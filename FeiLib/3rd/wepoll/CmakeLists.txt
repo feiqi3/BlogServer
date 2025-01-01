@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 # Set the project name
 project(wepoll)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 
 # Add the source file
 set(SOURCES wepoll.c)
