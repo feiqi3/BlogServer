@@ -1,6 +1,7 @@
 #ifndef F_DEF_H
 #define F_DEF_H
 #include <cstdint>
+#include <mutex>
 
 namespace Fei {
     using uint8 = uint8_t;
@@ -23,5 +24,7 @@ namespace Fei {
         #define F_API
     #endif
 #endif
+
+#define FAUTO_LOCK(_mutex) std::lock_guard<std::mutex> lock##_mutex(_mutex)
 
 #endif
