@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.10)
+
+# Set the project name
+project(wepoll)
+
+
+# Add the source file
+set(SOURCES wepoll.c)
+
+# Create the static library
+add_library(wepoll STATIC ${SOURCES})
+# Set the include directory variable
+set(WEPOLL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# Add the include directory using the variable
+target_include_directories(${PROJECT_NAME} PRIVATE ${WEPOLL_INCLUDE_DIR})

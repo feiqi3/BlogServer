@@ -2,15 +2,21 @@
 #include "FDef.h"
 #include <cassert>
 #include <string>
+#include <winsock2.h>
 
 #ifdef _WIN32
+#include "wepoll.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 
 #elif defined(__linux__)
+#include "poll.h"
 #include <sys/socket.h>
+
 #elif defined(__APPLE__)
+#include "poll.h"
 #include <sys/socket.h>
+
 #endif
 
 namespace Fei {
@@ -54,6 +60,7 @@ int recvFlagToPlatfromSpec(RecvFlag flag) {
   }
 #endif
 }
+
 } // namespace
 
 const char *StatusToStr(SocketStatus status) {
@@ -163,7 +170,7 @@ SocketStatus Bind(Socket socket, FSocketAddr addr, int port) {
   return status;
 }
 
-SocketStatus Accept(Socket listen, Socket& client, FSocketAddr *addr) {
+SocketStatus Accept(Socket listen, Socket &client, FSocketAddr *addr) {
   SocketStatus status = SocketStatus::Success;
 #ifdef _WIN32
   sockaddr_in addr_in{};
@@ -173,7 +180,6 @@ SocketStatus Accept(Socket listen, Socket& client, FSocketAddr *addr) {
 
   if (client == INVALID_SOCKET) {
     status = SocketStatus::AcceptFailed;
-    
   }
 #else
   sockaddr_in addr_in{};
@@ -187,7 +193,7 @@ SocketStatus Accept(Socket listen, Socket& client, FSocketAddr *addr) {
   return status;
 }
 
-SocketStatus F_API Send(Socket socket, const char *data, int len) {
+SocketStatus Send(Socket socket, const char *data, int len) {
   SocketStatus status = SocketStatus::Success;
 #ifdef _WIN32
   int ret = send(socket, data, len, 0);
@@ -270,27 +276,50 @@ SocketStatus Connect(Socket socket, FSocketAddr addr, int port) {
   return status;
 }
 
-std::string GetErrorStr(){
+std::string GetErrorStr() {
 #ifdef _WIN32
-    char* msgBuffer = nullptr;
-    int errorCode = WSAGetLastError();
-    FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr,
-        errorCode,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&msgBuffer,
-        0,
-        nullptr
-    );
-    std::string errorMsg(msgBuffer);
-    LocalFree(msgBuffer); // 释放缓冲区
+  char *msgBuffer = nullptr;
+  int errorCode = WSAGetLastError();
+  FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                     FORMAT_MESSAGE_IGNORE_INSERTS,
+                 nullptr, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                 (LPSTR)&msgBuffer, 0, nullptr);
+  std::string errorMsg(msgBuffer);
+  LocalFree(msgBuffer); // 释放缓冲区
 
-    return errorMsg;
+  return errorMsg;
 #else
-    return std::string(strerror(errno));
+  return std::string(strerror(errno));
 #endif
 }
 
+int FPoll(FPollfd *sockets, int num, int timeout) {
+#ifdef _WIN32
+  return WSAPoll((pollfd *)sockets, num, timeout);
+#elif defined(__linux__) or defined(__APPLE__)
+  return poll((pollfd *)sockets, num, timeout);
+#endif
+}
+
+EpollHandle EPollCreate(int size) { return epoll_create(size); }
+
+int EPollCtl(EpollHandle ephnd, EPollOp op, Socket sock, FEpollEvent *event) {
+  return epoll_ctl(ephnd, (int)op, sock, (epoll_event *)event);
+}
+
+int EPollClose(EpollHandle ephnd) { return epoll_close(ephnd); }
+
+int EPollWait(EpollHandle ephnd, FEpollEvent *events, int maxevents,
+              int timeout) {
+  return epoll_wait(ephnd, (epoll_event *)events, maxevents, timeout);
+}
+
+EpollHandle EPollCreate1(int flags) {
+#ifdef _WIN32
+  flags = 0;
+#endif
+//under win32, only support Level Triggered
+  return epoll_create1(flags);
+}
 
 }; // namespace Fei
