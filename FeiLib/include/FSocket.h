@@ -5,7 +5,6 @@
 
 namespace Fei {
 
-using Socket = uint64;
 
 enum class SocketStatus {
   Success,
@@ -31,39 +30,60 @@ enum class RecvFlag {
 
 F_API const char *StatusToStr(SocketStatus status);
 
-struct F_API FSocketAddr {
-  union {
-    struct {
-      uint8 a0;
-      uint8 a1;
-      uint8 a2;
-      uint8 a3;
-    } un_byte;
-    uint32 un_addr;
-  } un;
-};
-
 struct F_API FPollfd {
   Socket fd;
   short events;
   short revents;
 };
 
-F_API FSocketAddr to_addr(const char *ip);
+namespace SocketOpts{
+  enum{
+    Stream = 1 << 0,
+    NoBlock = 1 << 1,
+  };
+}
+
+namespace SocketType{
+  enum{
+    Stream,
+    Dgram,
+  };
+};
+
+namespace SocketProt{
+  enum{
+    TCP,
+    UDP,
+  };
+};
 
 F_API SocketStatus FeiInit();
 F_API SocketStatus FeiUnInit();
+
 F_API SocketStatus Create(Socket &socket);
+F_API SocketStatus Create(Socket &socket,int type,int protocal);
 F_API SocketStatus Close(Socket socket);
-F_API SocketStatus Connect(Socket socket, const char *ip, int port);
-F_API SocketStatus Connect(Socket socket, FSocketAddr addr, int port);
-F_API SocketStatus Bind(Socket socket, const char *ip, int port);
-F_API SocketStatus Bind(Socket socket, FSocketAddr addr, int port);
+F_API SocketStatus Connect(Socket socket, const char *ip, uint16 port);
+F_API SocketStatus Connect(Socket socket, FSocketAddr addr);
+F_API SocketStatus Bind(Socket socket, const char *ip, uint16 port);
+F_API SocketStatus Bind(Socket socket, FSocketAddr addr);
 F_API SocketStatus Listen(Socket socket, int backlog);
 F_API SocketStatus Accept(Socket listen, Socket &client, FSocketAddr *addr);
 F_API SocketStatus Send(Socket socket, const char *data, int len);
 F_API SocketStatus Recv(Socket socket, char *data, int len, RecvFlag flag,
                         int &recv_len);
+
+
+enum class SockOpt{
+  ReusePort,
+  ReuseAddr,
+  KeepAlive,
+  NoneBlock,
+  CloseOnExec,
+  NoneBlockAndCloseOnExec,
+};
+F_API int SetSockOpt(Socket s,SockOpt opt,bool on);
+                
 F_API std::string GetErrorStr();
 
 F_API int FPoll(FPollfd *sockets, int num, int timeout);
@@ -86,21 +106,15 @@ const short POLLERR = 0x0001;
 const short POLLHUP = 0x0002;
 const short POLLNVAL = 0x0004;
 
+//Linux Specific, means the other side of the connection has closed its write, but still can read
+//In windows we just ignore this flag
+const short POLLRDHUP = 0;
 #else
 
 #endif
 
-using EpollHandle = void *;
 
-typedef union FEpollData {
-  void *ptr;
-  int i32;
-  uint32_t u32;
-  uint64_t u64;
-  Socket sock;  
-} epoll_data_t;
-
-const int EPOLLIN = (int)(1U << 0),
+const int   EPOLLIN = (int)(1U << 0),
             EPOLLPRI = (int)(1U << 1),
             EPOLLOUT = (int)(1U << 2), 
             EPOLLERR = (int)(1U << 3),
@@ -113,10 +127,7 @@ const int EPOLLIN = (int)(1U << 0),
             EPOLLRDHUP = (int)(1U << 13),
             EPOLLONESHOT = (int)(1U << 31);
 
-struct F_API FEpollEvent {
-  uint32 events;
-  FEpollData data;
-};
+
 
 enum class EPollOp { Add = 1, Mod = 2, Del = 3};
 
