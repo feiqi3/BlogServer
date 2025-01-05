@@ -213,11 +213,12 @@ void eventLoop() {
   FAcceptor::OnNewConnectionFunc func = [loop](Socket s, FSocketAddr addr) {
     FEvent *event = new FEvent(loop, s, loop->getUniqueIdInLoop());
     event->enableReading();
-    auto onClose = [s, addr, event]() {
+    auto onClose = [s, addr, event,loop]() {
       printf("Closing client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
              addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
       Close(s);
-      delete event;
+      event->disableAll();
+      loop->AddTask([event](){printf("Delete event\n"); delete event;});
     };
     auto onRead = [addr, s,onClose]() {
       char data[128];

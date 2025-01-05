@@ -26,7 +26,6 @@ std::vector<TimerFunc> FTimeQueue::Tick(TimePoint t) {
     FAUTO_LOCK(m_mutex);
     auto timerItBegin = m_tasks.begin();
     auto timerItEnd = m_tasks.upper_bound(t);
-    if(timerItBegin == timerItEnd)return {};
     std::vector<TimerFunc> ret;
     std::swap(ret, m_curTasks);
 
