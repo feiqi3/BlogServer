@@ -1,6 +1,7 @@
 #include "FSocket.h"
 #include "FDef.h"
 #include <cassert>
+#include <io.h>
 #include <string>
 #include <winsock2.h>
 
@@ -8,6 +9,7 @@
 #include "wepoll.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
+#pragma warning(suppress : 4996)
 
 #elif defined(__linux__)
 #include "poll.h"
@@ -70,7 +72,7 @@ const char *StatusToStr(SocketStatus status) {
 
 FSocketAddr::FSocketAddr(const char *ip, uint16 port) {
   this->port = ::htons(port);
-  
+
 #ifdef _WIN32
   inet_pton(AF_INET, ip, &un.un_addr);
 #else
@@ -313,6 +315,41 @@ SocketStatus Connect(Socket socket, FSocketAddr addr) {
   }
 #endif
   return status;
+}
+
+long SendV(Socket socket, iovec *iov, int count) {
+#ifdef _WIN32
+  long totallen = 0, tlen = -1;
+  while (count) {
+    tlen = send(socket, (const char *)iov->iov_base, iov->iov_len, 0);
+    if (tlen < 0)
+      return tlen;
+    totallen += tlen;
+    iov++;
+    count--;
+  }
+
+  return totallen;
+
+#else
+  return sendV(socket, (::iovec *)iov, count);
+#endif
+}
+int Readv(Socket socket, struct iovec *iov, int count) {
+#ifdef _WIN32
+  long r, t = 0;
+  while (count) {
+    r = read(socket, iov->iov_base, iov->iov_len);
+    if (r < 0)
+      return r;
+    t += r;
+    iov++;
+    count--;
+  }
+  return t;
+#else
+  return readv(socket, (::iovec *)iov, count);
+#endif
 }
 
 std::string GetErrorStr() {

@@ -1,7 +1,10 @@
 #ifndef F_DEF_H
 #define F_DEF_H
+#include "errno.h"
+#include <corecrt.h>
 #include <cstdint>
 #include <mutex>
+
 
 namespace Fei {
 using uint8 = uint8_t;
@@ -43,8 +46,15 @@ struct FSocketAddr {
   } un;
   uint16 port;
 
-  void toHumanFriendyType(char* buf,uint32 len, uint16* port);
+  void toHumanFriendyType(char *buf, uint32 len, uint16 *port);
 };
+
+#ifdef _WIN32
+  using Errno_t = errno_t;
+#else
+  using Errno_t = int;
+
+#endif
 
 }; // namespace Fei
 

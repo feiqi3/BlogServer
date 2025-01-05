@@ -73,7 +73,13 @@ F_API SocketStatus Send(Socket socket, const char *data, int len);
 F_API SocketStatus Recv(Socket socket, char *data, int len, RecvFlag flag,
                         int &recv_len);
 
+ struct iovec{
+     void *iov_base; /* Pointer to data. */
+     size_t iov_len; /* Length of data. */
+};
 
+F_API long SendV(Socket socket, iovec* vec, int count);
+F_API int Readv(Socket handle, struct iovec *iov, int count);
 enum class SockOpt{
   ReusePort,
   ReuseAddr,
