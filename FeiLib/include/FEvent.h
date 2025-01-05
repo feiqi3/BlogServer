@@ -15,7 +15,7 @@ class FListener;
 class F_API FEvent {
 public:
   friend class FListener;
-
+  
 public:
   FEvent(FEventLoop *loop, Socket fd, uint64 id);
   ~FEvent();

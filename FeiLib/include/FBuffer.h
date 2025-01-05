@@ -8,6 +8,13 @@ using Byte = uint8;
 class FBuffer {
 public:
   FBuffer(uint32 size);
+
+  FBuffer(FBuffer &&rhs) {
+    m_buffer = std::move(rhs.m_buffer);
+    readIdx = rhs.readIdx;
+    writeIdx = rhs.writeIdx;
+  }
+
   size_t Append(Socket fd, Errno_t &errSaved);
 
   int Peek(int wantLen, char *ret); // sizeof ret >= wantlen
