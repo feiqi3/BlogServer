@@ -1,18 +1,23 @@
 #include "FEvent.h"
 #include "FDef.h"
+#include "FEventLoop.h"
 #include "FREventDef.h"
 #include "FSocket.h"
 namespace Fei {
 
 static const Event NoneEvent = 0;
-static const Event ReadEvent = POLLIN | POLLPRI;
-static const Event WriteEvent = POLLOUT;
+static const Event ReadEvent = REvent::In | REvent::Pri;
+static const Event WriteEvent = REvent::Out;
 
-FEvent::FEvent(FListener *listener, Socket fd, uint64 id)
-    : mListener(listener), mFd(fd), mId(id), mEvent(0), mRevents(0),
+FEvent::FEvent(FEventLoop *loop, Socket fd, uint64 id)
+    : mLoop(loop), mFd(fd), mId(id), mEvent(0), mRevents(0),
       mEventHandling(false), mAddedToLoop(false) {
-        mListener->addEvent(this);
-      }
+  mLoop->AddEvent(this);
+}
+FEvent::~FEvent() {
+  disableAll();
+  mLoop->RemoveEvent(this);
+}
 
 void FEvent::enableReading() {
   mEvent |= ReadEvent;
@@ -45,9 +50,9 @@ bool FEvent::isReading() { return mEvent & ReadEvent; }
 
 bool FEvent::isNoneEvent() { return mEvent == NoneEvent; }
 
-void FEvent::update() { mListener->updateEvent(this); }
+void FEvent::update() { mLoop->UpdateEvent(this); }
 
-void FEvent::remove() { mListener->removeEvent(this); }
+void FEvent::remove() { mLoop->RemoveEvent(this); }
 
 void FEvent::handleEvent() {
   mEventHandling = true;
@@ -71,6 +76,5 @@ void FEvent::handleEvent() {
   }
   mEventHandling = false;
 }
-
 
 } // namespace Fei

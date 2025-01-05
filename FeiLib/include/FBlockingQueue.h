@@ -12,7 +12,7 @@
 
 namespace Fei {
 
-template <typename T> class BoundedBlockingQueue: public FNoCopyable {
+template <typename T> class F_API BoundedBlockingQueue: public FNoCopyable {
 public:
   BoundedBlockingQueue(uint32 maxCap)
       : mtx(), full_(), empty_(), capacity_(maxCap) {}
@@ -30,7 +30,7 @@ private:
   size_t capacity_;
 };
 
-template <typename T> class BlockingQueue : public FNoCopyable {
+template <typename T> class F_API BlockingQueue : public FNoCopyable {
 public:
   BlockingQueue() : mtx(), full_(), empty_() {}
   void put(const T &t);

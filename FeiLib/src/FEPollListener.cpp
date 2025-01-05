@@ -22,7 +22,7 @@ void FEPollListener::listen(uint32 timeoutMs,
       auto itor = m_pollEvents.find(id);
       if (itor != m_pollEvents.end()) {
         FEvent *event = itor->second.event;
-        setRevents(event, EPollevents[i].events);
+        setRevents(event, REvent::FromEpoll(EPollevents[i].events));
         outEvents.push_back(event);
         assert(event->getId() == id);
       } else {

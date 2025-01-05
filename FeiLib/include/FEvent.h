@@ -2,6 +2,7 @@
 #define FEVENT_H
 #include "FDef.h"
 #include "FEPollListener.h"
+#include "FEventLoop.h"
 #include "FListener.h"
 #include <functional>
 
@@ -11,9 +12,13 @@ typedef std::function<void()> ReadEventCallback;
 
 class FListener;
 
-class FEvent {
+class F_API FEvent {
 public:
   friend class FListener;
+
+public:
+  FEvent(FEventLoop *loop, Socket fd, uint64 id);
+  ~FEvent();
 
 public:
   void setReadCallback(ReadEventCallback cb) { mReadCallback = std::move(cb); }
@@ -21,11 +26,8 @@ public:
   void setCloseCallback(EventCallback cb) { mCloseCallback = std::move(cb); }
   void setErrorCallback(EventCallback cb) { mErrorCallback = std::move(cb); }
   Event getEvents() const { return mEvent; }
-  uint64 getId()const{return mId;}
+  uint64 getId() const { return mId; }
 
-public:
-  FEvent(FListener *listener, Socket fd, uint64 id);
-  ~FEvent();
   void enableReading();
   void enableWriting();
   void disableReading();
@@ -48,7 +50,7 @@ private:
   void setRevents(Event revents) { mRevents = revents; }
 
 private:
-  FListener *mListener;
+  FEventLoop *mLoop;
 
 private:
   Socket mFd;
@@ -62,8 +64,6 @@ private:
   EventCallback mCloseCallback;
   EventCallback mErrorCallback;
 };
-
-
 
 } // namespace Fei
 

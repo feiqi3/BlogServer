@@ -22,7 +22,7 @@ struct FTimerTask {
   bool aborted = false;
 };
 
-class FTimeQueue {
+class F_API FTimeQueue {
 public:
   FTimeQueue() = default;
   ~FTimeQueue() = default;

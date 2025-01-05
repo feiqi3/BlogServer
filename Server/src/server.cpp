@@ -1,8 +1,17 @@
+#include "FEvent.h"
+#include "FListener.h"
 #include "FSocket.h"
 #include "FeiLib/FSocket.h"
 #include "cstdio"
 #include <cstdio>
+#include <iostream>
+#include <memory>
 #include <vector>
+
+#include "FAcceptor.h"
+#include "FEPollListener.h"
+#include "FEvent.h"
+#include "FEventLoop.h"
 
 void simple_echo();
 
@@ -10,7 +19,12 @@ void poll_echo();
 
 void epoll_echo();
 
-int main() { epoll_echo();return 0; }
+void eventLoop();
+
+int main() {
+  eventLoop();
+  return 0;
+}
 
 void poll_echo() {
   using namespace Fei;
@@ -175,20 +189,54 @@ void epoll_echo() {
     char data[128] = {};
     int recLen = 0;
     status = Recv(client, data, 127, RecvFlag::None, recLen);
-    if(status != SocketStatus::Success){
+    if (status != SocketStatus::Success) {
       printf("Recv failed: %s\n", StatusToStr(status));
       printf("Error: %s\n", GetErrorStr().c_str());
       break;
     }
-    
+
     printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
            addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
            addr.un.un_byte.a3, recLen, data);
-     Close(client);
-
-
+    Close(client);
   }
   EPollCtl(ephnd, EPollOp::Del, socket, nullptr);
   EPollClose(ephnd);
+  FeiUnInit();
+}
+
+void eventLoop() {
+  using namespace Fei;
+  FeiInit();
+  FEventLoop *loop = new FEventLoop(std::make_unique<FEPollListener>());
+  auto acceptor = std::make_unique<FAcceptor>(loop, "127.0.0.1", 12345, true);
+  FAcceptor::OnNewConnectionFunc func = [loop](Socket s, FSocketAddr addr) {
+    FEvent *event = new FEvent(loop, s, loop->getUniqueIdInLoop());
+    event->enableReading();
+    auto onClose = [s, addr, event]() {
+      printf("Closing client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
+             addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
+      Close(s);
+      delete event;
+    };
+    auto onRead = [addr, s,onClose]() {
+      char data[128];
+      int len = 0;
+      auto status = Recv(s, data, 127, RecvFlag::None, len);
+      if (len <= 0) {
+        onClose();
+        return;
+      }
+      printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
+             addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+             addr.un.un_byte.a3, len, data);
+      
+    };
+    event->setReadCallback(onRead);
+
+    event->setCloseCallback(onClose);
+  };
+  acceptor->SetOnNewConnCallback(func);
+  loop->Loop();
   FeiUnInit();
 }

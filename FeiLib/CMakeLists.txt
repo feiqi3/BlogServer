@@ -118,5 +118,6 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/include/${PROJECT_NAME}
+    COMMAND echo Copy FeiLib libs,headers and dlls.
 )
 

@@ -5,7 +5,7 @@
 #include "FSocket.h"
 
 namespace Fei{
-class FSock : public FNoCopyable{
+class F_API FSock : public FNoCopyable{
 
 public:
 FSock():valid(false){};

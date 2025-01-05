@@ -27,12 +27,12 @@ enum EventEnum {
 
 };
 
-const char *REventToString(EventEnum events);
+F_API const char *REventToString(EventEnum events);
 
-uint32 ToEpoll(uint32 events);
-uint32 FromEpoll(uint32 events);
-uint32 ToPoll(uint32 events);
-uint32 FromPoll(uint32 events);
+F_API uint32 ToEpoll(uint32 events);
+F_API uint32 FromEpoll(uint32 events);
+F_API uint32 ToPoll(uint32 events);
+F_API uint32 FromPoll(uint32 events);
 
 }; // namespace REvent
 }; // namespace Fei

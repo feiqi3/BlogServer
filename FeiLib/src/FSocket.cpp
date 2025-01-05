@@ -69,7 +69,8 @@ const char *StatusToStr(SocketStatus status) {
 }
 
 FSocketAddr::FSocketAddr(const char *ip, uint16 port) {
-  port = ::htons(port);
+  this->port = ::htons(port);
+  
 #ifdef _WIN32
   inet_pton(AF_INET, ip, &un.un_addr);
 #else

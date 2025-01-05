@@ -4,18 +4,15 @@
 #include <vector>
 namespace Fei {
 
-class FListener {
+class F_API FListener {
 public:
-  virtual ~FListener() = default;
+  virtual ~FListener(){};
 
   virtual void listen(uint32 timeoutMs,
                       std::vector<class FEvent *> &outEvents) = 0;
   virtual void addEvent(class FEvent *event) = 0;
   virtual void removeEvent(class FEvent *event) = 0;
   virtual void updateEvent(class FEvent *event) = 0;
-
-private:
-  virtual void update(int operation, class FEvent *event) = 0;
 
 public:
   void setRevents(class FEvent *event, Event revents);

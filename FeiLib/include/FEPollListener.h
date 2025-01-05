@@ -5,7 +5,7 @@
 #include <map>
 #include <vector>
 namespace Fei {
-class FEPollListener : public FListener {
+class F_API FEPollListener : public FListener {
 public:
   virtual void listen(uint32 timeoutMs,
                       std::vector<class FEvent *> &outEvents) override;
@@ -21,7 +21,6 @@ private:
     class FEvent *event;
     FEpollEvent epollevent;
   };
-  virtual void update(int operation, class FEvent *event) override;
   EpollHandle m_epollfd;
   std::map<uint64, EpollData> m_pollEvents;
 };
