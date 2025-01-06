@@ -3,14 +3,15 @@
 #include "FDef.h"
 #include "FListener.h"
 #include <map>
+#include <memory>
 #include <vector>
 namespace Fei {
 class F_API FEPollListener : public FListener {
 public:
   virtual void listen(uint32 timeoutMs,
-                      std::vector<class FEvent *> &outEvents) override;
+                      std::vector<std::shared_ptr<FEvent >> &outEvents) override;
 
-  virtual void addEvent(class FEvent *event) override;
+  virtual void addEvent(std::shared_ptr<FEvent> event) override;
   virtual void removeEvent(class FEvent *event) override;
   virtual void updateEvent(class FEvent *event) override;
   ~FEPollListener();
@@ -18,7 +19,7 @@ public:
 
 private:
   struct EpollData {
-    class FEvent *event;
+    std::shared_ptr<FEvent> event;
     FEpollEvent epollevent;
   };
   EpollHandle m_epollfd;

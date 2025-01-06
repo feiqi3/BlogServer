@@ -12,7 +12,7 @@ static const Event WriteEvent = REvent::Out;
 FEvent::FEvent(FEventLoop *loop, Socket fd, uint64 id)
     : mLoop(loop), mFd(fd), mId(id), mEvent(0), mRevents(0),
       mEventHandling(false), mAddedToLoop(true) {
-  mLoop->AddEvent(this);
+  mLoop->AddEvent(shared_from_this());
 }
 FEvent::~FEvent() {
   disableAll();

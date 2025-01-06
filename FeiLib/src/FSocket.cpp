@@ -234,7 +234,7 @@ SocketStatus Accept(Socket listen, Socket &client, FSocketAddr *addr) {
   return status;
 }
 
-SocketStatus Send(Socket socket, const char *data, int len) {
+SocketStatus Send(Socket socket, const char *data, int len,int& writeLen) {
   SocketStatus status = SocketStatus::Success;
 #ifdef _WIN32
   int ret = send(socket, data, len, 0);
@@ -247,6 +247,7 @@ SocketStatus Send(Socket socket, const char *data, int len) {
     status = SocketStatus::SendFailed;
   }
 #endif
+  writeLen = ret;
   return status;
 }
 

@@ -1,18 +1,18 @@
 #ifndef FEVENT_H
 #define FEVENT_H
 #include "FDef.h"
-#include "FEPollListener.h"
 #include "FEventLoop.h"
 #include "FListener.h"
 #include <functional>
+#include <memory>
+#include "FCallBackDef.h"
 
 namespace Fei {
-typedef std::function<void()> EventCallback;
-typedef std::function<void()> ReadEventCallback;
+
 
 class FListener;
 
-class F_API FEvent {
+class F_API FEvent : public std::enable_shared_from_this<FEvent> {
 public:
   friend class FListener;
   

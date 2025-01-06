@@ -1,6 +1,7 @@
 #ifndef FLISTENER_H
 #define FLISTENER_H
 #include "FDef.h"
+#include <memory>
 #include <vector>
 namespace Fei {
 
@@ -9,8 +10,8 @@ public:
   virtual ~FListener(){};
 
   virtual void listen(uint32 timeoutMs,
-                      std::vector<class FEvent *> &outEvents) = 0;
-  virtual void addEvent(class FEvent *event) = 0;
+                      std::vector<std::shared_ptr<class FEvent >> &outEvents) = 0;
+  virtual void addEvent(std::shared_ptr<FEvent> event) = 0;
   virtual void removeEvent(class FEvent *event) = 0;
   virtual void updateEvent(class FEvent *event) = 0;
 

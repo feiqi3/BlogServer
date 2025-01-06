@@ -69,7 +69,7 @@ F_API SocketStatus Bind(Socket socket, const char *ip, uint16 port);
 F_API SocketStatus Bind(Socket socket, FSocketAddr addr);
 F_API SocketStatus Listen(Socket socket, int backlog);
 F_API SocketStatus Accept(Socket listen, Socket &client, FSocketAddr *addr);
-F_API SocketStatus Send(Socket socket, const char *data, int len);
+F_API SocketStatus Send(Socket socket, const char *data, int len,int& writeLen);
 F_API SocketStatus Recv(Socket socket, char *data, int len, RecvFlag flag,
                         int &recv_len);
 

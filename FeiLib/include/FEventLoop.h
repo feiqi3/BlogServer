@@ -25,15 +25,19 @@ public:
   void AddTask(const std::function<void()> &task);
   TimerID RunAfter(uint64 ms, TimerFunc task);
   void CancelTimer(TimerID id);
-  void AddEvent(FEvent* event);
+  void AddEvent(std::shared_ptr<FEvent> event);
   void RemoveEvent(FEvent* event);
   void UpdateEvent(FEvent* event);
   uint64 getUniqueIdInLoop(){return mIdCounter++; }
+
+  bool isInLoopThread()const;
+
 private:
+
   std::atomic_bool m_quit;
   std::unique_ptr<FTimeQueue> m_timeQueue;
   std::unique_ptr<FListener> m_listener;
-  std::vector<FEvent*> mActiveEvents;
+  std::vector<std::shared_ptr<FEvent>> mActiveEvents;
   uint64 mIdCounter = 1;
 };
 } // namespace Fei

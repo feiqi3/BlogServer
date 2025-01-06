@@ -5,6 +5,7 @@
 #include "FSocket.h"
 #include <cassert>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 #define MAX_EVENTS 1024
@@ -12,7 +13,7 @@
 namespace Fei {
 
 void FEPollListener::listen(uint32 timeoutMs,
-                            std::vector<FEvent *> &outEvents) {
+                            std::vector<std::shared_ptr<FEvent>> &outEvents) {
   FEpollEvent EPollevents[MAX_EVENTS];
   int num = EPollWait(m_epollfd, EPollevents, m_pollEvents.size(), timeoutMs);
   if (num >= 0) {
@@ -21,8 +22,8 @@ void FEPollListener::listen(uint32 timeoutMs,
       uint64 id = EPollevents[i].data.u64;
       auto itor = m_pollEvents.find(id);
       if (itor != m_pollEvents.end()) {
-        FEvent *event = itor->second.event;
-        setRevents(event, REvent::FromEpoll(EPollevents[i].events));
+        std::shared_ptr<FEvent> event = itor->second.event;
+        setRevents(event.get(), REvent::FromEpoll(EPollevents[i].events));
         outEvents.push_back(event);
         assert(event->getId() == id);
       } else {
@@ -34,7 +35,7 @@ void FEPollListener::listen(uint32 timeoutMs,
   }
 }
 
-void FEPollListener::addEvent(FEvent *event) {
+void FEPollListener::addEvent(std::shared_ptr<FEvent> event) {
   EpollData data{.event = event, .epollevent = {}};
 
   // Important Use FEvent id as user data
