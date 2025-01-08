@@ -3,50 +3,80 @@
 
 #include <memory>
 
+#include "FCallBackDef.h"
 #include "FDef.h"
 #include "FNoCopyable.h"
 
-namespace Fei{
-    class FEventLoop;
-    class FEvent;
-    class FSock;
-    class FBuffer;
-    
-    class FTcpConnection : public FNoCopyable,public std::enable_shared_from_this<FTcpConnection>{
-        public:
-        
-        //High water callback: when there are too much data in inBuffer/outBuffer
-        //                     While user consume it slow, then this will be called
-        //Low  water callback: when data in buffer reach a user set limit, call this. 
+namespace Fei {
+class FEventLoop;
+class FEvent;
+class FSock;
+class FBuffer;
 
-        FTcpConnection(FEventLoop* loop, Socket s, FSocketAddr addrIn);
-        ~FTcpConnection();
+class FTcpConnection : public FNoCopyable,
+                       public std::enable_shared_from_this<FTcpConnection> {
+public:
+  enum class TcpConnState {
+    Connected,
+    DisConnected,
+    Connectiing,
+    DisConnecting
+  };
 
-        void send(const char* data,uint64 len);
+  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn){
+    return std::make_shared<FTcpConnection>(loop,s,addrIn);
+  }
 
-        private:
+  // High water callback: when there are too much data in inBuffer/outBuffer
+  //                      While user consume it slow, then this will be called
+  // Low  water callback: when data in buffer reach a user set limit, call this.
 
-        //When output buffer is empty, send directly,
-        //else queued in loop and send by buffer.
-        void sendInLoop(const char* data,uint64 len);
-        void handleRead();
-        void handleWrite();
-        void handleClose();
-        void handleError();
-        void handleWriteComplete();
+  ~FTcpConnection();
 
-        FEventLoop * m_loop;
-        std::unique_ptr<FSock> m_sock;
-        
+  TcpConnState getState() const { return mstate; }
+  
+  void send(const char *data, uint64 len);
+  void destroy();
 
-        FSocketAddr m_addrIn;
-        std::shared_ptr<FEvent> m_event;
+  void setMessageCallback(TcpMessageCallback cb) {
+    m_onMessage = std::move(cb);
+  }
+  void setWriteCompleteCallback(TcpWriteCompleteCallback cb) {
+    m_onWriteComplete = std::move(cb);
+  }
+  void setCloseCallback(TcpCloseCallback cb) {
+    m_onCloseCallback = std::move(cb);
+  }
 
-        std::unique_ptr<FBuffer> inBuffer;
-        std::unique_ptr<FBuffer> outBuffer;
+private:
+  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn);
+  // When output buffer is empty, send directly,
+  // else queued in loop and send by buffer.
+  void sendInLoop(const char *data, uint64 len);
+  void handleRead();
+  void handleWrite();
+  void handleClose();
+  void handleError() { // TODO:
+  }
 
-    };
+  void handleWriteComplete();
 
-}
+  FEventLoop *m_loop;
+  std::unique_ptr<FSock> m_sock;
+
+  FSocketAddr m_addrIn;
+  std::shared_ptr<FEvent> m_event;
+
+  std::unique_ptr<FBuffer> inBuffer;
+  std::unique_ptr<FBuffer> outBuffer;
+  TcpMessageCallback m_onMessage;
+  TcpWriteCompleteCallback m_onWriteComplete;
+  TcpCloseCallback m_onCloseCallback;
+
+  TcpConnState mstate;
+};
+
+
+} // namespace Fei
 
 #endif

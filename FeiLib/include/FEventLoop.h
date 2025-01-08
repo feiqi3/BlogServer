@@ -5,6 +5,8 @@
 #include "FListener.h"
 #include "FNoCopyable.h"
 #include "FTimeQueue.h"
+#include <atomic>
+#include <cassert>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -22,23 +24,26 @@ public:
   ~FEventLoop();
   void Loop();
   void Quit();
+  void ForceQuit() {m_forceQuit = true;}
+  bool HasStoped() {return m_stoped;}
   void AddTask(const std::function<void()> &task);
   TimerID RunAfter(uint64 ms, TimerFunc task);
   void CancelTimer(TimerID id);
-  void AddEvent(std::shared_ptr<FEvent> event);
-  void RemoveEvent(FEvent* event);
-  void UpdateEvent(FEvent* event);
+  void AddEvent(const FEventPtr& event);
+  void RemoveEvent(const FEventPtr& event);
+  void UpdateEvent(const FEventPtr& event);
   uint64 getUniqueIdInLoop(){return mIdCounter++; }
 
   bool isInLoopThread()const;
-
+  void isInLoopAssert()const{assert(isInLoopThread());}
 private:
-
+  std::atomic_bool m_stoped;
   std::atomic_bool m_quit;
   std::unique_ptr<FTimeQueue> m_timeQueue;
   std::unique_ptr<FListener> m_listener;
-  std::vector<std::shared_ptr<FEvent>> mActiveEvents;
+  std::vector<FEventPtr> mActiveEvents;
   uint64 mIdCounter = 1;
+  std::atomic_bool m_forceQuit = false;
 };
 } // namespace Fei
 

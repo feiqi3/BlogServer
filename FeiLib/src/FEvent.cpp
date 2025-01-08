@@ -16,7 +16,7 @@ FEvent::FEvent(FEventLoop *loop, Socket fd, uint64 id)
 }
 FEvent::~FEvent() {
   disableAll();
-  mLoop->RemoveEvent(this);
+  mLoop->RemoveEvent(shared_from_this());
 }
 
 void FEvent::enableReading() {
@@ -50,9 +50,9 @@ bool FEvent::isReading() { return mEvent & ReadEvent; }
 
 bool FEvent::isNoneEvent() { return mEvent == NoneEvent; }
 
-void FEvent::update() { mLoop->UpdateEvent(this); }
+void FEvent::update() { mLoop->UpdateEvent(shared_from_this()); }
 
-void FEvent::remove() { mLoop->RemoveEvent(this); }
+void FEvent::remove() { mLoop->RemoveEvent(shared_from_this()); }
 
 void FEvent::handleEvent() {
   mEventHandling = true;

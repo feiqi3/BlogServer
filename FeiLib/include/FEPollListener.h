@@ -11,15 +11,15 @@ public:
   virtual void listen(uint32 timeoutMs,
                       std::vector<std::shared_ptr<FEvent >> &outEvents) override;
 
-  virtual void addEvent(std::shared_ptr<FEvent> event) override;
-  virtual void removeEvent(class FEvent *event) override;
-  virtual void updateEvent(class FEvent *event) override;
+  virtual void addEvent(const FEventPtr& event) override;
+  virtual void removeEvent(const FEventPtr& event) override;
+  virtual void updateEvent(const FEventPtr& event) override;
   ~FEPollListener();
   FEPollListener();
 
 private:
   struct EpollData {
-    std::shared_ptr<FEvent> event;
+    FEventPtrWeak event;
     FEpollEvent epollevent;
   };
   EpollHandle m_epollfd;

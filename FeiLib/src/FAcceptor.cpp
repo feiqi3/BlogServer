@@ -1,15 +1,17 @@
 #include "FAcceptor.h"
 #include "FDef.h"
 #include "FEvent.h"
+#include "FSockWrapper.h"
 #include "FSocket.h"
 #include <cassert>
 #include <cstdlib>
 #include <functional>
+#include <memory>
 namespace Fei {
 
 FAcceptor::FAcceptor(FEventLoop *loop, const char *listenAddr, int port,
                      bool reusePort)
-    : m_loop(loop) {
+    : m_loop(loop), m_listenAddr(listenAddr),m_listenPort(port){
   Socket socket;
   auto status = Create(socket, SocketType::Stream, SocketProt::TCP);
   if (status != SocketStatus::Success) {
@@ -22,9 +24,9 @@ FAcceptor::FAcceptor(FEventLoop *loop, const char *listenAddr, int port,
   m_sock.setReuseport(reusePort);
   m_sock.setNoneBlock(true);
   m_sock.setExitOnExec(true);
-  m_event = new FEvent(m_loop, m_sock.getFd(), loop->getUniqueIdInLoop());
+  m_event = FEvent::createEvent(m_loop, m_sock.getFd(), loop->getUniqueIdInLoop());
   m_event->enableReading();
-  m_addr = FSocketAddr(inAddrAny, port);
+  m_addr = FSocketAddr(listenAddr, port);
   status = Bind(m_sock.getFd(), m_addr);
   if (status != SocketStatus::Success) {
     printf("Bind failed: %s\n", StatusToStr(status));
@@ -56,6 +58,10 @@ void FAcceptor::handleRead() {
     // Accept error;
   }
 }
-FAcceptor::~FAcceptor() { delete m_event; }
+
+FAcceptor::~FAcceptor() {
+  m_loop->RemoveEvent(m_event);
+  m_event = nullptr;
+}
 
 } // namespace Fei

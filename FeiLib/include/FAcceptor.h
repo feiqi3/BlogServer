@@ -6,6 +6,7 @@
 #include "FSockWrapper.h"
 
 #include <functional>
+#include <string>
 namespace Fei {
 class F_API FAcceptor : public FNoCopyable {
 public:
@@ -18,14 +19,18 @@ public:
   void SetOnNewConnCallback(OnNewConnectionFunc func){_newConnCb = std::move(func);}
   void listen();
 
+  std::string getListenAddr()const{return m_listenAddr;}
+  uint32 getListenPort()const{return m_listenPort;}
 private:
     void handleRead();
 
 private:
 FEventLoop* m_loop;
   FSock m_sock;
-  class FEvent *m_event;
+  FEventPtr m_event;
   FSocketAddr m_addr;
   OnNewConnectionFunc _newConnCb = nullptr;
+  std::string m_listenAddr;
+  uint32 m_listenPort;
 };
 } // namespace Fei

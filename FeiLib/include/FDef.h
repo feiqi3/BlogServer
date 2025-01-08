@@ -1,9 +1,10 @@
 #ifndef F_DEF_H
 #define F_DEF_H
 #include "errno.h"
-#include <corecrt.h>
-#include <cstdint>
+#include <atomic>
+#include <memory>
 #include <mutex>
+#include <cstdint>
 
 
 namespace Fei {
@@ -16,6 +17,7 @@ using int64 = int64_t;
 
 using Socket = uint64;
 using Event = uint32;
+using AtomicEvent = std::atomic_uint32_t;
 using EpollHandle = void *;
 
 typedef union FEpollData {
@@ -45,7 +47,6 @@ struct FSocketAddr {
     uint32 un_addr;
   } un;
   uint16 port;
-
   void toHumanFriendyType(char *buf, uint32 len, uint16 *port);
 };
 
@@ -56,6 +57,8 @@ struct FSocketAddr {
 
 #endif
 
+using FEventPtr = std::shared_ptr<class FEvent>;
+using FEventPtrWeak= std::weak_ptr<class FEvent>;
 }; // namespace Fei
 
 #ifdef _WIN32

@@ -1,7 +1,7 @@
 #include "FListener.h"
 #include "FEvent.h"
 namespace Fei {
-void FListener::setRevents(FEvent *event, Event revents) {
+void FListener::setRevents(const FEventPtr& event, Event revents) {
   event->setRevents(revents);
 }
 

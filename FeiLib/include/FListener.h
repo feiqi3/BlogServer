@@ -11,12 +11,12 @@ public:
 
   virtual void listen(uint32 timeoutMs,
                       std::vector<std::shared_ptr<class FEvent >> &outEvents) = 0;
-  virtual void addEvent(std::shared_ptr<FEvent> event) = 0;
-  virtual void removeEvent(class FEvent *event) = 0;
-  virtual void updateEvent(class FEvent *event) = 0;
+  virtual void addEvent(const FEventPtr& event) = 0;
+  virtual void removeEvent(const FEventPtr& event) = 0;
+  virtual void updateEvent(const FEventPtr& event) = 0;
 
 public:
-  void setRevents(class FEvent *event, Event revents);
+  void setRevents(const FEventPtr& event, Event revents);
   uint64 getId(){return m_idCounter++;}
 private:
   uint64 m_idCounter = 1;
