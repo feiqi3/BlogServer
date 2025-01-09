@@ -2,6 +2,7 @@
 #define FBUFFER_H
 #include "FDef.h"
 #include <cstddef>
+#include <mutex>
 #include <vector>
 namespace Fei {
 using Byte = uint8;

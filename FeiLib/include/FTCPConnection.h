@@ -2,6 +2,7 @@
 #define FTCPCONNECTION_H
 
 #include <memory>
+#include <string>
 
 #include "FCallBackDef.h"
 #include "FDef.h"
@@ -34,10 +35,10 @@ public:
   ~FTcpConnection();
 
   TcpConnState getState() const { return mstate; }
+  Socket getFd();
   
   void send(const char *data, uint64 len);
   void destroy();
-
   void setMessageCallback(TcpMessageCallback cb) {
     m_onMessage = std::move(cb);
   }
@@ -48,6 +49,7 @@ public:
     m_onCloseCallback = std::move(cb);
   }
 
+  void setReading(bool v);
 private:
   FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn);
   // When output buffer is empty, send directly,
@@ -58,8 +60,12 @@ private:
   void handleClose();
   void handleError() { // TODO:
   }
-
+  void shutdownInLoop();
   void handleWriteComplete();
+  void startReadingInLoop();
+  void stopReadingInLoop();
+
+  void sendInLoopStr(std::string data);
 
   FEventLoop *m_loop;
   std::unique_ptr<FSock> m_sock;

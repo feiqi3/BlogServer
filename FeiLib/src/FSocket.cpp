@@ -234,7 +234,7 @@ SocketStatus Accept(Socket listen, Socket &client, FSocketAddr *addr) {
   return status;
 }
 
-SocketStatus Send(Socket socket, const char *data, int len,int& writeLen) {
+SocketStatus Send(Socket socket, const char *data, int len, int &writeLen) {
   SocketStatus status = SocketStatus::Success;
 #ifdef _WIN32
   int ret = send(socket, data, len, 0);
@@ -275,6 +275,33 @@ SocketStatus Recv(Socket socket, char *data, int len, RecvFlag flag,
   recv_len = ret;
 #endif
   return status;
+}
+
+F_API void ShutDown(Socket socket, bool shutWr, bool shutRd) {
+  int choose = 0;
+  if (shutRd && shutWr) {
+#ifdef _WIN32
+    choose = SD_BOTH;
+#else
+    choose = SHUT_RDWR;
+#endif
+  } else if (shutWr) {
+#ifdef _WIN32
+    choose = SD_SEND;
+#else
+    choose = SHUT_WR;
+#endif
+  } else if (shutRd) {
+#ifdef _WIN32
+    choose = SD_RECEIVE;
+#else
+    choose = SHUT_RD;
+#endif
+  } else {
+    return;
+  }
+
+  shutdown(socket, choose);
 }
 
 SocketStatus Close(Socket socket) {

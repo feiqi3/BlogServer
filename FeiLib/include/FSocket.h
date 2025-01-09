@@ -73,6 +73,9 @@ F_API SocketStatus Send(Socket socket, const char *data, int len,int& writeLen);
 F_API SocketStatus Recv(Socket socket, char *data, int len, RecvFlag flag,
                         int &recv_len);
 
+
+F_API void ShutDown(Socket socket,bool shutWr,bool shutRd);
+
  struct iovec{
      void *iov_base; /* Pointer to data. */
      size_t iov_len; /* Length of data. */
