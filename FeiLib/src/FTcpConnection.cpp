@@ -1,12 +1,15 @@
-#include "FDef.h"
+#include "FBufferReader.h"
 #include "FCallBackDef.h"
+#include "FDef.h"
 
-#include "FTCPConnection.h"
+
 #include "FBuffer.h"
 #include "FEvent.h"
+#include "FEventLoop.h"
 #include "FSockWrapper.h"
 #include "FSocket.h"
-#include "FEventLoop.h"
+#include "FTCPConnection.h"
+
 
 #include <cerrno>
 #include <functional>
@@ -21,13 +24,13 @@ void guardian(FTcpConnPtr ptr) {
   // protected task, to protect this conn from being destroyed.
 }
 
-FTcpConnection::~FTcpConnection(){
+FTcpConnection::~FTcpConnection() {
   assert(mstate == TcpConnState::DisConnected);
 }
 
 FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn)
     : m_loop(loop), m_sock(new FSock(s)), m_addrIn(addrIn),
-      m_event(std::make_shared<FEvent>(loop, s, loop->getUniqueIdInLoop())),
+      m_event(FEvent::createEvent(loop, s, loop->getUniqueIdInLoop())),
       inBuffer(std::make_unique<FBuffer>(1024)),
       outBuffer(std::make_unique<FBuffer>(1024)),
       mstate(TcpConnState::Connectiing) {
@@ -75,10 +78,13 @@ void FTcpConnection::sendInLoop(const char *data, uint64 len) {
 void FTcpConnection::handleRead() {
   Errno_t err = 0;
   auto len = this->inBuffer->Read(m_sock->getFd(), err);
+
   mstate = TcpConnState::Connected;
   if (len > 0) {
-    if (m_onMessage)
-      m_onMessage(shared_from_this(), *inBuffer);
+    if (m_onMessage) {
+      FBufferReader reader(*inBuffer);
+      m_onMessage(shared_from_this(), reader);
+    }
   } else if (len == 0) {
     handleClose();
   } else {
@@ -109,6 +115,8 @@ void FTcpConnection::setReading(bool v) {
 void FTcpConnection::handleClose() {
   mstate = TcpConnState::DisConnected;
   m_event->disableAll();
+  m_onWriteComplete = nullptr;
+  m_onMessage = nullptr;
   m_onCloseCallback(shared_from_this());
 }
 
@@ -149,15 +157,6 @@ void FTcpConnection::send(const char *data, uint64 len) {
     m_loop->AddTask(
         std::bind(&FTcpConnection::sendInLoopStr, this, std::string()));
     m_loop->AddTask(std::bind(&guardian, shared_from_this()));
-  }
-}
-
-void FTcpConnection::destroy() {
-  // Must in loop
-  m_loop->isInLoopAssert();
-
-  if (mstate != TcpConnState::DisConnected) {
-    m_event->disableAll();
   }
 }
 

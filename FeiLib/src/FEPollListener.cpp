@@ -73,6 +73,7 @@ void FEPollListener::removeEvent(FEvent* event) {
 void FEPollListener::updateEvent(FEvent* event) {
   auto itor = m_pollEvents.find(event->getId());
   if (itor == m_pollEvents.end()) {
+    return;
     // error
   }
   auto &epollEvent = itor->second.epollevent;

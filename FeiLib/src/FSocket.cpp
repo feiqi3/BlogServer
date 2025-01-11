@@ -364,12 +364,13 @@ long SendV(Socket socket, iovec *iov, int count) {
 #endif
 }
 int Readv(Socket socket, struct iovec *iov, int count) {
-#ifdef _WIN32
-  long r, t = 0;
+  int r, t = 0;
   while (count) {
-    r = read(socket, iov->iov_base, iov->iov_len);
-    if (r < 0)
+    #ifdef _WIN32
+    Recv(socket,(char*)iov->iov_base,iov->iov_len,RecvFlag::None,r);
+    if (r < 0) {
       return r;
+    }
     t += r;
     iov++;
     count--;

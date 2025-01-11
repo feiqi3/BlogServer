@@ -1,18 +1,23 @@
+#include "FCallBackDef.h"
 #include "FDef.h"
 #include "FEvent.h"
-#include "FListener.h"
 #include "FSocket.h"
-#include "FeiLib/FSocket.h"
-#include "cstdio"
+#include "FTCPConnection.h"
+#include "FTcpServer.h"
+
 #include <cstdio>
 #include <iostream>
 #include <memory>
 #include <vector>
 
 #include "FAcceptor.h"
+#include "FBufferReader.h"
 #include "FEPollListener.h"
 #include "FEvent.h"
 #include "FEventLoop.h"
+#include "FTCPServer.h"
+#include <chrono>
+#include <thread>
 
 void simple_echo();
 
@@ -22,8 +27,10 @@ void epoll_echo();
 
 void eventLoop();
 
+void FTcpServer_echo();
+
 int main() {
-  eventLoop();
+  FTcpServer_echo();
   return 0;
 }
 
@@ -211,19 +218,20 @@ void eventLoop() {
   FeiInit();
   auto loop = new FEventLoop(std::make_unique<FEPollListener>());
   auto acceptor = std::make_unique<FAcceptor>(loop, "127.0.0.1", 12345, true);
-  //Important: event's lifetime
-  std::map<uint32,FEventPtr> mMap;
-  FAcceptor::OnNewConnectionFunc func = [loop,&mMap](Socket s, FSocketAddr addr) {
+  // Important: event's lifetime
+  std::map<uint32, FEventPtr> mMap;
+  FAcceptor::OnNewConnectionFunc func = [loop, &mMap](Socket s,
+                                                      FSocketAddr addr) {
     auto event = FEvent::createEvent(loop, s, loop->getUniqueIdInLoop());
     mMap[s] = event;
     event->enableReading();
-    auto onClose = [s, addr,loop,&mMap]() {
+    auto onClose = [s, addr, loop, &mMap]() {
       printf("Closing client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
              addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
       Close(s);
       mMap.erase(s);
     };
-    auto onRead = [addr, s,onClose]() {
+    auto onRead = [addr, s, onClose]() {
       char data[128];
       int len = 0;
       auto status = Recv(s, data, 127, RecvFlag::None, len);
@@ -234,7 +242,7 @@ void eventLoop() {
       }
       printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
              addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
-             addr.un.un_byte.a3, len, data);      
+             addr.un.un_byte.a3, len, data);
     };
     event->setReadCallback(onRead);
 
@@ -242,5 +250,46 @@ void eventLoop() {
   };
   acceptor->SetOnNewConnCallback(func);
   loop->Loop();
+  FeiUnInit();
+}
+
+void FTcpServer_echo() {
+  using namespace Fei;
+  FeiInit();
+  FTcpServer *server = new FTcpServer(1);
+  server->init();
+  server->addListenPort(12345);
+  server->setOnConnEstablisedCallback([](FTcpConnPtr ptr) {
+    auto addr = ptr->getAddr();
+    std::cout<<"use count "<<ptr.use_count()<<"\n";
+    printf("Accept client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
+           addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
+    ptr->setReading(true);
+  });
+
+  server->setOnMessageCallback([](FTcpConnPtr ptr, FBufferReader &buf) {
+    auto len = buf.readTo(0, 0);
+    std::vector<char> mBytes(len + 1);
+    len = buf.readTo(mBytes.data(), len);
+    auto addr = ptr->getAddr();
+    std::cout<<"use count "<<ptr.use_count()<<"\n";
+    printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
+           addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+           addr.un.un_byte.a3, len, mBytes.data());
+  });
+
+  server->setOnCloseCallback([](FTcpConnPtr ptr) {
+    (void)ptr;
+    uint16 port = 0;
+    std::cout<<"use count "<<ptr.use_count()<<"\n";
+    auto addr = ptr->getAddr();
+    printf("Close client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
+           addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
+  });
+  server->run();
+  while(1){
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(100ms);
+  }
   FeiUnInit();
 }

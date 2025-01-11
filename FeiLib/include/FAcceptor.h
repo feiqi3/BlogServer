@@ -17,7 +17,6 @@ public:
   ~FAcceptor();
 
   void SetOnNewConnCallback(OnNewConnectionFunc func){_newConnCb = std::move(func);}
-  void listen();
 
   std::string getListenAddr()const{return m_listenAddr;}
   uint32 getListenPort()const{return m_listenPort;}

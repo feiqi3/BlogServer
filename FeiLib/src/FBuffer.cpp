@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstring>
 namespace Fei {
-FBuffer::FBuffer(uint32 size) { m_buffer.reserve(size); }
+FBuffer::FBuffer(uint32 size) { m_buffer.resize(size); }
 int FBuffer::Read(Socket fd, Errno_t &errSaved) {
   char extrabuf[65536];
   iovec vec[2];

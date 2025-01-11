@@ -1,5 +1,5 @@
-#ifndef FTCPSERVER_H
-#define FTCPSERVER_H
+#ifndef FFTcpServer_H
+#define FFTcpServer_H
 #include <map>
 #include <memory>
 #include <mutex>
@@ -15,10 +15,10 @@ namespace Fei {
 class FEventLoop;
 class FAcceptor;
 class FSock;
-class TcpServer : public FNoCopyable{
+class F_API FTcpServer : public FNoCopyable{
     public:
-    TcpServer(uint32 threadNum);
-    ~TcpServer(){stop(true);}
+    FTcpServer(uint32 threadNum);
+    ~FTcpServer(){stop(true);}
     void init();
     void run();
     void stop(bool forceClose = false);
