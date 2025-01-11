@@ -25,7 +25,7 @@ private:
     void handleRead();
 
 private:
-FEventLoop* m_loop;
+  FEventLoop* m_loop;
   FSock m_sock;
   FEventPtr m_event;
   FSocketAddr m_addr;

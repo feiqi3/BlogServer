@@ -13,7 +13,7 @@
 namespace Fei {
 
 void FEPollListener::listen(uint32 timeoutMs,
-                            std::vector<std::shared_ptr<FEvent>> &outEvents) {
+                            std::vector<FEventPtr> &outEvents) {
   FEpollEvent EPollevents[MAX_EVENTS];
   int num = EPollWait(m_epollfd, EPollevents, m_pollEvents.size(), timeoutMs);
   if (num >= 0) {
@@ -28,7 +28,7 @@ void FEPollListener::listen(uint32 timeoutMs,
           m_pollEvents.erase(itor);
           continue;
         }
-        setRevents(event, REvent::FromEpoll(EPollevents[i].events));
+        setRevents(event.get(), REvent::FromEpoll(EPollevents[i].events));
         outEvents.push_back(event);
         assert(event->getId() == id);
       } else {
@@ -40,8 +40,9 @@ void FEPollListener::listen(uint32 timeoutMs,
   }
 }
 
-void FEPollListener::addEvent(const FEventPtr& event) {
-  EpollData data{.event = event, .epollevent = {}};
+void FEPollListener::addEvent(FEvent* event) {
+  //fix me
+  EpollData data{.event = event->shared_from_this(), .epollevent = {}};
 
   // Important Use FEvent id as user data
   data.epollevent.data.u64 = event->getId();
@@ -58,7 +59,7 @@ void FEPollListener::addEvent(const FEventPtr& event) {
   }
 }
 
-void FEPollListener::removeEvent(const FEventPtr& event) {
+void FEPollListener::removeEvent(FEvent* event) {
   auto itor = m_pollEvents.find(event->getId());
   if (itor != m_pollEvents.end()) {
     m_pollEvents.erase(event->getId());
@@ -69,7 +70,7 @@ void FEPollListener::removeEvent(const FEventPtr& event) {
   }
 }
 
-void FEPollListener::updateEvent(const FEventPtr& event) {
+void FEPollListener::updateEvent(FEvent* event) {
   auto itor = m_pollEvents.find(event->getId());
   if (itor == m_pollEvents.end()) {
     // error

@@ -34,7 +34,7 @@ void FEventLoop::Loop() {
   while (!m_quit) {
     mActiveEvents.clear();
     m_listener->listen(10, mActiveEvents);
-    for (auto event : mActiveEvents) {
+    for (auto& event : mActiveEvents) {
       if (m_forceQuit)
         break;
       event->setEventHandling(true);
@@ -53,11 +53,11 @@ void FEventLoop::Loop() {
 
 void FEventLoop::CancelTimer(TimerID id) { m_timeQueue->CancelTask(id); }
 
-void FEventLoop::AddEvent(const FEventPtr& event) {
+void FEventLoop::AddEvent(FEvent* event) {
   m_listener->addEvent(event);
 }
-void FEventLoop::RemoveEvent(const FEventPtr& event) { m_listener->removeEvent(event); }
-void FEventLoop::UpdateEvent(const FEventPtr& event) { m_listener->updateEvent(event); }
+void FEventLoop::RemoveEvent(FEvent* event) { m_listener->removeEvent(event); }
+void FEventLoop::UpdateEvent(FEvent* event) { m_listener->updateEvent(event); }
 bool FEventLoop::isInLoopThread() const {
   return _this_thread_loop == (uint64)this;
 }

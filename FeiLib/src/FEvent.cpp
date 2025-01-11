@@ -3,28 +3,44 @@
 #include "FEventLoop.h"
 #include "FREventDef.h"
 #include "FSocket.h"
+#include <iostream>
 namespace Fei {
 
 static const Event NoneEvent = 0;
 static const Event ReadEvent = REvent::In | REvent::Pri;
 static const Event WriteEvent = REvent::Out;
 
+FEventPtr FEvent::createEvent(FEventLoop *loop, Socket fd, uint64 id){
+  auto ret = std::make_shared<FEvent>(loop, fd, id);
+  ret->addSelfToLoop();
+  return ret;
+}
+
 FEvent::FEvent(FEventLoop *loop, Socket fd, uint64 id)
     : mLoop(loop), mFd(fd), mId(id), mEvent(0), mRevents(0),
-      mEventHandling(false), mAddedToLoop(true) {
-  mLoop->AddEvent(shared_from_this());
+      mEventHandling(false), mAddedToLoop(false) {
 }
 FEvent::~FEvent() {
+  if(!mAddedToLoop)return;
   disableAll();
-  mLoop->RemoveEvent(shared_from_this());
+  mLoop->RemoveEvent(this);
+  std::cout<<"event down"<<"\n";
+}
+
+void FEvent::addSelfToLoop(){
+  if(mAddedToLoop)return;
+  mLoop->AddEvent(this);
+  mAddedToLoop = true;
 }
 
 void FEvent::enableReading() {
+  if(mEvent&ReadEvent)return;
   mEvent |= ReadEvent;
   update();
 }
 
 void FEvent::enableWriting() {
+  if(mEvent&WriteEvent)return;
   mEvent |= WriteEvent;
   update();
 }
@@ -50,9 +66,9 @@ bool FEvent::isReading() { return mEvent & ReadEvent; }
 
 bool FEvent::isNoneEvent() { return mEvent == NoneEvent; }
 
-void FEvent::update() { mLoop->UpdateEvent(shared_from_this()); }
+void FEvent::update() { mLoop->UpdateEvent(this); }
 
-void FEvent::remove() { mLoop->RemoveEvent(shared_from_this()); }
+void FEvent::remove() { mLoop->RemoveEvent(this); }
 
 void FEvent::handleEvent() {
   mEventHandling = true;

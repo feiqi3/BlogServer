@@ -21,7 +21,7 @@ class FEvent;
 class F_API FEventLoop : public FNoCopyable {
 public:
   FEventLoop(std::unique_ptr<FListener> listener);
-  ~FEventLoop();
+  ~FEventLoop(){assert(m_stoped);}
   void Loop();
   void Quit();
   void ForceQuit() {m_forceQuit = true;}
@@ -29,9 +29,9 @@ public:
   void AddTask(const std::function<void()> &task);
   TimerID RunAfter(uint64 ms, TimerFunc task);
   void CancelTimer(TimerID id);
-  void AddEvent(const FEventPtr& event);
-  void RemoveEvent(const FEventPtr& event);
-  void UpdateEvent(const FEventPtr& event);
+  void AddEvent(FEvent* event);
+  void RemoveEvent(FEvent* event);
+  void UpdateEvent(FEvent* event);
   uint64 getUniqueIdInLoop(){return mIdCounter++; }
 
   bool isInLoopThread()const;

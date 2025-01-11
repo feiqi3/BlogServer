@@ -3,6 +3,9 @@
 #include "FEvent.h"
 #include "FSockWrapper.h"
 #include "FSocket.h"
+
+#include "FEventLoop.h"
+
 #include <cassert>
 #include <cstdlib>
 #include <functional>
@@ -60,7 +63,7 @@ void FAcceptor::handleRead() {
 }
 
 FAcceptor::~FAcceptor() {
-  m_loop->RemoveEvent(m_event);
+  m_loop->RemoveEvent(m_event.get());
   m_event = nullptr;
 }
 

@@ -1,6 +1,7 @@
 #ifndef FTCPCONNECTION_H
 #define FTCPCONNECTION_H
 
+#include <cassert>
 #include <memory>
 #include <string>
 
@@ -32,6 +33,7 @@ public:
   //                      While user consume it slow, then this will be called
   // Low  water callback: when data in buffer reach a user set limit, call this.
 
+  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn);
   ~FTcpConnection();
 
   TcpConnState getState() const { return mstate; }
@@ -50,8 +52,7 @@ public:
   }
 
   void setReading(bool v);
-private:
-  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn);
+protected:
   // When output buffer is empty, send directly,
   // else queued in loop and send by buffer.
   void sendInLoop(const char *data, uint64 len);

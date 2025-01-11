@@ -9,11 +9,11 @@ namespace Fei {
 class F_API FEPollListener : public FListener {
 public:
   virtual void listen(uint32 timeoutMs,
-                      std::vector<std::shared_ptr<FEvent >> &outEvents) override;
+                      std::vector<FEventPtr> &outEvents) override;
 
-  virtual void addEvent(const FEventPtr& event) override;
-  virtual void removeEvent(const FEventPtr& event) override;
-  virtual void updateEvent(const FEventPtr& event) override;
+  virtual void addEvent(FEvent* event) override;
+  virtual void removeEvent(FEvent* event) override;
+  virtual void updateEvent(FEvent* event) override;
   ~FEPollListener();
   FEPollListener();
 

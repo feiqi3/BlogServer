@@ -1,3 +1,4 @@
+#include "FDef.h"
 #include "FEvent.h"
 #include "FListener.h"
 #include "FSocket.h"
@@ -208,30 +209,32 @@ void epoll_echo() {
 void eventLoop() {
   using namespace Fei;
   FeiInit();
-  FEventLoop *loop = new FEventLoop(std::make_unique<FEPollListener>());
+  auto loop = new FEventLoop(std::make_unique<FEPollListener>());
   auto acceptor = std::make_unique<FAcceptor>(loop, "127.0.0.1", 12345, true);
-  FAcceptor::OnNewConnectionFunc func = [loop](Socket s, FSocketAddr addr) {
-    FEvent *event = new FEvent(loop, s, loop->getUniqueIdInLoop());
+  //Important: event's lifetime
+  std::map<uint32,FEventPtr> mMap;
+  FAcceptor::OnNewConnectionFunc func = [loop,&mMap](Socket s, FSocketAddr addr) {
+    auto event = FEvent::createEvent(loop, s, loop->getUniqueIdInLoop());
+    mMap[s] = event;
     event->enableReading();
-    auto onClose = [s, addr, event,loop]() {
+    auto onClose = [s, addr,loop,&mMap]() {
       printf("Closing client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
              addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
       Close(s);
-      event->disableAll();
-      loop->AddTask([event](){printf("Delete event\n"); delete event;});
+      mMap.erase(s);
     };
     auto onRead = [addr, s,onClose]() {
       char data[128];
       int len = 0;
       auto status = Recv(s, data, 127, RecvFlag::None, len);
+      (void)status;
       if (len <= 0) {
         onClose();
         return;
       }
       printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
              addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
-             addr.un.un_byte.a3, len, data);
-      
+             addr.un.un_byte.a3, len, data);      
     };
     event->setReadCallback(onRead);
 

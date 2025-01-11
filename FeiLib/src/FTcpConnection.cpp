@@ -1,10 +1,13 @@
+#include "FDef.h"
+#include "FCallBackDef.h"
+
 #include "FTCPConnection.h"
 #include "FBuffer.h"
-#include "FCallBackDef.h"
-#include "FDef.h"
 #include "FEvent.h"
 #include "FSockWrapper.h"
 #include "FSocket.h"
+#include "FEventLoop.h"
+
 #include <cerrno>
 #include <functional>
 #include <memory>
@@ -16,6 +19,10 @@ void guardian(FTcpConnPtr ptr) {
   (void)ptr;
   // Do Nothing, but hold a reference count and queued in loop after the need
   // protected task, to protect this conn from being destroyed.
+}
+
+FTcpConnection::~FTcpConnection(){
+  assert(mstate == TcpConnState::DisConnected);
 }
 
 FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn)

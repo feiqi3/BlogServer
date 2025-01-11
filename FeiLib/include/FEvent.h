@@ -2,27 +2,23 @@
 #define FEVENT_H
 #include "FCallBackDef.h"
 #include "FDef.h"
-#include "FEventLoop.h"
 #include "FListener.h"
 #include <atomic>
-#include <functional>
 #include <memory>
 
 
 namespace Fei {
 
 class FListener;
+class FEventLoop;
 
-class F_API FEvent : public std::enable_shared_from_this<FEvent> {
+class F_API FEvent : public std::enable_shared_from_this<FEvent>{
 public:
   friend class FListener;
-  static FEventPtr createEvent(FEventLoop *loop, Socket fd, uint64 id) {
-    return std::make_shared<FEvent>(loop, fd, id);
-  }
-
+  static FEventPtr createEvent(FEventLoop *loop, Socket fd, uint64 id);
 public:
+  FEvent(FEventLoop *loop, Socket fd, uint64 id);
   ~FEvent();
-
 public:
   void setReadCallback(ReadEventCallback cb) { mReadCallback = std::move(cb); }
   void setWriteCallback(EventCallback cb) { mWriteCallback = std::move(cb); }
@@ -51,7 +47,7 @@ public:
 
 private:
   void setRevents(Event revents) { mRevents = revents; }
-  FEvent(FEventLoop *loop, Socket fd, uint64 id);
+  void addSelfToLoop();
 
 private:
   FEventLoop *mLoop;

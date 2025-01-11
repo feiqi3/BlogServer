@@ -18,8 +18,9 @@ int main() {
     return -1;
   }
   char data[128] = "Hello, world!";
-  status = Send(socket, data, 13);
-  if (status != SocketStatus::Success) {
+  int realSendLen = 0;
+  status = Send(socket, data, 13,realSendLen);
+  if (status != SocketStatus::Success || realSendLen < 13) {
     printf("Send failed: %s\n", StatusToStr(status));
     printf("Error: %s\n", GetErrorStr().c_str());
     return -1;
