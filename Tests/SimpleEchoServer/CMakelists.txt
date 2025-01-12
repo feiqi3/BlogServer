@@ -1,0 +1,18 @@
+project(SimpleEchoServer)
+
+set (projectname_server ${PROJECT_NAME}_Server)
+set (projectname_client ${PROJECT_NAME}_Client)
+
+add_executable(${projectname_server} server.cpp)
+set_target_properties(${projectname_server} PROPERTIES FOLDER "Libraries")
+add_executable(${projectname_client} client.cpp)
+set_target_properties(${projectname_client} PROPERTIES FOLDER "Libraries")
+
+
+target_include_directories(${projectname_server} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(${projectname_server} PRIVATE ${CMAKE_SOURCE_DIR}/3rd/FeiLib/include)
+target_link_libraries(${projectname_server} PRIVATE FeiLib)
+
+target_include_directories(${projectname_client} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(${projectname_client} PRIVATE ${CMAKE_SOURCE_DIR}/3rd/FeiLib/include)
+target_link_libraries(${projectname_client} PRIVATE FeiLib)
