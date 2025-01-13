@@ -14,6 +14,7 @@ using uint32 = uint32_t;
 using uint64 = uint64_t;
 using int32 = int32_t;
 using int64 = int64_t;
+using Byte = uint8;
 
 using Socket = uint64;
 using Event = uint32;
