@@ -9,7 +9,7 @@
 namespace Fei {
 class FBuffer;
 
-//A low-weight buffer reader, do not control buffer's lifetime
+//A light-weight buffer reader, do not control buffer's lifetime
 class FBufferView {
 public:
   FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end);
