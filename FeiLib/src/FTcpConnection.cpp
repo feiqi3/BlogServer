@@ -100,6 +100,12 @@ void FTcpConnection::handleRead() {
   }
 }
 
+void FTcpConnection::setKeepAlive(bool v) { m_sock->setKeepAlive(v); }
+
+void FTcpConnection::setKeepIdle(int idleTime) {
+  m_sock->setKeepIdle(idleTime);
+}
+
 void FTcpConnection::setReading(bool v) {
 
   if (v == true && !m_event->isReading()) {

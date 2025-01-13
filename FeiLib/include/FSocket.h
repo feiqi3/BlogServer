@@ -87,12 +87,15 @@ enum class SockOpt{
   ReusePort,
   ReuseAddr,
   KeepAlive,
+  KeepIntvl,
+  KeepIdle,
   NoneBlock,
   CloseOnExec,
   NoneBlockAndCloseOnExec,
 };
 F_API int SetSockOpt(Socket s,SockOpt opt,bool on);
-                
+F_API int SetSockOpt(Socket s,SockOpt opt, int v);
+
 F_API std::string GetErrorStr();
 
 F_API int FPoll(FPollfd *sockets, int num, int timeout);

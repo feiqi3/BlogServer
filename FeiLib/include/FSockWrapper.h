@@ -21,6 +21,10 @@ void setReuseport(bool on);
 void setReuseAddr(bool on);
 void setNoneBlock(bool on);
 void setExitOnExec(bool on);
+void setKeepAlive(bool on);
+void setKeepIdle(int time);
+
+
 private:
     Socket m_fd;
     bool valid = true;

@@ -4,6 +4,7 @@
 #include <io.h>
 #include <string>
 #include <winsock2.h>
+#include <ws2ipdef.h>
 
 #ifdef _WIN32
 #include "wepoll.h"
@@ -427,6 +428,22 @@ EpollHandle EPollCreate1(int flags) {
   return epoll_create1(flags);
 }
 
+int SetSockOpt(Socket s,SockOpt opt, int v){
+  int _opt = 0;
+  int lvl = SOL_SOCKET;
+  if(opt == SockOpt::KeepIntvl){
+    _opt = TCP_KEEPINTVL;
+    lvl = IPPROTO_TCP;
+  }else if(opt == SockOpt::KeepIdle){
+    _opt = TCP_KEEPIDLE;
+    lvl = IPPROTO_TCP;
+  }else{
+    return -1;
+  }
+
+  return ::setsockopt(s, lvl, _opt,(char*)&v, sizeof(v));
+}
+
 int SetSockOpt(Socket s, SockOpt opt, bool on) {
   int _opt = 0;
   if (opt == SockOpt::ReuseAddr) {
@@ -440,16 +457,16 @@ int SetSockOpt(Socket s, SockOpt opt, bool on) {
   } else if (opt == SockOpt::KeepAlive) {
     _opt = SO_KEEPALIVE;
   }
-
+  int data = on ? 1 : 0;
   if (_opt != 0)
-    return setsockopt(s, SOL_SOCKET, _opt, on ? (char *)1 : 0, sizeof(_opt));
+    return setsockopt(s, SOL_SOCKET, _opt, (char*)&data, sizeof(data));
 
 //-------------------------------------------//
 #ifdef _WIN32
   if (opt == SockOpt::NoneBlock || opt == SockOpt::NoneBlockAndCloseOnExec) {
     unsigned long _temp = 1;
     return ioctlsocket(s, FIONBIO, &_temp);
-  } else {
+  } else if(opt == SockOpt::CloseOnExec){
     return 0;
     // No close on exec in windows
   }
@@ -473,6 +490,7 @@ int SetSockOpt(Socket s, SockOpt opt, bool on) {
   }
 
 #endif
+return -1;
 }
 
 }; // namespace Fei

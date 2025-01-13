@@ -1,6 +1,7 @@
 #include "FSockWrapper.h"
 #include "FDef.h"
 #include "FSocket.h"
+#include <cassert>
 
 namespace Fei {
 
@@ -38,7 +39,7 @@ void FSock::setReuseport(bool on) {
 
 void FSock::setNoneBlock(bool on) {
   if (valid) {
-    SetSockOpt(m_fd, SockOpt::NoneBlock, on);
+   assert(SetSockOpt(m_fd, SockOpt::NoneBlock, on) >= 0);
   }
 }
 void FSock::setExitOnExec(bool on) {
@@ -46,5 +47,18 @@ void FSock::setExitOnExec(bool on) {
     SetSockOpt(m_fd, SockOpt::CloseOnExec, on);
   }
 }
+
+void FSock::setKeepAlive(bool on){
+  if (valid) {
+    SetSockOpt(m_fd, SockOpt::KeepAlive, on);
+  }
+}
+
+void FSock::setKeepIdle(int time){
+    if (valid) {
+    SetSockOpt(m_fd, SockOpt::KeepAlive, time);
+  }
+}
+
 
 } // namespace Fei

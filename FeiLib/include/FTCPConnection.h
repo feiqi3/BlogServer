@@ -15,8 +15,9 @@ class FEvent;
 class FSock;
 class FBuffer;
 
-class F_API FTcpConnection : public FNoCopyable,
-                       public std::enable_shared_from_this<FTcpConnection> {
+class F_API FTcpConnection
+    : public FNoCopyable,
+      public std::enable_shared_from_this<FTcpConnection> {
 public:
   friend class FTcpServer;
 
@@ -41,7 +42,11 @@ public:
   TcpConnState getState() const { return mstate; }
   void setReading(bool v);
   void send(const char *data, uint64 len);
-  FSocketAddr getAddr()const{return m_addrIn;}
+
+  void setKeepAlive(bool v);
+  void setKeepIdle(int idleTime);
+  FSocketAddr getAddr() const { return m_addrIn; }
+
 protected:
   // When output buffer is empty, send directly,
   // else queued in loop and send by buffer.
