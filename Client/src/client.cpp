@@ -1,9 +1,10 @@
 #include "FSocket.h"
 #include "FeiLib/FSocket.h"
+#include "FeiLibIniter.h"
 #include "cstdio"
 int main() {
   using namespace Fei;
-  FeiInit();
+  ::Fei::FeiLibInit();
   Socket socket;
   SocketStatus status = Create(socket);
   if (status != SocketStatus::Success) {
@@ -26,5 +27,5 @@ int main() {
     return -1;
   }
   Close(socket);
-  FeiUnInit();
+  FeiLibUnInit();
 }

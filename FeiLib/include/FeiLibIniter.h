@@ -2,9 +2,11 @@
 #define FEILIBINITER_H
 #include "FDef.h"
 
-namespace Fei{
-    void F_API FeiLibInit();
-    void F_API FeiLibUnInit();
-};
+namespace Fei {
+
+F_API void FeiLibInit();
+F_API void FeiLibUnInit();
+
+}; // namespace Fei
 
 #endif

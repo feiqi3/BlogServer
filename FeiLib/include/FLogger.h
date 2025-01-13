@@ -26,7 +26,7 @@ struct LoggerConfig {
   lvl saveLvl = lvl::info;
 };
 
-class Logger : public FSingleton<Logger> {
+class F_API Logger : public FSingleton<Logger> {
 public:
   Logger(const LoggerConfig &config);
   template <typename... Args>

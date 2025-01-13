@@ -5,6 +5,7 @@
 #include "FSocket.h"
 
 #include "FEventLoop.h"
+#include "Flogger.h"
 
 #include <cassert>
 #include <cstdlib>
@@ -14,33 +15,31 @@ namespace Fei {
 
 FAcceptor::FAcceptor(FEventLoop *loop, const char *listenAddr, int port,
                      bool reusePort)
-    : m_loop(loop), m_listenAddr(listenAddr),m_listenPort(port){
+    : m_loop(loop), m_listenAddr(listenAddr), m_listenPort(port) {
   Socket socket;
   auto status = Create(socket, SocketType::Stream, SocketProt::TCP);
   if (status != SocketStatus::Success) {
-    printf("Create failed: %s\n", StatusToStr(status));
-    printf("Error: %s\n", GetErrorStr().c_str());
-    exit(-1);
+    Logger::instance()->log("Acceptor", lvl::critical,
+                            "Socket create failed, reason: {}", GetErrorStr());
   }
   assert(status == SocketStatus::Success);
   m_sock = FSock(socket); // For a possible copy elision...
   m_sock.setReuseport(reusePort);
   m_sock.setNoneBlock(true);
   m_sock.setExitOnExec(true);
-  m_event = FEvent::createEvent(m_loop, m_sock.getFd(), loop->getUniqueIdInLoop());
+  m_event =
+      FEvent::createEvent(m_loop, m_sock.getFd(), loop->getUniqueIdInLoop());
   m_event->enableReading();
   m_addr = FSocketAddr(listenAddr, port);
   status = Bind(m_sock.getFd(), m_addr);
   if (status != SocketStatus::Success) {
-    printf("Bind failed: %s\n", StatusToStr(status));
-    printf("Error: %s\n", GetErrorStr().c_str());
-    exit(-1);
+    Logger::instance()->log("Acceptor", lvl::critical,
+                            "Socket bind failed, reason: {}", GetErrorStr());
   }
   status = Listen(m_sock.getFd(), 1024);
   if (status != SocketStatus::Success) {
-    printf("Listen failed: %s\n", StatusToStr(status));
-    printf("Error: %s\n", GetErrorStr().c_str());
-    exit(-1);
+    Logger::instance()->log("Acceptor", lvl::critical,
+                            "Socket listen failed, reason: {}", GetErrorStr());
   }
   m_event->setReadCallback(std::bind(&FAcceptor::handleRead, this));
 
@@ -59,6 +58,8 @@ void FAcceptor::handleRead() {
     }
   } else {
     // Accept error;
+    Logger::instance()->log("Acceptor", lvl::err,
+                            "Socket accept failed, reason: {}", GetErrorStr());
   }
 }
 

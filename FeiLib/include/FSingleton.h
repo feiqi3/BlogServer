@@ -2,6 +2,7 @@
 #define SINGLETON_H_
 #pragma once
 #include "FDef.h"
+#include "cassert"
 
 namespace Fei {
 

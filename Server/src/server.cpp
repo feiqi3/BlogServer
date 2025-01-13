@@ -1,6 +1,7 @@
 #include "FCallBackDef.h"
 #include "FDef.h"
 #include "FEvent.h"
+#include "FeiLibIniter.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
 #include "FTcpServer.h"
@@ -36,7 +37,7 @@ int main() {
 
 void poll_echo() {
   using namespace Fei;
-  FeiInit();
+  FeiLibInit();
   Socket socket;
   SocketStatus status = Fei::SocketStatus::Success;
 
@@ -93,13 +94,13 @@ void poll_echo() {
       }
     }
   }
-  FeiUnInit();
+  FeiLibUnInit();
 }
 
 void simple_echo() {
   using namespace Fei;
   Socket socket;
-  FeiInit();
+  FeiLibInit();
   SocketStatus status = Create(socket);
   if (status != SocketStatus::Success) {
     printf("Create socket failed: %s\n", StatusToStr(status));
@@ -136,12 +137,12 @@ void simple_echo() {
     }
   }
   Close(socket);
-  FeiUnInit();
+  FeiLibUnInit();
 }
 
 void epoll_echo() {
   using namespace Fei;
-  FeiInit();
+  FeiLibInit();
   Socket socket;
   SocketStatus status = Fei::SocketStatus::Success;
   status = Create(socket);
@@ -210,12 +211,12 @@ void epoll_echo() {
   }
   EPollCtl(ephnd, EPollOp::Del, socket, nullptr);
   EPollClose(ephnd);
-  FeiUnInit();
+  FeiLibUnInit();
 }
 
 void eventLoop() {
   using namespace Fei;
-  FeiInit();
+  FeiLibInit();
   auto loop = new FEventLoop(std::make_unique<FEPollListener>());
   auto acceptor = std::make_unique<FAcceptor>(loop, "127.0.0.1", 12345, true);
   // Important: event's lifetime
@@ -250,12 +251,12 @@ void eventLoop() {
   };
   acceptor->SetOnNewConnCallback(func);
   loop->Loop();
-  FeiUnInit();
+  FeiLibUnInit();
 }
 
 void FTcpServer_echo() {
   using namespace Fei;
-  FeiInit();
+  ::Fei::FeiLibInit();
   FTcpServer *server = new FTcpServer(1);
   server->init();
   server->addListenPort(12345);
@@ -290,5 +291,5 @@ void FTcpServer_echo() {
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(100ms);
   }
-  FeiUnInit();
+  FeiLibUnInit();
 }
