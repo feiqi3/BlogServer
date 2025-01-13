@@ -3,23 +3,27 @@
 #include "FCallBackDef.h"
 #include "FDef.h"
 #include "FListener.h"
+#include "FTimeQueue.h"
 #include <atomic>
 #include <memory>
-
 
 namespace Fei {
 
 class FListener;
 class FEventLoop;
 
-class F_API FEvent : public std::enable_shared_from_this<FEvent>{
+class F_API FEvent : public std::enable_shared_from_this<FEvent> {
 public:
   friend class FListener;
   static FEventPtr createEvent(FEventLoop *loop, Socket fd, uint64 id);
+
 public:
   FEvent(FEventLoop *loop, Socket fd, uint64 id);
   ~FEvent();
+
 public:
+  void setReveiveTime(TimeStamp reveiveTime) { mReceiveTime = reveiveTime; }
+  TimeStamp getReceiveTime()const { return mReceiveTime; }
   void setReadCallback(ReadEventCallback cb) { mReadCallback = std::move(cb); }
   void setWriteCallback(EventCallback cb) { mWriteCallback = std::move(cb); }
   void setCloseCallback(EventCallback cb) { mCloseCallback = std::move(cb); }
@@ -63,6 +67,8 @@ private:
   EventCallback mWriteCallback;
   EventCallback mCloseCallback;
   EventCallback mErrorCallback;
+
+  TimeStamp mReceiveTime;
 };
 
 } // namespace Fei

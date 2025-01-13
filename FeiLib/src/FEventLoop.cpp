@@ -5,7 +5,6 @@
 #include "FTimeQueue.h"
 #include <chrono>
 #include <memory>
-#include <thread>
 
 namespace Fei {
 
@@ -34,10 +33,12 @@ void FEventLoop::Loop() {
   while (!m_quit) {
     mActiveEvents.clear();
     m_listener->listen(10, mActiveEvents);
+    TimeStamp onReceviceTime = std::chrono::system_clock::now().time_since_epoch().count();
     for (auto& event : mActiveEvents) {
       if (m_forceQuit)
         break;
       event->setEventHandling(true);
+      event->setReveiveTime(onReceviceTime);
       event->handleEvent();
       event->setEventHandling(false);
     }

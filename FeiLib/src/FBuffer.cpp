@@ -52,10 +52,15 @@ int FBuffer::Peek(int wantLen, char *ret) {
 void FBuffer::Append(const char *data, uint32 len) {
   uint32 newSize = writeIdx + len;
   m_buffer.resize(newSize);
-  memcpy(m_buffer.data()+writeIdx, data, len);
+  memcpy(m_buffer.data() + writeIdx, data, len);
 }
 
 void FBuffer::Pop(int len) { readIdx += len; }
 void FBuffer::PopAll() { readIdx = writeIdx; }
+char FBuffer::Get(uint32 offset) const {
+  auto readPos = readIdx + offset;
+  if(readPos > writeIdx)return '\0';
+  return m_buffer[readPos];
+}
 
 } // namespace Fei

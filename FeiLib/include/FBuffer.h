@@ -25,6 +25,7 @@ public:
   int Peek(int wantLen, char *ret); // sizeof ret >= wantlen
   void Pop(int len);
   void PopAll();
+  char Get(uint32 offset)const;
 
   int getWriteableSize() const { return int(m_buffer.size() - writeIdx); }
   int getReadableSize() const { return int(writeIdx - readIdx); }
