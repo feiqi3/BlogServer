@@ -36,6 +36,10 @@ endif()
 # Link platform-specific socket libraries
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+    # stupid msvc
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+)
 endif()
 
 # Set build-specific output directories

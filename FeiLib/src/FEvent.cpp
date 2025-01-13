@@ -24,7 +24,6 @@ FEvent::~FEvent() {
   if(!mAddedToLoop)return;
   disableAll();
   mLoop->RemoveEvent(this);
-  std::cout<<"event down"<<"\n";
 }
 
 void FEvent::addSelfToLoop(){

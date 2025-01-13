@@ -2,19 +2,21 @@
 #include "FCallBackDef.h"
 #include "FDef.h"
 
-
 #include "FBuffer.h"
 #include "FEvent.h"
 #include "FEventLoop.h"
+#include "FLogger.h"
 #include "FSockWrapper.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
 
-
 #include <cerrno>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <string>
+
+#define MODULE_NAME "TcpConn"
 
 namespace Fei {
 
@@ -38,6 +40,11 @@ FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn)
   m_event->setErrorCallback(std::bind(&FTcpConnection::handleClose, this));
   m_event->setReadCallback(std::bind(&FTcpConnection::handleRead, this));
   m_event->setWriteCallback(std::bind(&FTcpConnection::handleWrite, this));
+  Logger::instance()->log(
+      MODULE_NAME, lvl::trace,
+      "TcpConnection Establish. address: {}.{}.{}.{}, port: {}",
+      m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1, m_addrIn.un.un_byte.a2,
+      m_addrIn.un.un_byte.a3, m_addrIn.port);
 }
 
 void FTcpConnection::sendInLoop(const char *data, uint64 len) {
@@ -118,6 +125,19 @@ void FTcpConnection::handleClose() {
   m_onWriteComplete = nullptr;
   m_onMessage = nullptr;
   m_onCloseCallback(shared_from_this());
+  Logger::instance()->log(
+      MODULE_NAME, lvl::trace,
+      "TcpConnection disconnected. address: {}.{}.{}.{}, port: {}",
+      m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1, m_addrIn.un.un_byte.a2,
+      m_addrIn.un.un_byte.a3, m_addrIn.port);
+}
+
+void FTcpConnection::handleError() {
+  Logger::instance()->log(
+      MODULE_NAME, lvl::trace,
+      "TcpConnection Error, Errno {}. address: {}.{}.{}.{}, port: {}",
+      strerror(errno), m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1,
+      m_addrIn.un.un_byte.a2, m_addrIn.un.un_byte.a3, m_addrIn.port);
 }
 
 void FTcpConnection::handleWrite() {
@@ -135,6 +155,11 @@ void FTcpConnection::handleWrite() {
         m_loop->AddTask(std::bind(m_onWriteComplete, shared_from_this()));
       }
       if (mstate == TcpConnState::DisConnecting) {
+        Logger::instance()->log(
+            MODULE_NAME, lvl::trace,
+            "TcpConnection shuting down. address: {}.{}.{}.{}, port: {}",
+            strerror(errno), m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1,
+            m_addrIn.un.un_byte.a2, m_addrIn.un.un_byte.a3, m_addrIn.port);
         shutdownInLoop();
       }
     }

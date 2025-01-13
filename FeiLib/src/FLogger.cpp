@@ -39,7 +39,9 @@ spdlog::level::level_enum toSpdLvl(lvl _lvl) {
 }
 } // namespace
 
-Logger::Logger(const LoggerConfig &config) : mDp(new LoggerPrivate) {
+Logger::Logger(const LoggerConfig &config)
+    : mShowLvl((lvl)std::min((int)config.showLvl, (int)config.saveLvl)),
+      mDp(new LoggerPrivate) {
   mDp->mConsoleLogger = spdlog::stdout_logger_mt("Console_log");
   mDp->mConsoleLogger->set_level(toSpdLvl(config.showLvl));
   mDp->mConsoleLogger->set_pattern("[%l] %v");

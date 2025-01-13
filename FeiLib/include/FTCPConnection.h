@@ -49,8 +49,7 @@ protected:
   void handleRead();
   void handleWrite();
   void handleClose();
-  void handleError() { // TODO:
-  }
+  void handleError();
   void shutdownInLoop();
   void handleWriteComplete();
   void startReadingInLoop();
