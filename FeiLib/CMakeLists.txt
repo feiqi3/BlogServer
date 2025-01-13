@@ -23,6 +23,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+#3rd
+add_subdirectory(3rd/spdlog)
+target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
+
 if(WIN32)
     add_subdirectory(3rd/wepoll)
     target_link_libraries(${PROJECT_NAME} PRIVATE wepoll)

@@ -1,0 +1,3 @@
+[submodule "FeiLib/3rd/spdlog"]
+	path = FeiLib/3rd/spdlog
+	url = https://github.com/gabime/spdlog.git
