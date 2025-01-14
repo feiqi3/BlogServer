@@ -2,6 +2,7 @@
 #define FHTTPARSER_H
 #include "FHttpDef.h"
 #include "../FBufferReader.h"
+#include "Http/FHttpDef.h"
 
 #include <string>
 #include <map>
@@ -9,11 +10,14 @@
 namespace Fei::Http {
 
 using HttpQueryMap = std::map<std::string, std::string>;
-
+using HeaderMap = std::map<std::string, std::string>;
 class F_API FHttpContext {
+    friend class FHttpParser;
+    
     public:
     private:
-    std::map<std::string,std::string> mHeaders;
+    Method mMethod;
+    HeaderMap mHeaders;
 };
 
 class FHttpParser {
@@ -24,16 +28,16 @@ public:
      const std::string& MethodToString(Method method);
      Method StringToMethod(const std::string&);
 public:
-   FHttpContext parse();
+   bool parse(FHttpContext& ctx);
 private:
    FBufferView parseHost(FBufferReader& inReader);
    FBufferView parseUserAgent(FBufferReader& inReader);
 
   //Method and method data.
    Http::Method parseMethod(FBufferView& inView, uint32& cursor);
-   Http::Version parseVersion(FBufferReader& inReader);
-   HttpQueryMap parseQueryInPath(FBufferReader& inReader);
-   FBufferView parseBody(FBufferReader& inReader);
+   bool parseVersion(FBufferView& view,Http::Version &outVersion, uint32& cursor);
+   bool parsePath(FBufferView& inView,std::string& outPath,HttpQueryMap& outmap,uint32& cursor);
+   HeaderMap parseHeader(FBufferView& oldView);
 
    FBufferView newLine(FBufferView* lastView);
 

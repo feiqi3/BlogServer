@@ -35,6 +35,9 @@ enum StatusCode{
 //5xx    
     _500,_501,_502,_505,
 };
+
+const uint32 HttpMaxRequestPathLen = 4096;
+
 } // namespace Http
 } // namespace Fei
 
