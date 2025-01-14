@@ -6,6 +6,23 @@
 #include <mutex>
 #include <cstdint>
 
+#ifdef _WIN32
+#pragma warning( once : 4251 )
+#ifdef _F_EXPORT
+#define F_API __declspec(dllexport)
+#else
+#define F_API __declspec(dllimport)
+#endif
+#elif defined(__linux__) or defined(__APPLE__)
+#ifdef _F_EXPORT
+#define F_API __attribute__((visibility("default")))
+#else
+#define F_API
+#endif
+#endif
+
+#define FAUTO_LOCK(_mutex) std::lock_guard<std::mutex> lock##_mutex(_mutex)
+
 
 namespace Fei {
 using uint8 = uint8_t;
@@ -29,12 +46,12 @@ typedef union FEpollData {
   Socket sock;
 } epoll_data_t;
 
-struct FEpollEvent {
+struct F_API FEpollEvent {
   uint32 events;
   FEpollData data;
 };
 
-struct FSocketAddr {
+struct F_API FSocketAddr {
   // Impl in Socket.cpp
   FSocketAddr(const char *ip, uint16 port);
   FSocketAddr() = default;
@@ -62,20 +79,5 @@ using FEventPtr = std::shared_ptr<class FEvent>;
 using FEventPtrWeak= std::weak_ptr<class FEvent>;
 }; // namespace Fei
 
-#ifdef _WIN32
-#ifdef _F_EXPORT
-#define F_API __declspec(dllexport)
-#else
-#define F_API __declspec(dllimport)
-#endif
-#elif defined(__linux__) or defined(__APPLE__)
-#ifdef _F_EXPORT
-#define F_API __attribute__((visibility("default")))
-#else
-#define F_API
-#endif
-#endif
-
-#define FAUTO_LOCK(_mutex) std::lock_guard<std::mutex> lock##_mutex(_mutex)
 
 #endif

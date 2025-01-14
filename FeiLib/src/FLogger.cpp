@@ -33,6 +33,7 @@ spdlog::level::level_enum toSpdLvl(lvl _lvl) {
   case lvl::off:
     return spdlog::level::off;
   case lvl::n_levels:
+  default:
     return spdlog::level::n_levels;
     break;
   }
