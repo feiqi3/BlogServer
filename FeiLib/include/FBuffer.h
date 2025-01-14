@@ -31,7 +31,7 @@ public:
 
 private:
   friend class FBufferView;
-  const Byte &GetDirect(uint32 pos) const { return m_buffer[pos]; }
+  const Byte &GetDirect(uint32 pos) const { return m_buffer.at(pos); }
   uint32 readIdx = 0;
   uint32 writeIdx = 0;
   std::vector<Byte> m_buffer;

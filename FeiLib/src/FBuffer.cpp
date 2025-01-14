@@ -59,7 +59,7 @@ void FBuffer::Pop(int len) { readIdx += len; }
 void FBuffer::PopAll() { readIdx = writeIdx; }
 char FBuffer::Get(uint32 offset) const {
   auto readPos = readIdx + offset;
-  if(readPos > writeIdx)return '\0';
+  if(readPos >= writeIdx)return '\0';
   return m_buffer[readPos];
 }
 

@@ -36,7 +36,7 @@ FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
     end++;
 
     // LF
-    if (nxt == 'n' && linebreaker == LineBreaker::LF) {
+    if (nxt == '\n' && linebreaker == LineBreaker::LF) {
       break;
     } else if (nxt == '\r' && (int)linebreaker & (int)LineBreaker::CR) {
       // CRLF
@@ -67,12 +67,15 @@ char FBufferReader::readNext() {
 }
 
 FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
-    : buffer(inBuffer), beg(_beg + buffer.readIdx), end(_end + buffer.readIdx) {
+    : buffer(&inBuffer), beg(_beg + buffer->readIdx), end(_end + buffer->readIdx) {
 }
+  bool FBufferView::isEOF()const{
+    return buffer->Get(beg)== '\0';
+  }
 
 const Byte &FBufferView::operator[](uint32 pos) const {
   assert(pos + beg < end);
-  return buffer.GetDirect(beg + pos);
+  return buffer->GetDirect(beg + pos);
 }
 
 } // namespace Fei
