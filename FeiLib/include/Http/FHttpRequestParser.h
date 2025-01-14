@@ -6,8 +6,9 @@
 #include <string>
 #include <map>
 
-namespace Fei {
+namespace Fei::Http {
 
+using HttpQueryMap = std::map<std::string, std::string>;
 
 class F_API FHttpContext {
     public:
@@ -17,17 +18,33 @@ class F_API FHttpContext {
 
 class FHttpParser {
 public:
-  static FHttpContext parse(FBufferReader &inReader);
+    FHttpParser(FBufferReader& buffer):mBuffer(buffer) {
+    }
 
+     const std::string& MethodToString(Method method);
+     Method StringToMethod(const std::string&);
+public:
+   FHttpContext parse();
 private:
-  static FBufferView parseHost();
-  static FBufferView parseUserAgent();
+   FBufferView parseHost(FBufferReader& inReader);
+   FBufferView parseUserAgent(FBufferReader& inReader);
 
   //Method and method data.
-  static std::pair<Http::Method,FBufferView> parseMethod();
-  static Http::Version parseVersion();
+   Http::Method parseMethod(FBufferView& inView, uint32& cursor);
+   Http::Version parseVersion(FBufferReader& inReader);
+   HttpQueryMap parseQueryInPath(FBufferReader& inReader);
+   FBufferView parseBody(FBufferReader& inReader);
 
-  static FBufferView parseBody();
+   FBufferView newLine(FBufferView* lastView);
+
+private:
+    struct{
+        uint32 line = 0;
+        uint32 ch = 0;
+        uint32 curLineBeg = 0;
+        //TODO: parse phase
+    } _parseContext;
+    FBufferReader& mBuffer;
 };
 } // namespace Fei
 #endif
