@@ -163,15 +163,15 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
 bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
                                uint32 &cursor) {
-  auto end = findFirstNotSpace(view, cursor);
-  auto cursorSave = cursor;
+    auto beg = findFirstNotSpace(view, cursor);
+  auto end = findFirstSpace(view, beg);
   cursor = end + 1;
   outVersion = Version::Unknown;
-  if (end - cursorSave < 8) {
+  if (end - beg < 8) {
     return false;
   }
-  if (view[cursor + 5] == 1) {
-    if (view[cursorSave + 7] == 1) {
+  if (view[beg + 5] == '1') {
+    if (view[beg + 7] == '1') {
       outVersion = Version::Http11;
     } else {
       outVersion = Version::Http10;
@@ -183,15 +183,17 @@ bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
 
 bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
                             HttpQueryMap &outmap, uint32 &cursor) {
-  auto end = findFirstNotSpace(view, cursor);
-  if (end - cursor > HttpMaxRequestPathLen) {
+  auto beg = findFirstNotSpace(view, cursor);
+  auto end = findFirstSpace(view, cursor);
+
+  if (end - beg > HttpMaxRequestPathLen) {
     Logger::instance()->log("HttpParser", lvl::warn,
                             "Too long http request path {} out of limit {}",
-                            end - cursor, HttpMaxRequestPathLen);
+                            end - beg, HttpMaxRequestPathLen);
     return false;
   }
   int hasQuestion = -1;
-  for (auto i = 0u; i < end; ++i) {
+  for (auto i = beg; i < end; ++i) {
     // Find question
     if (view[i] == '?') {
       hasQuestion = i;
@@ -201,14 +203,14 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
   }
 
   if (hasQuestion > 0) {
-    outPath = std::string((char *)&view[0], hasQuestion);
+    outPath = std::string((char *)&view[beg], hasQuestion - beg);
   } else {
-    outPath = std::string((char *)&view[0], end);
+    outPath = std::string((char *)&view[beg], end - beg);
     cursor = end + 1;
     return true;
   }
 
-  int marker = hasQuestion;
+  int marker = hasQuestion + 1;
   bool findK = false;
   std::string key, val;
   for (auto i = hasQuestion + 1; (uint32)i < end; ++i) {
@@ -217,19 +219,23 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
         Logger::instance()->log("HttpParser", lvl::warn, "Bad query.");
         return false;
       }
-      key = std::string((char *)&view[marker], i - 1 - marker);
+      key = std::string((char *)&view[marker], i  - marker);
       marker = i + 1;
       findK = true;
     } else if (view[i] == '&') {
-      if (!findK || i - marker - 1 < 0) {
-        Logger::instance()->log("HttpParser", lvl::warn, "Bad query.");
-        return false;
+      if (!findK) {
+          continue;
       }
-      val = std::string((char *)&view[marker], i - 1);
-      outmap[val] = key;
+      val = std::string((char *)&view[marker], i - marker);
+      outmap[key] = val;
       findK = false;
       marker = i + 1;
     }
+  }
+
+  if (findK) {
+      val = std::string((char*)&view[marker], end - marker);
+      outmap[key] = val;
   }
 
   cursor = end + 1;
@@ -237,7 +243,9 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
 }
 
 Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
-  auto findTokenEnd = findFirstNotSpace(inView, cursor);
+  auto findTokenBeg = findFirstNotSpace(inView, cursor);
+  cursor = findTokenBeg;
+  auto findTokenEnd = findFirstSpace(inView,findTokenBeg);
   std::string method((char *)&inView[cursor], findTokenEnd - cursor);
   // next
   cursor = findTokenEnd + 1;

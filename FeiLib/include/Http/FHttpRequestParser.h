@@ -12,6 +12,7 @@ namespace Fei::Http {
 using HttpQueryMap = std::map<std::string, std::string>;
 using HeaderMap = std::map<std::string, std::string>;
 class F_API FHttpContext {
+    public:
     friend class FHttpParser;
     FHttpContext() {}
     public:
@@ -20,7 +21,7 @@ class F_API FHttpContext {
     HeaderMap mHeaders;
 };
 
-class FHttpParser {
+class F_API FHttpParser {
 public:
     FHttpParser(FBufferReader& buffer):mBuffer(buffer) {
     }
