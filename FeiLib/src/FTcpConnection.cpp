@@ -130,12 +130,13 @@ void FTcpConnection::handleClose() {
   m_event->disableAll();
   m_onWriteComplete = nullptr;
   m_onMessage = nullptr;
-  m_onCloseCallback(shared_from_this());
   Logger::instance()->log(
       MODULE_NAME, lvl::trace,
       "TcpConnection disconnected. address: {}.{}.{}.{}, port: {}",
       m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1, m_addrIn.un.un_byte.a2,
       m_addrIn.un.un_byte.a3, m_addrIn.port);
+  m_onCloseCallback(shared_from_this());
+
 }
 
 void FTcpConnection::handleError() {

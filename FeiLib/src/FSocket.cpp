@@ -349,11 +349,12 @@ SocketStatus Connect(Socket socket, FSocketAddr addr) {
 
 long SendV(Socket socket, iovec *iov, int count) {
 #ifdef _WIN32
-  long totallen = 0, tlen = -1;
+    long totallen = 0;int tlen = -1;
   while (count) {
-    tlen = send(socket, (const char *)iov->iov_base, iov->iov_len, 0);
-    if (tlen < 0)
-      return tlen;
+    auto status = Send(socket, (const char*)iov->iov_base, iov->iov_len, tlen);
+    if (status != SocketStatus::Success) {
+        break;
+    }
     totallen += tlen;
     iov++;
     count--;
@@ -366,7 +367,7 @@ long SendV(Socket socket, iovec *iov, int count) {
 #endif
 }
 int Readv(Socket socket, struct iovec *iov, int count) {
-  int r, t = 0;
+  int r,t = 0;
   while (count) {
     #ifdef _WIN32
     Recv(socket,(char*)iov->iov_base,iov->iov_len,RecvFlag::None,r);
@@ -374,6 +375,10 @@ int Readv(Socket socket, struct iovec *iov, int count) {
       return r;
     }
     t += r;
+    if (r < iov->iov_len) {
+        break;
+    }
+
     iov++;
     count--;
   }
