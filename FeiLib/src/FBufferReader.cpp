@@ -47,7 +47,7 @@ FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
     } else if (nxt == '\r' && (int)linebreaker & (int)LineBreaker::CR) {
       // CRLF
       if (linebreaker == LineBreaker::CRLF) {
-        char lookahead = mBuffer.Get(end + 1);
+        char lookahead = mBuffer.Get(end);
         if (lookahead == '\n') {
           end++;
           break;

@@ -21,6 +21,8 @@ class F_API FHttpContext {
     HeaderMap mHeaders;
 };
 
+//Fix me: need a more easy and faster parser.
+
 class F_API FHttpParser {
 public:
     FHttpParser(FBufferReader& buffer):mBuffer(buffer) {
