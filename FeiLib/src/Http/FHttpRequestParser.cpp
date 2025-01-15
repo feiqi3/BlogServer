@@ -19,7 +19,7 @@ const std::map<std::string, Method> MethodsMap = {
 };
 uint32 findFirstNotSpace(FBufferView &view, uint32 begin = 0) {
   uint32 cnt = begin;
-  for (cnt; cnt < view.size(); ++cnt) {
+  for (; cnt < view.size(); ++cnt) {
     if (view[cnt] != ' ') {
       break;
     }
@@ -101,7 +101,7 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
 
     // Find colon
     int findColon = -1;
-    for (int i = 0; i < lineView.size(); ++i) {
+    for (int i = 0; i < (int)lineView.size(); ++i) {
       if (lineView[i] == ':') {
         findColon = i;
         break;

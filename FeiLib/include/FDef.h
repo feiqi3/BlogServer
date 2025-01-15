@@ -7,7 +7,9 @@
 #include <cstdint>
 
 #ifdef _WIN32
+#ifdef _MSC_VER
 #pragma warning( once : 4251 )
+#endif
 #ifdef _F_EXPORT
 #define F_API __declspec(dllexport)
 #else

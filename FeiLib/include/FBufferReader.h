@@ -12,8 +12,6 @@ class FBuffer;
 // A light-weight buffer reader, do not control buffer's lifetime
 class FBufferView {
 public:
-  FBufferView(const FBufferView &rhs)
-      : buffer(rhs.buffer), beg(rhs.beg), end(rhs.end) {}
   FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end);
   const Byte *get() const { return &((*this)[0]); }
   const Byte &operator[](uint32 pos) const;
