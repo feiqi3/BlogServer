@@ -158,6 +158,7 @@ bool FHttpParser::parse(FHttpContext &ctx) {
   }
 
   auto headerMap = parseHeader(lineView);
+  return true;
 }
 
 bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,

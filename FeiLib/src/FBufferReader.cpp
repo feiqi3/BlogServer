@@ -27,6 +27,12 @@ std::string FBufferReader::readLine(LineBreaker linebreaker) {
   return ret;
 }
 
+void FBufferReader::popLine()
+{
+    auto view = readLineNoPop();
+    expireView(view);
+}
+
 FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
   int end = 0;
   while (true) {

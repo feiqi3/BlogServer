@@ -1,6 +1,7 @@
 #include "FBuffer.h"
 #include "FDef.h"
 #include "FSocket.h"
+#include "FLogger.h"
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
@@ -20,6 +21,7 @@ int FBuffer::Read(Socket fd, Errno_t &errSaved) {
   const int n = Readv(fd, vec, iovcnt);
   if (n < 0) {
     errSaved = errno;
+    Logger::instance()->log("FBuffer", lvl::err, "Buffer Error {}", GetErrorStr());
   } else if (n < writealbe) {
     writeIdx += n;
   } else {
@@ -36,7 +38,8 @@ int FBuffer::Write(Socket fd, int size, Errno_t &errSaved) {
   auto status = Send(fd, (const char *)this->m_buffer.data() + readIdx,
                      writeLen, writeLen);
   if (status != SocketStatus::Success) {
-    errSaved = errno;
+      Logger::instance()->log("FBuffer", lvl::err, "Buffer Error {}", GetErrorStr());
+      errSaved = errno;
   } else {
     this->Pop(writeLen);
   }

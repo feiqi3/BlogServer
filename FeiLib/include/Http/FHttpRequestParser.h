@@ -13,7 +13,7 @@ using HttpQueryMap = std::map<std::string, std::string>;
 using HeaderMap = std::map<std::string, std::string>;
 class F_API FHttpContext {
     friend class FHttpParser;
-    
+    FHttpContext() {}
     public:
     private:
     Method mMethod;

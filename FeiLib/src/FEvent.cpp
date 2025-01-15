@@ -7,7 +7,7 @@
 namespace Fei {
 
 static const Event NoneEvent = 0;
-static const Event ReadEvent = REvent::In | REvent::Pri;
+static const Event ReadEvent = REvent::In | REvent::Pri | REvent::Rdnorm | REvent::Rdband;
 static const Event WriteEvent = REvent::Out;
 
 FEventPtr FEvent::createEvent(FEventLoop *loop, Socket fd, uint64 id){

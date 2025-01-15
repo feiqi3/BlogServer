@@ -10,3 +10,4 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # tests 
 add_subdirectory(SimpleEchoServer)
+add_subdirectory(HttpTest)

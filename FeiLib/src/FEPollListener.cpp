@@ -7,7 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
-
+#include "FLogger.h"
 #define MAX_EVENTS 1024
 
 namespace Fei {
@@ -55,7 +55,7 @@ void FEPollListener::addEvent(FEvent* event) {
 
   auto data_ptr = &itor.first->second.epollevent;
   if (-1 == EPollCtl(this->m_epollfd, EPollOp::Add, event->getFd(), data_ptr)) {
-    std::cout << GetErrorStr();
+      Logger::instance()->log("FEPollListener", lvl::err, "Epoll add event error: {}", GetErrorStr());
   }
 }
 
@@ -73,20 +73,21 @@ void FEPollListener::removeEvent(FEvent* event) {
 void FEPollListener::updateEvent(FEvent* event) {
   auto itor = m_pollEvents.find(event->getId());
   if (itor == m_pollEvents.end()) {
-    return;
-    // error
+      Logger::instance()->log("FEPollListener", lvl::err, "Event does not exist in Epoll map.");
+      return;
   }
   auto &epollEvent = itor->second.epollevent;
   epollEvent.events = REvent::ToEpoll(event->getEvents());
   if (-1 == EPollCtl(m_epollfd, EPollOp::Mod, event->getFd(), &epollEvent)) {
-    std::cout << GetErrorStr();
+    
+      Logger::instance()->log("FEPollListener", lvl::err, "Epoll add event error: {}", GetErrorStr());
   }
 }
 
 FEPollListener::FEPollListener() {
   m_epollfd = EPollCreate1(0);
   if (-1ull == (uint64)m_epollfd) {
-    std::cout << GetErrorStr();
+    Logger::instance()->log("FEPollListener", lvl::err, "Epoll create error: {}", GetErrorStr());
   }
 }
 

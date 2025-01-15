@@ -1,0 +1,11 @@
+project(SimpleHttpTest)
+
+set (projectname_server ${PROJECT_NAME}_Server)
+
+add_executable(${projectname_server} HttpTest.cpp)
+set_target_properties(${projectname_server} PROPERTIES FOLDER "Libraries")
+
+
+target_include_directories(${projectname_server} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(${projectname_server} PRIVATE ${CMAKE_SOURCE_DIR}/3rd/FeiLib/include)
+target_link_libraries(${projectname_server} PRIVATE FeiLib)
