@@ -29,7 +29,7 @@ uint32 findFirstNotSpace(FBufferView &view, uint32 begin = 0) {
 
 uint32 findFirstSpace(FBufferView &view, uint32 begin = 0) {
   uint32 cnt = begin;
-  for (cnt; cnt < view.size(); ++cnt) {
+  for (; cnt < view.size(); ++cnt) {
     if (view[cnt] == ' ' || view[cnt] == '\r' || view[cnt] == '\n') {
       break;
     }
@@ -38,6 +38,32 @@ uint32 findFirstSpace(FBufferView &view, uint32 begin = 0) {
 }
 
 } // namespace
+
+bool FHttpContext::getHeader(const std::string &key,
+                             std::string &outVal) const {
+  auto itor = mHeaders.find(key);
+  if (itor == mHeaders.end()) {
+    return false;
+  }
+
+  outVal = itor->second;
+  return true;
+}
+
+bool FHttpContext::getRequestBody(std::string &outBody) const {
+  return getHeader("__body", outBody);
+}
+
+bool FHttpContext::getQuery(const std::string &key, std::string &outVal) const {
+  auto itor = mQueryMap.find(key);
+  if (itor == mQueryMap.end()) {
+    return false;
+  }
+
+  outVal = itor->second;
+  return true;
+}
+
 const std::string &FHttpParser::MethodToString(Method method) {
   switch (method) {
   case Fei::Http::Method::GET:
@@ -86,9 +112,10 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
   FBufferView lineView(oldView);
   while (1) {
     lineView = newLine(&oldView);
-    ;
+    
     uint32 cursor = 0;
     cursor = findFirstNotSpace(lineView);
+    //Blank line
     if (lineView.size() == 0 || lineView.size() - 1 == cursor)
       break;
     // To long?
@@ -113,31 +140,29 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
           std::string((char *)&lineView[0], lineView.size()));
       continue;
     }
-    std::string header = std::string((char *)&lineView[cursor], findColon - cursor);
+    std::string header =
+        std::string((char *)&lineView[cursor], findColon - cursor);
     cursor = findColon + 1;
     uint32 _crlfOffset = 0;
     if (lineView.size() - cursor >= 2) {
-        if (lineView[lineView.size() - 2] == '\r' && lineView[lineView.size() - 1] == '\n') {
-            _crlfOffset = 2;
-        }
+      if (lineView[lineView.size() - 2] == '\r' &&
+          lineView[lineView.size() - 1] == '\n') {
+        _crlfOffset = 2;
+      }
     }
 
-    std::string content =
-        std::string((char *)&lineView[cursor], lineView.size() - cursor - _crlfOffset);
+    std::string content = std::string((char *)&lineView[cursor],
+                                      lineView.size() - cursor - _crlfOffset);
     map.insert({header, content});
     oldView = lineView;
   }
+
   lineView = newLine(&lineView);
-  uint32 cursor = findFirstNotSpace(lineView, 0);
+
   if (lineView.isEOF()) {
     return map;
   }
 
-  if (!(lineView.size() == 0 || lineView.size() - 1 == cursor)) {
-    return map;
-  }
-
-  lineView = newLine(&lineView);
   uint32 bufferSize = mBuffer.readTo(0, 0);
   std::string body;
   body.reserve(bufferSize + 1);
@@ -152,25 +177,39 @@ bool FHttpParser::parse(FHttpContext &ctx) {
   auto lineView = newLine(0);
 
   uint32 cursor = 0;
+
   Method method = parseMethod(lineView, cursor);
+
+  ctx.mMethod = method;
 
   HttpQueryMap queryMap;
   std::string path;
   if (!parsePath(lineView, path, queryMap, cursor) && path.length() == 0) {
     // Do something?
   }
+
+  ctx.mRequestPath = std::move(path);
+  ctx.mQueryMap = std::move(queryMap);
+
   Version ver;
   if (!parseVersion(lineView, ver, cursor)) {
     // Do something?
   }
 
+  ctx.mHttpVersion = ver;
+
   auto headerMap = parseHeader(lineView);
+
+  ctx.mHeaders = std::move(headerMap);
+
+  ctx.mCookieMap = parseCookie();
+
   return true;
 }
 
 bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
                                uint32 &cursor) {
-    auto beg = findFirstNotSpace(view, cursor);
+  auto beg = findFirstNotSpace(view, cursor);
   auto end = findFirstSpace(view, beg);
   cursor = end + 1;
   outVersion = Version::Unknown;
@@ -226,12 +265,12 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
         Logger::instance()->log("HttpParser", lvl::warn, "Bad query.");
         return false;
       }
-      key = std::string((char *)&view[marker], i  - marker);
+      key = std::string((char *)&view[marker], i - marker);
       marker = i + 1;
       findK = true;
     } else if (view[i] == '&') {
       if (!findK) {
-          continue;
+        continue;
       }
       val = std::string((char *)&view[marker], i - marker);
       outmap[key] = val;
@@ -241,8 +280,8 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
   }
 
   if (findK) {
-      val = std::string((char*)&view[marker], end - marker);
-      outmap[key] = val;
+    val = std::string((char *)&view[marker], end - marker);
+    outmap[key] = val;
   }
 
   cursor = end + 1;
@@ -252,7 +291,7 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
 Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
   auto findTokenBeg = findFirstNotSpace(inView, cursor);
   cursor = findTokenBeg;
-  auto findTokenEnd = findFirstSpace(inView,findTokenBeg);
+  auto findTokenEnd = findFirstSpace(inView, findTokenBeg);
   std::string method((char *)&inView[cursor], findTokenEnd - cursor);
   // next
   cursor = findTokenEnd + 1;
@@ -271,7 +310,7 @@ Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
 }
 FBufferView FHttpParser::newLine(FBufferView *lastView) {
   if (_parseContext.line == 0) {
-      _parseContext.line++;
+    _parseContext.line++;
     return mBuffer.readLineNoPop();
   }
   if (lastView == 0) {
@@ -281,7 +320,11 @@ FBufferView FHttpParser::newLine(FBufferView *lastView) {
   }
   auto ret = mBuffer.readLineNoPop();
   _parseContext.line++;
-  _parseContext.curLineBeg = 0;
   return ret;
 }
+
+CookieMap FHttpParser::parseCookie() const {
+  
+}
+
 } // namespace Fei::Http
