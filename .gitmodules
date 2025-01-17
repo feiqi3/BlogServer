@@ -1,3 +1,12 @@
 [submodule "FeiLib/3rd/spdlog"]
 	path = FeiLib/3rd/spdlog
 	url = https://github.com/gabime/spdlog.git
+[submodule "FeiLib/3rd/reflect"]
+	path = FeiLib/3rd/reflect
+	url = https://github.com/qlibs/reflect.git
+[submodule "FeiLib/3rd/json"]
+	path = FeiLib/3rd/json
+	url = https://github.com/nlohmann/json.git
+[submodule "FeiLib/3rd/inja"]
+	path = FeiLib/3rd/inja
+	url = https://github.com/pantor/inja.git
