@@ -1,8 +1,10 @@
 #include "Http/FHttpRequestParser.h"
 #include "FBufferReader.h"
 #include "FLogger.h"
+#include "Http/FCookie.h"
 #include "Http/FHttpDef.h"
 #include <string>
+
 namespace Fei::Http {
 namespace {
 const std::string MethodsName[] = {
@@ -112,10 +114,10 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
   FBufferView lineView(oldView);
   while (1) {
     lineView = newLine(&oldView);
-    
+
     uint32 cursor = 0;
     cursor = findFirstNotSpace(lineView);
-    //Blank line
+    // Blank line
     if (lineView.size() == 0 || lineView.size() - 1 == cursor)
       break;
     // To long?
@@ -185,6 +187,7 @@ bool FHttpParser::parse(FHttpContext &ctx) {
   HttpQueryMap queryMap;
   std::string path;
   if (!parsePath(lineView, path, queryMap, cursor) && path.length() == 0) {
+    return false;
     // Do something?
   }
 
@@ -193,6 +196,7 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
   Version ver;
   if (!parseVersion(lineView, ver, cursor)) {
+    return false;
     // Do something?
   }
 
@@ -200,9 +204,12 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
   auto headerMap = parseHeader(lineView);
 
-  ctx.mHeaders = std::move(headerMap);
+  auto cookieItor = headerMap.find("Cookie");
+  if (cookieItor != headerMap.end()) {
+    parseCookie(ctx.cookie, cookieItor->second);
+  }
 
-  ctx.mCookieMap = parseCookie();
+  ctx.mHeaders = std::move(headerMap);
 
   return true;
 }
@@ -323,8 +330,37 @@ FBufferView FHttpParser::newLine(FBufferView *lastView) {
   return ret;
 }
 
-CookieMap FHttpParser::parseCookie() const {
-  
+void FHttpParser::parseCookie(FCookie &inCookie,
+                              const std::string &cookieData) const {
+  auto i = 0u;
+  for (i = 0u; i < cookieData.size(); ++i) {
+    if (cookieData[i] != ' ') {
+      break;
+    }
+  }
+  bool findKey = false;
+  std::string key, val;
+  uint32 saveMarker = i;
+  for (; i < cookieData.size(); ++i) {
+    if (cookieData[i] == ';') {
+      if (findKey) {
+        findKey = false;
+        val = std::string(&cookieData[saveMarker], i - saveMarker);
+        inCookie.addValue(key, val);
+        val = "";
+      } else {
+        inCookie.addAttribute(key);
+      }
+      key = "";
+      i++;
+      saveMarker = i;
+    } else if (cookieData[i] == '=') {
+      findKey = true;
+      key = std::string(&cookieData[saveMarker], i - saveMarker);
+      i++;
+      saveMarker = i;
+    }
+  }
 }
 
 } // namespace Fei::Http
