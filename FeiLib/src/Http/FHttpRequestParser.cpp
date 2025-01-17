@@ -4,6 +4,7 @@
 #include "Http/FCookie.h"
 #include "Http/FHttpDef.h"
 #include <string>
+#include <string_view>
 
 namespace Fei::Http {
 namespace {
@@ -52,8 +53,13 @@ bool FHttpContext::getHeader(const std::string &key,
   return true;
 }
 
-bool FHttpContext::getRequestBody(std::string &outBody) const {
-  return getHeader("__body", outBody);
+std::string_view FHttpContext::getRequestBody() const {
+  auto itor = mHeaders.find("__body");
+  if (itor == mHeaders.end()) {
+    return {};
+  }
+
+  return itor->second;
 }
 
 bool FHttpContext::getQuery(const std::string &key, std::string &outVal) const {

@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace Fei::Http {
 
@@ -31,7 +32,8 @@ public:
   Version getHttpVersion() const { return mHttpVersion; }
   bool getHeader(const std::string &key, std::string &outVal) const;
   bool getQuery(const std::string &key, std::string &outVal) const;
-  bool getRequestBody(std::string &outBody) const;
+  std::string_view getRequestBody() const;
+  
 
 private:
   Method mMethod;

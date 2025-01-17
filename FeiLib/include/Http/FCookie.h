@@ -9,6 +9,12 @@ using CookiesMap = std::map<std::string, std::string>;
 
 class FCookie {
 public:
+
+  FCookie& operator=(FCookie&& rhs){
+    mMap = std:: move(rhs.mMap);
+    return *this;
+  }
+
   bool getValue(const std::string &key, std::string &outVal) const;
   void addValue(const std::string key, const std::string val);
   
