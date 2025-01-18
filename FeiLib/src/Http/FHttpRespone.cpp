@@ -14,7 +14,7 @@ namespace Fei::Http{
 
     for(auto&& cookie :mCookies){
         if(cookie.empty())continue;
-        ss << cookie.outSetCookie();
+        ss << cookie.outSetCookie()<<LINE_BREAKER;
     }
     return ss.str();
   }
