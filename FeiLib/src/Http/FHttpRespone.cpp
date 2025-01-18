@@ -11,10 +11,12 @@ namespace Fei::Http{
     for(auto&& [header,val] : mHeaders){
         ss<<header<<": "<<val<<LINE_BREAKER;
     }
-    
-    if(!mCookie.empty())
-        ss<<mCookie.outSetCookie()<<LINE_BREAKER;
-    
+
+    for(auto&& cookie :mCookies){
+        if(cookie.empty())continue;
+        ss << cookie.outSetCookie();
+    }
+    return ss.str();
   }
     
 }

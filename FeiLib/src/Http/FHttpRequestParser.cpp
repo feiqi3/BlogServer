@@ -216,7 +216,7 @@ bool FHttpParser::parse(FHttpContext &ctx) {
     parseCookie(cookie, itor->second);
     ctx.cookies.emplace_back(cookie);
   }
-  
+  headerMap.erase(cookieEqualRange.first,cookieEqualRange.second);
   ctx.mHeaders = std::move(headerMap);
 
   return true;

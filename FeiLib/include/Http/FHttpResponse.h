@@ -25,7 +25,7 @@ public:
   }
 
   FHttpResponse &addHeader(const std::string &key, const std::string &val) {
-    mHeaders.insert(key,val);
+    mHeaders.insert(key, val);
     return *this;
   }
 
@@ -59,13 +59,13 @@ public:
     return *this;
   }
 
-  FHttpResponse &setCookie(const FCookie &inCookie) {
-    mCookie = inCookie;
+  FHttpResponse &addCookie(const FCookie &inCookie) {
+    mCookies.push_back(inCookie);
     return *this;
   }
 
-  FHttpResponse &setCookie(FCookie &&inCookie) {
-    mCookie = (std::move(inCookie));
+  FHttpResponse &addCookie(FCookie &&inCookie) {
+    mCookies.push_back(std::move(inCookie));
     return *this;
   }
 
@@ -77,7 +77,6 @@ private:
   HeaderMap mHeaders;
   std::string mBody;
   std::vector<FCookie> mCookies;
-  FCookie mCookie;
 };
 
 } // namespace Fei::Http
