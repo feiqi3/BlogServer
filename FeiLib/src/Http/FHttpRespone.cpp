@@ -1,0 +1,20 @@
+#include "Http/FHttpDef.h"
+#include "Http/FHttpResponse.h"
+#include <sstream>
+
+#define LINE_BREAKER "\r\n"
+
+namespace Fei::Http{
+  std::string FHttpResponse::toString() const{
+    std::stringstream ss;
+    ss<<versionToStr(mVersion)<<" "<<statusCodeToStr(mStatus)<<LINE_BREAKER;
+    for(auto&& [header,val] : mHeaders){
+        ss<<header<<": "<<val<<LINE_BREAKER;
+    }
+    
+    if(!mCookie.empty())
+        ss<<mCookie.outSetCookie()<<LINE_BREAKER;
+    
+  }
+    
+}

@@ -3,10 +3,12 @@
 #include "FCookie.h"
 #include "Http/FHttpDef.h"
 #include "Http/FHttpRequestParser.h"
+#include <functional>
 #include <string>
+#include <vector>
 
 namespace Fei::Http {
-using HeaderMap = std::map<std::string, std::string>;
+using HeaderMap = std::multimap<std::string, std::string>;
 
 class FHttpResponse {
 public:
@@ -23,12 +25,17 @@ public:
   }
 
   FHttpResponse &addHeader(const std::string &key, const std::string &val) {
-    mHeaders[key] = val;
+    mHeaders.insert(key,val);
     return *this;
   }
 
   FHttpResponse &setContentType(const std::string &type) {
-    mHeaders["Content-Type"] = type;
+    auto itor = mHeaders.find("Content-Type");
+    if (itor != mHeaders.end()) {
+      itor->second = type;
+    } else {
+      mHeaders.insert({"Content-Type", type});
+    }
     return *this;
   }
 
@@ -39,6 +46,16 @@ public:
 
   FHttpResponse &setHttpVersion(Version version) {
     mVersion = version;
+    return *this;
+  }
+
+  FHttpResponse &pushCookie(const FCookie &iCookie) {
+    mCookies.push_back(iCookie);
+    return *this;
+  }
+
+  FHttpResponse &emplaceCookie(FCookie &&inCookie) {
+    mCookies.emplace_back(std::move(inCookie));
     return *this;
   }
 
@@ -59,6 +76,7 @@ private:
   StatusCode mStatus;
   HeaderMap mHeaders;
   std::string mBody;
+  std::vector<FCookie> mCookies;
   FCookie mCookie;
 };
 

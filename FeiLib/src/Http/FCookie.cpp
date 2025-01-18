@@ -29,7 +29,21 @@ bool FCookie::hasAttribute(const std::string &attr) const {
   }
   return true;
 }
-
+std::string FCookie::outSetCookieNoHeader() const {
+  std::stringstream ssOut;
+  // SetCookie header.
+  auto size = mMap.size();
+  for (auto &&[key, val] : mMap) {
+    ssOut << key;
+    if (val.size() != 0) {
+      ssOut << "=" << val;
+    }
+    if (--size != 0) {
+      ssOut << ";";
+    }
+  }
+  return ssOut.str();
+}
 std::string FCookie::outSetCookie() const {
   std::stringstream ssOut;
   // SetCookie header.

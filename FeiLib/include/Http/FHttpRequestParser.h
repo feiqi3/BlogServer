@@ -9,11 +9,12 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Fei::Http {
 
 using HttpQueryMap = std::map<std::string, std::string>;
-using HeaderMap = std::map<std::string, std::string>;
+using HeaderMap = std::multimap<std::string, std::string>;
 class F_API FHttpContext {
 public:
   friend class FHttpParser;
@@ -24,7 +25,7 @@ public:
     mHttpVersion = rhs.mHttpVersion;
     mMethod = rhs.mMethod;
     mRequestPath = std::move(rhs.mRequestPath);
-    cookie = std::move(rhs.cookie);
+    cookies = std::move(rhs.cookies);
     mHeaders = std::move(rhs.mHeaders);
     mQueryMap = std::move(rhs.mQueryMap);
   }
@@ -42,7 +43,7 @@ private:
 
   HttpQueryMap mQueryMap;
   HeaderMap mHeaders;
-  FCookie cookie;
+  std::vector<FCookie> cookies;
 };
 
 // Fix me: need a more easy and faster parser.
@@ -66,7 +67,6 @@ private:
   HeaderMap parseHeader(FBufferView &oldView);
   FBufferView newLine(FBufferView *lastView);
   void parseCookie(FCookie &inCookie, const std::string &cookieData) const;
-
 private:
   struct {
     uint32 line = 0;

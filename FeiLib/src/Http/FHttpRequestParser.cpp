@@ -210,11 +210,13 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
   auto headerMap = parseHeader(lineView);
 
-  auto cookieItor = headerMap.find("Cookie");
-  if (cookieItor != headerMap.end()) {
-    parseCookie(ctx.cookie, cookieItor->second);
+  auto cookieEqualRange = headerMap.equal_range("Cookie");
+  for(auto itor = cookieEqualRange.first;itor != cookieEqualRange.second;itor++){
+    FCookie cookie;
+    parseCookie(cookie, itor->second);
+    ctx.cookies.emplace_back(cookie);
   }
-
+  
   ctx.mHeaders = std::move(headerMap);
 
   return true;
