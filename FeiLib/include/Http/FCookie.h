@@ -9,6 +9,10 @@ using CookiesMap = std::map<std::string, std::string>;
 
 class FCookie {
 public:
+    FCookie& operator=(const FCookie& rhs){
+      mMap = rhs.mMap;
+      return *this;
+    }  
 
   FCookie& operator=(FCookie&& rhs){
     mMap = std:: move(rhs.mMap);

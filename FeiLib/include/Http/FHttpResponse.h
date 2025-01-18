@@ -48,7 +48,7 @@ public:
   }
 
   FHttpResponse &setCookie(FCookie &&inCookie) {
-    mCookie(std::move(inCookie));
+    mCookie = (std::move(inCookie));
     return *this;
   }
 
