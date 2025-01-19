@@ -6,7 +6,7 @@ set(BUILD_TEST ON CACHE BOOL "Build test")
 # Specify C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # Generate compile_commands.json for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

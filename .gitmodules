@@ -10,3 +10,9 @@
 [submodule "FeiLib/3rd/inja"]
 	path = FeiLib/3rd/inja
 	url = https://github.com/pantor/inja.git
+[submodule "FeiLib/3rd/re2"]
+	path = FeiLib/3rd/re2
+	url = https://github.com/google/re2.git
+[submodule "FeiLib/3rd/absl"]
+	path = FeiLib/3rd/absl
+	url = https://github.com/abseil/abseil-cpp.git

@@ -1,0 +1,7 @@
+project(HttpPathMatcherTest)
+
+add_executable(HttpPathMatcherTest test.cpp)
+set_target_properties(HttpPathMatcherTest PROPERTIES FOLDER "Libraries")
+
+
+target_link_libraries(HttpPathMatcherTest PUBLIC FeiLib)

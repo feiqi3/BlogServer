@@ -33,8 +33,17 @@ add_subdirectory(3rd/json)
 target_link_libraries(${PROJECT_NAME} PUBLIC nlohmann_json::nlohmann_json)
 
 set(INJA_USE_EMBEDDED_JSON Off)
+set(INJA_BUILD_TESTS OFF)
 add_subdirectory(3rd/inja)
 target_link_libraries(${PROJECT_NAME} PUBLIC inja)
+
+##work around for re2, the absl installed on system with wrong version may cause a link error in mingw
+##Indeed we dont really use it
+set(ABSL_ENABLE_INSTALL ON)
+add_subdirectory(3rd/absl)
+
+add_subdirectory(3rd/re2)
+target_link_libraries(${PROJECT_NAME} PUBLIC re2::re2)
 
 
 if(WIN32)

@@ -25,7 +25,7 @@ public:
   }
 
   FHttpResponse &addHeader(const std::string &key, const std::string &val) {
-    mHeaders.insert(key, val);
+    mHeaders.insert({key, val});
     return *this;
   }
 
