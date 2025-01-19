@@ -6,6 +6,10 @@
 #include <string_view>
 #include <unordered_map>
 
+namespace re2 {
+    class RE2;
+};
+
 namespace Fei::Http {
 
 //-----------------------------------------------------------------//
@@ -36,8 +40,11 @@ private:
 //An ANT-Style path matcher
 class FPathMatcher {
 public:
-  FPathMatcher(std::string pattern);
-  FPathMatcher(std::string pattern,bool caseSensitive);
+    FPathMatcher(const std::string& pattern) : FPathMatcher(pattern, true) {}
+  FPathMatcher(const std::string& pattern,bool caseSensitive);
+private:
+    std::vector<std::string> varNames;
+    std::unique_ptr<re2::RE2> mPattern;
 };
 
 }; // namespace Fei::Http

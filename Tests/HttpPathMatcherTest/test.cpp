@@ -1,27 +1,50 @@
 #include <iostream>
 #include <re2/re2.h>
 #include <string>
+#include <sstream>
+#include "Http/FPathMatcher.h"
+#include "FDef.h"
+uint64_t matchAt(const absl::string_view& piece, const std::string& pieceFrom) {
+	return piece.data() - pieceFrom.data();
+}
 
 int main() {
-    std::string text = "foo?bar*test{1,2}baz ? {abc} * *";
-    re2::RE2 pattern("(\\?)|(\\*)|\\{([^/{}\\\\]+|\\\\[{}])+\\}");  // 正则表达式
-
-    re2::StringPiece input(text);
-    re2::StringPiece match1, match2, match3;
-
-    // 使用 RE2::PartialMatch 来检查捕获组 
-    // 注意: 因为本正则有三个捕获组，对于Re2，他会每次按照正则中的顺序把捕获到的字符放入参数中 
-    while (RE2::FindAndConsume(&input, pattern, &match1, &match2, &match3)) {
-        if (!match1.empty()) {
-            std::cout << "Captured ?: " << match1 << std::endl;  // 捕获问号
-        }
-        if (!match2.empty()) {
-            std::cout << "Captured *: " << match2 << std::endl;  // 捕获星号
-        }
-        if (!match3.empty()) {
-            std::cout << "Captured {} content: " << match3 << std::endl;  // 捕获大括号内容
-        }
-    }
-
+    std::string srcText = "*foo?bar*test{1,2}baz ? {abc} *";
+	std::string newText = "assfoobbartexttest{123}baz c {4656} aaabbbb";
+    re2::RE2 AntStyleMatchPattern("(\\?)|(\\*)|\\{([^/{}\\\\]+|\\\\[{}])+\\}");  // 正则表达式
+	std::string VarMatchPattern = "(.*)";
+	int end = 0;
+	absl::string_view text = srcText;
+	re2::StringPiece matchGroup[3]{};
+	std::stringstream ss;
+	while (RE2::FindAndConsume(&text, AntStyleMatchPattern, &matchGroup[0], &matchGroup[1], &matchGroup[2]))
+	{
+		auto begin = 0;
+		//Match '?'
+		if (!matchGroup[0].empty()) {
+			begin = matchAt(matchGroup[0], srcText);
+			ss << std::string_view(srcText.begin() + end, srcText.begin() + begin) << ".";
+			end = begin + matchGroup[0].size();
+		}
+		//Match '*'
+		else if (!matchGroup[1].empty()) {
+			begin = matchAt(matchGroup[1], srcText);
+			ss << std::string_view(srcText.begin() + end, srcText.begin() + begin) << ".*";
+			end = begin + matchGroup[1].size();
+		}
+		//Match {} variable
+		else if (!matchGroup[2].empty()) {
+			begin = matchAt(matchGroup[2], srcText);
+			ss << std::string_view(srcText.begin() + end, srcText.begin() + begin) << std::string_view(VarMatchPattern);
+			end = begin + matchGroup[2].size();
+		}
+	}
+	std::cout<<"New pattern " << ss.str()<<"\n";
+	text = newText;
+	RE2  nePattern(ss.str());
+	while (RE2::Consume(&text, nePattern))
+	{
+		std::cout << "matched!";
+	}
     return 0;
 }
