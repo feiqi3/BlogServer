@@ -12,7 +12,6 @@ namespace {
 
 	std::string preFilterPattern(const std::string& pattern) {
 		uint32_t stars = 0;
-		uint32_t end = 0;
 		//Is Pattern valid?
 		for (auto i = 0; i < pattern.size(); ++i) {
 			if (pattern[i] != '*') {
@@ -39,8 +38,10 @@ namespace {
 namespace Fei::Http {
 
 RE2 AntStyleMatchPattern = ("(@)|(\\?)|(\\*)|\\{([^/{}\\\\]+|\\\\[{}])+\\}");
-std::string VarMatchPattern = "(.*)";
-FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive) {
+FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive):mOriginPattern(pattern) {
+	if (pattern.size() > MaxPathLengthMatcherSupport) {
+		throw std::exception("Invalid path pattern");
+	}
 	int end = 0;
 	auto filteredPattern = preFilterPattern(pattern);
 	absl::string_view text = filteredPattern;
@@ -54,28 +55,32 @@ FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive) {
 			begin = matchAt(matchGroup[0], pattern);
 			ss << std::string_view(pattern.begin() + end, pattern.begin() + begin) << ".*";
 			end = begin + matchGroup[0].size();
+			mWildCardsNums++;
 		}
 		//Match '?'
 		if (!matchGroup[1].empty()) {
 			begin = matchAt(matchGroup[1],pattern);
 			ss << std::string_view(pattern.begin() + end, pattern.begin() + begin)<<".";
 			end = begin + matchGroup[1].size();
+			mUndecidedChars++;
 		}
 		//Match '*'
 		else if (!matchGroup[2].empty()) {
 			begin = matchAt(matchGroup[2], pattern);
 			ss << std::string_view(pattern.begin() + end, pattern.begin() + begin) << "[^/]*";
 			end = begin + matchGroup[2].size();
+			mWildCardsNums++;
 		}
 		//Match {} variable
 		else if (!matchGroup[3].empty()) {
 			begin = matchAt(matchGroup[3], pattern);
-			std::string_view view(pattern.begin() + end, pattern.begin() + begin);
-			ss << view << std::string_view(VarMatchPattern);
+			std::string_view view(pattern.begin() + end, pattern.begin() + begin - 1);
+			ss << view <<"([^/]*)";
 			varNames.push_back(std::string(view));
-			end = begin + matchGroup[3].size();
+			end = begin + matchGroup[3].size() + 1;
 		}
 	}
+	ss << std::string_view(pattern.begin() + end, pattern.begin() + pattern.size());
 	RE2::Options opts;
 	if (caseSensitive) {
 		opts.set_case_sensitive(true);
@@ -95,14 +100,14 @@ bool FPathMatcher::isMatch(const std::string& str, PathVarMap& vars)
 
 	bool isMatch = RE2::FullMatchN(view, *mPattern, args.data(), this->varNames.size());
 	for (auto i = 0; i < args.size(); ++i) {
-	{
 		if (!varViews[i].empty()) {
-			vars.insert({varNames[i],std::string(varViews[i])});
+			vars.insert({ varNames[i],std::string(varViews[i]) });
 		}
 		delete args[i];
 	}
-
 	return isMatch;
 }
-
+FPathMatcher::~FPathMatcher()
+{
+}
 }; // namespace Fei::Http
