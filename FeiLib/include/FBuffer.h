@@ -6,10 +6,9 @@
 #include <vector>
 namespace Fei {
 
-class FBuffer {
+class F_API FBuffer {
 public:
-  FBuffer(uint32 size);
-
+    FBuffer(uint32 size);
   FBuffer(FBuffer &&rhs) {
     m_buffer = std::move(rhs.m_buffer);
     readIdx = rhs.readIdx;

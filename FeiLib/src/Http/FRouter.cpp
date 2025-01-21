@@ -94,7 +94,7 @@ namespace Fei::Http {
 		Logger::instance()->log("FRouter", lvl::trace, "Register Controller {}", controllerName);
 
 	}
-	void FRouter::regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, const FControllerFunc& func)
+	void FRouter::regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, FControllerFunc& func)
 	{
 		FPathMatcher* matcher = new FPathMatcher(pathPattern, true);
 		uint64 priority = calcPathPatternPriority(matcher);

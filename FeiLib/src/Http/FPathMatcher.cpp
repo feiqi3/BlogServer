@@ -52,31 +52,31 @@ FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive):mOrigi
 		auto begin = 0ull;
 		//Match '**' 
 		if (!matchGroup[0].empty()) {
-			begin = matchAt(matchGroup[0], pattern);
-			ss << std::string_view(pattern.begin() + end, pattern.begin() + begin) << ".*";
+			begin = matchAt(matchGroup[0], filteredPattern);
+			ss << std::string_view(filteredPattern.begin() + end, filteredPattern.begin() + begin) << ".*";
 			end = begin + matchGroup[0].size();
 			mWildCardsNums++;
 		}
 		//Match '?'
 		if (!matchGroup[1].empty()) {
-			begin = matchAt(matchGroup[1],pattern);
-			ss << std::string_view(pattern.begin() + end, pattern.begin() + begin)<<".";
+			begin = matchAt(matchGroup[1], filteredPattern);
+			ss << std::string_view(filteredPattern.begin() + end, filteredPattern.begin() + begin)<<".";
 			end = begin + matchGroup[1].size();
 			mUndecidedChars++;
 		}
 		//Match '*'
 		else if (!matchGroup[2].empty()) {
-			begin = matchAt(matchGroup[2], pattern);
-			ss << std::string_view(pattern.begin() + end, pattern.begin() + begin) << "[^/]*";
+			begin = matchAt(matchGroup[2], filteredPattern);
+			ss << std::string_view(filteredPattern.begin() + end, filteredPattern.begin() + begin) << "[^/]*";
 			end = begin + matchGroup[2].size();
 			mWildCardsNums++;
 		}
 		//Match {} variable
 		else if (!matchGroup[3].empty()) {
-			begin = matchAt(matchGroup[3], pattern);
-			std::string_view view(pattern.begin() + end, pattern.begin() + begin - 1);
+			begin = matchAt(matchGroup[3], filteredPattern);
+			std::string_view view(filteredPattern.begin() + end, filteredPattern.begin() + begin - 1);
 			ss << view <<"([^/]*)";
-			varNames.push_back(std::string(view));
+			varNames.push_back(std::string(matchGroup[3]));
 			end = begin + matchGroup[3].size() + 1;
 		}
 	}

@@ -226,6 +226,7 @@ bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
                                uint32 &cursor) {
   auto beg = findFirstNotSpace(view, cursor);
   auto end = findFirstSpace(view, beg);
+  if (end == beg)return false;
   cursor = end + 1;
   outVersion = Version::Unknown;
   if (end - beg < 8) {
@@ -246,6 +247,7 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
                             HttpQueryMap &outmap, uint32 &cursor) {
   auto beg = findFirstNotSpace(view, cursor);
   auto end = findFirstSpace(view, cursor);
+  if (end - beg == 0)return false;
 
   if (end - beg > HttpMaxRequestPathLen) {
     Logger::instance()->log("HttpParser", lvl::warn,

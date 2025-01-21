@@ -11,7 +11,7 @@ class FBufferReader;
 namespace Fei::Http {
 
 class FHttpContext;
-class FHttpRequest {
+class F_API FHttpRequest {
 public:
   FHttpRequest(FBufferReader &buffer);
   bool isValid() const { return mIsValid; }

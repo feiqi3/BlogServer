@@ -7,7 +7,7 @@
 
 namespace Fei::Http{
     class FHttpRequest;
-    using FControllerFunc = std::function<FHttpResponse(FHttpRequest*)>;
+    using FControllerFunc = std::function<FHttpResponse(const FHttpRequest&,const PathVarMap&)>;
     
     class FControllerBase{
         public:

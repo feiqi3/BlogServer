@@ -12,7 +12,7 @@ namespace Fei::Http {
 class FRouterPrivate;
 class FPathMatcher;
 class __FRouterInner;
-class FRouter : public FSingleton<FRouter>,public FNoCopyable{
+class F_API FRouter : public FSingleton<FRouter>,public FNoCopyable{
 public:
   static void RegisterController(const std::string& controllerName, FControllerPtr controller);
   static void RegisterControllerFuncs(const std::string& pathPattern,Method mapMethod,const std::string& controllerName, FControllerFunc func);
@@ -35,7 +35,7 @@ public:
 
 private:
 	void regController(const std::string& controllerName, FControllerPtr controller);
-	void regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName,const FControllerFunc& func);
+	void regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, FControllerFunc& func);
 	static uint64 calcPathPatternPriority(FPathMatcher* matcher);
 	void unregController(const std::string& controllerName);
 

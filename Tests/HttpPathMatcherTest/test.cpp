@@ -2,8 +2,14 @@
 #include <re2/re2.h>
 #include <string>
 #include <sstream>
+#include <functional>
 #include "Http/FPathMatcher.h"
+#include "Http/FRouter.h"
+#include "Http/FController.h"
 #include "FDef.h"
+#include "FeiLibIniter.h"
+#include "Http/FHttpRequest.h"
+#include "FBuffer.h"
 uint64_t matchAt(const absl::string_view& piece, const std::string& pieceFrom) {
 	return piece.data() - pieceFrom.data();
 }
@@ -30,10 +36,18 @@ std::string preFilterPattern(const std::string& pattern) {
 	return _ret;
 }
 
+//Test path matcher woring?
+void test01();
+//Test controller register and so on.
+void test02();
 int main() {
-    std::string srcText = "/test/*/{id}/**/{ijg}";
+	test02();
+}
+
+void test01() {
+	std::string srcText = "/test/*/{id}/**/{ijg}";
 	std::string newText = "/test/123/9985/asdas/gdsdsfasd/12354";
-    re2::RE2 AntStyleMatchPattern("(\\@)|(\\?)|(\\*)|\\{([^/{}\\\\]+|\\\\[{}])+\\}");  // 正则表达式
+	re2::RE2 AntStyleMatchPattern("(\\@)|(\\?)|(\\*)|\\{([^/{}\\\\]+|\\\\[{}])+\\}");  // 正则表达式
 	std::string VarMatchPattern = "([^/]*)";
 
 	int end = 0;
@@ -91,5 +105,53 @@ int main() {
 			std::cout << "var: " << varViews[i] << " ";
 		}
 		delete args[i];
+	}
+	if (!isMatch)std::exit(-1);
+	assert(isMatch);
+}
+
+class ControllerTest : public Fei::Http::FControllerBase {
+public:
+	ControllerTest() {
+	}
+	Fei::Http::FHttpResponse map_abc(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::PathVarMap& pathVar) {
+		std::cout << "Method Get, /abc \n";
+		return Fei::Http::FHttpResponse{};
+	}
+	Fei::Http::FHttpResponse map_var(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::PathVarMap& pathVar) {
+		std::cout << "Method Post, /{id}/hello/path/{uv}"<<" with variable: ";
+		for (auto&& [key, val] : pathVar) {
+			std::cout << key << " = " << val << " ";
+		}
+		std::cout << "\n";
+		return Fei::Http::FHttpResponse{};
+	}
+
+	void registerThis() {
+		using namespace Fei::Http;
+		FRouter::RegisterControllerFuncs("/abc", Method::GET, "Test", std::bind(&ControllerTest::map_abc, this, std::placeholders::_1, std::placeholders::_2));
+		FRouter::RegisterControllerFuncs("/{id}/hello/path/{uv}", Method::POST, "Test", std::bind(&ControllerTest::map_var, this, std::placeholders::_1, std::placeholders::_2));
+	}
+};
+
+void test02()
+{
+	using namespace Fei;
+	FeiLibInit();
+
+	using namespace Fei::Http;
+	FBuffer buffer(100);
+	FBufferReader reader(buffer);
+	FHttpRequest request(reader);
+	auto controller = std::make_shared<ControllerTest>();
+	FRouter::RegisterController("Test", controller);
+	controller->registerThis();
+	auto matched = FRouter::instance()->route(Method::GET, "/abc");
+	if (matched.isvalid()) {
+		matched.controllerFunc(request, matched.pathVariable);
+	}
+	matched = FRouter::instance()->route(Method::POST, "/abc/hello/path/cde");
+	if (matched.isvalid()) {
+		matched.controllerFunc(request, matched.pathVariable);
 	}
 }

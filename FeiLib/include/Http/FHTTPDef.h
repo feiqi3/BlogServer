@@ -1,10 +1,13 @@
 #ifndef FHTTPDEF_H
 #define FHTTPDEF_H
+#include <map>
 #include "../FDef.h"
-
 namespace Fei {
 namespace Http {
-enum class Method {
+    
+    using PathVarMap = std::map<std::string, std::string>;
+
+    enum class Method {
   GET = 0,
   POST = 1,
   HEAD = 2,

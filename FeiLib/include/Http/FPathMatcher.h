@@ -13,9 +13,6 @@ namespace re2 {
 
 namespace Fei::Http {
 
-//-----------------------------------------------------------------//
-    using PathVarMap = std::map<std::string, std::string>;
-//-----------------------------------------------------------------//
     static const uint32 MaxPathLengthMatcherSupport = 1024;
 //An ANT-Style path matcher
 class FPathMatcher {

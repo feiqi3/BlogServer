@@ -1,7 +1,14 @@
 project(HttpPathMatcherTest)
 
-add_executable(HttpPathMatcherTest test.cpp)
-set_target_properties(HttpPathMatcherTest PROPERTIES FOLDER "Libraries")
+add_executable(${PROJECT_NAME} test.cpp)
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "Libraries")
 
+target_link_libraries(${PROJECT_NAME} PUBLIC FeiLib)
 
-target_link_libraries(HttpPathMatcherTest PUBLIC FeiLib)
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        $<TARGET_FILE_DIR:FeiLib>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying Dependency"
+)
