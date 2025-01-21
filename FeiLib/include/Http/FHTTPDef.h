@@ -5,17 +5,20 @@
 namespace Fei {
 namespace Http {
 enum class Method {
-  GET,
-  POST,
-  HEAD,
-  PUT,
-  DELETE,
-  PATCH,
-  CONNECT,
-  OPTIONS,
-  TRACE,
-  Invalid,
+  GET = 0,
+  POST = 1,
+  HEAD = 2,
+  PUT = 3,
+  DELETE = 4,
+  PATCH = 5,
+  CONNECT = 6,
+  OPTIONS = 7,
+  TRACE = 8,
+  Invalid = 9,
+  MAX_SIZE = Invalid,
 };
+
+const char* methodToStr(Method method);
 
 enum class Version {
   Unknown,

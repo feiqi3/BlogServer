@@ -56,6 +56,36 @@ const char *statusCodeToStr(StatusCode code) {
   return statusCodeToStr(StatusCode::_200);
 }
 
+const char* methodToStr(Method method)
+{
+    switch (method)
+    {
+    case Fei::Http::Method::GET:return "GET";
+        break;
+    case Fei::Http::Method::POST:return "POST";
+        break;
+    case Fei::Http::Method::HEAD:return "HEAD";
+        break;
+    case Fei::Http::Method::PUT:return "PUT";
+        break;
+    case Fei::Http::Method::DELETE:return "DELETE";
+        break;
+    case Fei::Http::Method::PATCH:return "PATCH";
+        break;
+    case Fei::Http::Method::CONNECT:return "CONNECT";
+        break;
+    case Fei::Http::Method::OPTIONS:return "OPTIONS";
+        break;
+    case Fei::Http::Method::TRACE:return "TRACE";
+        break;
+    case Fei::Http::Method::Invalid:return "Invalid";
+        break;
+    default:
+        return nullptr;
+        break;
+    }
+}
+
 const char *versionToStr(Version version) {
   switch (version) {
 

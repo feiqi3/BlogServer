@@ -17,10 +17,8 @@ namespace Fei::Http{
         virtual ~FControllerBase(){};
 
         protected:
-
-    
     };
-
+    using FControllerPtr = std::shared_ptr<FControllerBase>;
 
 }
 

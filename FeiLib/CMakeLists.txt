@@ -45,6 +45,12 @@ add_subdirectory(3rd/absl)
 add_subdirectory(3rd/re2)
 target_link_libraries(${PROJECT_NAME} PUBLIC re2::re2)
 
+set(TBB_TEST OFF)
+set(TBBMALLOC_BUILD  OFF)
+#for TBB
+set(BUILD_SHARED_LIBS ON)
+add_subdirectory(3rd/oneTBB)
+target_link_libraries(${PROJECT_NAME} PUBLIC TBB::tbb)
 
 if(WIN32)
     add_subdirectory(3rd/wepoll)

@@ -23,6 +23,10 @@ public:
     return sInstance;
   }
 
+  static bool valid() {
+      return sInstance != nullptr;
+  }
+
   ~FSingleton() { sInstance = 0; }
 
 private:
