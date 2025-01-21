@@ -21,6 +21,9 @@ public:
   struct RouteResult {
 	  std::map<std::string, std::string> pathVariable;
 	  FControllerFunc controllerFunc;
+	  bool isvalid() const{
+		  return controllerSave != nullptr;
+	  }
   private:
 	  FControllerPtr controllerSave;
 	  friend FRouter;

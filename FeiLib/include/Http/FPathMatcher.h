@@ -24,7 +24,7 @@ public:
   FPathMatcher(const std::string& pattern,bool caseSensitive);
   bool isMatch(const std::string& str, PathVarMap& vars);
   uint32 getWildCardsNums()const { return mWildCardsNums; }
-  uint32 getVariableNums()const { return varNames.size(); }
+  uint32 getVariableNums()const { return uint32(varNames.size()); }
   uint32 getUndecidedCharNums()const { return mUndecidedChars; }
   const std::vector<std::string>& getVarbiables()const { return varNames; }
   const std::string& getOriginPattern()const { return mOriginPattern; }

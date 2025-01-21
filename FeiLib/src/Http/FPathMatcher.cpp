@@ -49,7 +49,7 @@ FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive):mOrigi
 	std::stringstream ss;
 	while (RE2::FindAndConsume(&text, AntStyleMatchPattern, &matchGroup[0], &matchGroup[1], &matchGroup[2], &matchGroup[3]))
 	{
-		auto begin = 0;
+		auto begin = 0ull;
 		//Match '**' 
 		if (!matchGroup[0].empty()) {
 			begin = matchAt(matchGroup[0], pattern);
@@ -98,7 +98,7 @@ bool FPathMatcher::isMatch(const std::string& str, PathVarMap& vars)
 		args[i] = new RE2::Arg(&varViews[i]);
 	}
 
-	bool isMatch = RE2::FullMatchN(view, *mPattern, args.data(), this->varNames.size());
+	bool isMatch = RE2::FullMatchN(view, *mPattern, args.data(), int(this->varNames.size()));
 	for (auto i = 0; i < args.size(); ++i) {
 		if (!varViews[i].empty()) {
 			vars.insert({ varNames[i],std::string(varViews[i]) });
