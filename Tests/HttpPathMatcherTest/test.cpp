@@ -112,7 +112,7 @@ void test01() {
 
 class ControllerTest : public Fei::Http::FControllerBase {
 public:
-	ControllerTest() {
+	ControllerTest():FControllerBase("test") {
 	}
 	Fei::Http::FHttpResponse map_abc(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::PathVarMap& pathVar) {
 		std::cout << "Method Get, /abc \n";
@@ -127,13 +127,13 @@ public:
 		return Fei::Http::FHttpResponse{};
 	}
 
-	void registerThis() {
-		using namespace Fei::Http;
-		FRouter::RegisterControllerFuncs("/abc", Method::GET, "Test", std::bind(&ControllerTest::map_abc, this, std::placeholders::_1, std::placeholders::_2));
-		FRouter::RegisterControllerFuncs("/{id}/hello/path/{uv}", Method::POST, "Test", std::bind(&ControllerTest::map_var, this, std::placeholders::_1, std::placeholders::_2));
+	void registerMapping() override {
+		addControllerMappingPath("");
+		REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/abc", ControllerTest, map_abc);
+		REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/{id}/hello/path/{uv}", ControllerTest, map_var);
 	}
+	~ControllerTest() {}
 };
-
 void test02()
 {
 	using namespace Fei;
@@ -143,9 +143,7 @@ void test02()
 	FBuffer buffer(100);
 	FBufferReader reader(buffer);
 	FHttpRequest request(reader);
-	auto controller = std::make_shared<ControllerTest>();
-	FRouter::RegisterController("Test", controller);
-	controller->registerThis();
+	REGISTER_CONTROLLER_CLASS(ControllerTest)
 	auto matched = FRouter::instance()->route(Method::GET, "/abc");
 	if (matched.isvalid()) {
 		matched.controllerFunc(request, matched.pathVariable);

@@ -67,7 +67,7 @@ void FTcpConnection::sendInLoop(const char *data, uint64 len) {
         faultError = true;
       }
     } else {
-      int remaining = len - sendLen;
+      remaining = len - sendLen;
       if (remaining == 0) {
         if (m_onWriteComplete)
           m_loop->AddTask(std::bind(m_onWriteComplete, shared_from_this()));

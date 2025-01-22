@@ -2,16 +2,19 @@
 #define FROUTER_H
 #include <string>
 #include <queue>
+#include <functional>
 #include "FSingleton.h"
 #include "FDef.h"
 #include "FHTTPDef.h"
 #include "FNoCopyable.h"
 #include "FController.h"
-
 namespace Fei::Http {
 class FRouterPrivate;
 class FPathMatcher;
 class __FRouterInner;
+class FHttpResponse;
+class FHttpRequest;
+
 class F_API FRouter : public FSingleton<FRouter>,public FNoCopyable{
 public:
   static void RegisterController(const std::string& controllerName, FControllerPtr controller);

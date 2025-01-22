@@ -99,14 +99,15 @@ namespace Fei::Http {
 		FPathMatcher* matcher = new FPathMatcher(pathPattern, true);
 		uint64 priority = calcPathPatternPriority(matcher);
 		FControllerPtr controller = nullptr;
-		auto itor = _dp->mControllerMap.find(controllerName);
-		if (itor == _dp->mControllerMap.end()) {
-			Logger::instance()->log("FRouter", lvl::err, "Unknown Controller Name");
-			throw std::exception("Unknown Controller Name");
+		{
+			auto itor = _dp->mControllerMap.find(controllerName);
+			if (itor == _dp->mControllerMap.end()) {
+				Logger::instance()->log("FRouter", lvl::err, "Unknown Controller Name");
+				throw std::exception("Unknown Controller Name");
+			}
+
+			controller = itor->second;
 		}
-
-		controller = itor->second;
-
 		ControllerAndPatternPtr _temp = std::make_shared<__ControllerAndPattern>();
 		
 		_temp->priority = priority;
@@ -138,7 +139,7 @@ namespace Fei::Http {
 	void FRouter::unregController(const std::string& controllerName)
 	{
 		FControllerPtr controllerPtr = 0;
-		
+		{
 			auto itor = _dp->mControllerMap.find(controllerName);
 			if (itor == _dp->mControllerMap.end()) {
 				return;
@@ -150,7 +151,7 @@ namespace Fei::Http {
 				FAUTO_LOCK(eraseLock);
 				_dp->mControllerMap.unsafe_erase(itor);
 			}
-		
+		}
 		for (auto queueIdx = 0; queueIdx < _dp->mControllerOrderQueue.size(); ++queueIdx) {
 			auto& queue = _dp->mControllerOrderQueue[queueIdx];
 			auto& eraselock = _dp->mControllerOrderQueueEraseLocks[queueIdx];
