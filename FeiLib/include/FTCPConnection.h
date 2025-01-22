@@ -45,6 +45,10 @@ public:
 
   void setKeepAlive(bool v);
   void setKeepIdle(int idleTime);
+
+  void forceClose();
+  void forceCloseInDelay(uint32 ms);
+
   FSocketAddr getAddr() const { return m_addrIn; }
 
 protected:
@@ -56,11 +60,12 @@ protected:
   void handleClose();
   void handleError();
   void shutdownInLoop();
-  void handleWriteComplete();
+  void handleWriteComplete() {}
   void startReadingInLoop();
   void stopReadingInLoop();
 
   void sendInLoopStr(std::string data);
+  void forceCloseInLoop();
 
   Socket getFd();
 

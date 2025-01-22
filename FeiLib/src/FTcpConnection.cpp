@@ -9,6 +9,7 @@
 #include "FSockWrapper.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
+#include "FWeakCallback.h"
 
 #include <cerrno>
 #include <cstring>
@@ -106,6 +107,24 @@ void FTcpConnection::setKeepIdle(int idleTime) {
   m_sock->setKeepIdle(idleTime);
 }
 
+void FTcpConnection::forceClose()
+{
+    if (m_loop->isInLoopThread()) {
+        forceCloseInLoop();
+    }
+    else {
+        m_loop->AddTask(
+            std::bind(&FTcpConnection::forceCloseInLoop, shared_from_this()));
+    }
+}
+
+void FTcpConnection::forceCloseInDelay(uint32 ms)
+{
+    auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
+    m_loop->RunAfter(ms,
+        std::bind(&FTcpConnection::forceCloseInLoop, shared_from_this()));
+}
+
 void FTcpConnection::setReading(bool v) {
 
   if (v == true && !m_event->isReading()) {
@@ -113,15 +132,13 @@ void FTcpConnection::setReading(bool v) {
       startReadingInLoop();
       return;
     }
-    m_loop->AddTask(std::bind(&FTcpConnection::startReadingInLoop, this));
-    m_loop->AddTask(std::bind(&guardian, shared_from_this()));
+    m_loop->AddTask(std::bind(&FTcpConnection::startReadingInLoop, shared_from_this()));
   } else if (v == false && m_event->isReading()) {
     if (m_loop->isInLoopThread()) {
       stopReadingInLoop();
       return;
     }
-    m_loop->AddTask(std::bind(&FTcpConnection::stopReadingInLoop, this));
-    m_loop->AddTask(std::bind(&guardian, shared_from_this()));
+    m_loop->AddTask(std::bind(&FTcpConnection::stopReadingInLoop, shared_from_this()));
   }
 }
 
@@ -187,8 +204,7 @@ void FTcpConnection::send(const char *data, uint64 len) {
     sendInLoop(data, len);
   } else {
     m_loop->AddTask(
-        std::bind(&FTcpConnection::sendInLoopStr, this, std::string()));
-    m_loop->AddTask(std::bind(&guardian, shared_from_this()));
+        std::bind(&FTcpConnection::sendInLoopStr, shared_from_this(), std::string(data)));
   }
 }
 
@@ -198,6 +214,11 @@ void FTcpConnection::stopReadingInLoop() { m_event->disableReading(); }
 
 void FTcpConnection::sendInLoopStr(std::string data) {
   sendInLoop(data.data(), data.size());
+}
+
+void FTcpConnection::forceCloseInLoop()
+{
+    handleClose();
 }
 
 } // namespace Fei

@@ -18,6 +18,7 @@ public:
   Method getMethod() const;
   Version getHttpVersion() const;
   bool getHeader(const std::string &key, std::string &outVal) const;
+  const std::string& getPath()const;
   bool getQuery(const std::string &key, std::string &outVal) const;
   std::string_view getRequestBody() const;
 

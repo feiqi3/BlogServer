@@ -21,6 +21,10 @@ FHttpRequest::FHttpRequest(FBufferReader &buffer)
   bool FHttpRequest::getHeader(const std::string &key, std::string &outVal) const{
     return mHttpCtx->getHeader(key, outVal);
   }
+  const std::string& FHttpRequest::getPath() const
+  {
+      return mHttpCtx->getRequestPath();
+  }
   bool FHttpRequest::getQuery(const std::string &key, std::string &outVal) const{
     return mHttpCtx->getQuery(key, outVal);
   }
