@@ -152,4 +152,10 @@ void test02()
 	if (matched.isvalid()) {
 		matched.controllerFunc(request, matched.pathVariable);
 	}
+
+	FRouter::UnRegisterController("test");
+	matched = FRouter::instance()->route(Method::POST, "/abc/hello/path/cde");
+	if (matched.isvalid()) {
+		matched.controllerFunc(request, matched.pathVariable);
+	}
 }

@@ -309,6 +309,9 @@ Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
   auto findTokenBeg = findFirstNotSpace(inView, cursor);
   cursor = findTokenBeg;
   auto findTokenEnd = findFirstSpace(inView, findTokenBeg);
+  if (findTokenBeg == findTokenEnd) {
+      return Http::Method::Invalid;
+  }
   std::string method((char *)&inView[cursor], findTokenEnd - cursor);
   // next
   cursor = findTokenEnd + 1;

@@ -80,7 +80,7 @@ FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
   }
 
 const Byte &FBufferView::operator[](uint32 pos) const {
-  assert(pos + beg <= end);
+  assert(pos + beg < end);
   return buffer->GetDirect(beg + pos);
 }
 

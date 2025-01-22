@@ -159,8 +159,8 @@ namespace Fei::Http {
 					auto controllerAndPatternPtr = i->second;
 					if (controllerAndPatternPtr->ControllerBase == controllerPtr) {
 						FAUTO_LOCK(eraselock);
-						i = queue.unsafe_erase(i);
 						Logger::instance()->log("FRouter", lvl::trace, "Remove {} Mehtod path pattern: {}", methodToStr(i->second->requestMethod), i->second->PathMatcher->getOriginPattern());
+						i = queue.unsafe_erase(i);
 					}
 					else {
 						i++;
