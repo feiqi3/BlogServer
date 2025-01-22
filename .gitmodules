@@ -19,3 +19,4 @@
 [submodule "FeiLib/3rd/oneTBB"]
 	path = FeiLib/3rd/oneTBB
 	url = https://github.com/uxlfoundation/oneTBB.git
+	tag = v2021.13.0
