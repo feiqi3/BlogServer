@@ -42,9 +42,10 @@ public:
   TcpConnState getState() const { return mstate; }
   void setReading(bool v);
   void send(const char *data, uint64 len);
-
+  void send(std::string&& data);
   void setKeepAlive(bool v);
   void setKeepIdle(int idleTime);
+  void setKeepInterval(int intervalTime);
 
   void forceClose();
   void forceCloseInDelay(uint32 ms);

@@ -60,5 +60,12 @@ void FSock::setKeepIdle(int time){
   }
 }
 
+void FSock::setKeepInterval(int time)
+{
+    if (valid) {
+        SetSockOpt(m_fd, SockOpt::KeepIntvl, time);
+    }
+}
+
 
 } // namespace Fei

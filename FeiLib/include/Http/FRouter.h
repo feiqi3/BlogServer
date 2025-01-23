@@ -35,7 +35,6 @@ public:
 public:
 	FRouter();
 	RouteResult route(Method method, const std::string& path);
-
 private:
 	void regController(const std::string& controllerName, FControllerPtr controller);
 	void regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, FControllerFunc& func);

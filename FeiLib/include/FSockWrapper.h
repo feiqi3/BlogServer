@@ -22,8 +22,9 @@ void setReuseAddr(bool on);
 void setNoneBlock(bool on);
 void setExitOnExec(bool on);
 void setKeepAlive(bool on);
+// in seconds
 void setKeepIdle(int time);
-
+void setKeepInterval(int time);
 
 private:
     Socket m_fd;

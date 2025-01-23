@@ -107,14 +107,19 @@ void FTcpConnection::setKeepIdle(int idleTime) {
   m_sock->setKeepIdle(idleTime);
 }
 
+void FTcpConnection::setKeepInterval(int intervalTime)
+{
+    m_sock->setKeepInterval(intervalTime);
+}
+
 void FTcpConnection::forceClose()
 {
     if (m_loop->isInLoopThread()) {
         forceCloseInLoop();
     }
     else {
-        m_loop->AddTask(
-            std::bind(&FTcpConnection::forceCloseInLoop, shared_from_this()));
+        auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
+        m_loop->AddTask(func);
     }
 }
 
@@ -207,6 +212,17 @@ void FTcpConnection::send(const char *data, uint64 len) {
   }
 }
 
+void FTcpConnection::send(std::string&& data)
+{
+    if (m_loop->isInLoopThread()) {
+        sendInLoop(data.data(), data.size());
+    }
+    else {
+        m_loop->AddTask(
+            std::bind(&FTcpConnection::sendInLoopStr, shared_from_this(), std::move(data)));
+    }
+}
+
 void FTcpConnection::startReadingInLoop() { m_event->enableReading(); }
 
 void FTcpConnection::stopReadingInLoop() { m_event->disableReading(); }
@@ -217,6 +233,7 @@ void FTcpConnection::sendInLoopStr(std::string data) {
 
 void FTcpConnection::forceCloseInLoop()
 {
+    m_loop->isInLoopAssert();
     handleClose();
 }
 

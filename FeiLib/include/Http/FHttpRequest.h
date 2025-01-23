@@ -21,9 +21,14 @@ public:
   const std::string& getPath()const;
   bool getQuery(const std::string &key, std::string &outVal) const;
   std::string_view getRequestBody() const;
+  void setAddr(const FSocketAddr& addr) {
+	  mAddr = addr;
+  }
 
+  const FSocketAddr& getAddr()const { return mAddr; }
 private:
   std::shared_ptr<FHttpContext> mHttpCtx;
+  FSocketAddr mAddr;
   bool mIsValid = true;
 };
 }; // namespace Fei::Http

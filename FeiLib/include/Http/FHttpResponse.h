@@ -14,6 +14,18 @@ class FHttpResponse {
 public:
   FHttpResponse() {}
 
+  bool getHeader(const std::string key, std::string& data)const {
+      auto itor = this->mHeaders.find(key);
+      if (itor == mHeaders.end())return false;
+      data = itor->second;
+      return true;
+
+  }
+
+  const std::string& getBody()const {
+      return mBody;
+  }
+
   FHttpResponse &setBody(std::string &&body) {
     mBody = std::move(body);
     return *this;
@@ -72,8 +84,8 @@ public:
   std::string toString() const;
 
 private:
-  Version mVersion;
-  StatusCode mStatus;
+  Version mVersion = Version::Http11;
+  StatusCode mStatus = StatusCode::_200;
   HeaderMap mHeaders;
   std::string mBody;
   std::vector<FCookie> mCookies;
