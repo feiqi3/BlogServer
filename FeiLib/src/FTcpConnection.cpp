@@ -121,8 +121,7 @@ void FTcpConnection::forceClose()
 void FTcpConnection::forceCloseInDelay(uint32 ms)
 {
     auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
-    m_loop->RunAfter(ms,
-        std::bind(&FTcpConnection::forceCloseInLoop, shared_from_this()));
+    m_loop->RunAfter(ms, func);
 }
 
 void FTcpConnection::setReading(bool v) {
