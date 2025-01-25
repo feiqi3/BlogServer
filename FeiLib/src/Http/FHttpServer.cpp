@@ -1,9 +1,12 @@
+#include <sstream>
 #include "Http/FHTTPServer.h"
 #include "Http/FHttpRequest.h"
-#include"Http/FHttpResponse.h"
+#include "Http/FHttpResponse.h"
+#include "FTCPServer.h"
 #include "FTCPConnection.h"
 #include "Http/FRouter.h"
 #include "FLogger.h"
+
 #define MODULE_NAME "HttpServer"
 #define TCP_TIMEOUT 60
 #define TCP_INTERVAL 5
@@ -33,6 +36,19 @@ bool getFileExtension(const std::string& filename,std::string& extension) {
 namespace Fei::Http {
 	FHttpServer::FHttpServer(uint32 threadNums) : mTcpServer(std::make_unique<FTcpServer>(threadNums))
 	{
+		mTcpServer->setOnConnEstablisedCallback(std::bind(&FHttpServer::handleTcpConnEstablish, this,std::placeholders::_1));
+		mTcpServer->setOnMessageCallback(std::bind(&FHttpServer::handleTcpIn, this, std::placeholders::_1, std::placeholders::_2));
+		mTcpServer->setOnCloseCallback(std::bind( & FHttpServer::handleTcpConnClosed,this,std::placeholders::_1 ));
+	}
+
+	void FHttpServer::run()
+	{
+		mTcpServer->run();
+	}
+
+	void FHttpServer::stop(bool force)
+	{
+		mTcpServer->stop(force);
 	}
 
 	bool getContentTypeByPath(const std::string& path, std::string& extensionName)
@@ -40,16 +56,24 @@ namespace Fei::Http {
 		return getFileExtension(path, extensionName);
 	}
 
+	bool FHttpServer::getContentTypeByPath(const std::string& path, std::string& extensionName)
+	{
+		return getContentTypeByPath(path, extensionName);
+	}
+
 	void FHttpServer::handleTcpIn(const FTcpConnPtr& ptr, FBufferReader& reader)
 	{
 		FHttpRequest request(reader);
+		
+		preProcessTcpConn(ptr, request);
+
 		FRouter::RouteResult routeResult;
-		bool shouldGoError = false;
+		bool notMatchError = false;
 		auto addr = ptr->getAddr();
 		request.setAddr(addr);
 		if (!request.isValid()) {
 			Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error",addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
-			shouldGoError = true;
+			notMatchError = true;
 		}
 		else {
 			routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
@@ -58,38 +82,55 @@ namespace Fei::Http {
 		FHttpResponse response;
 		
 		if (!routeResult.isvalid() ) {
-			shouldGoError = true;
-			Logger::instance()->log(MODULE_NAME,lvl::info, "request path {} with method {} unknown from {}.{}.{}.{}", request.getPath(), methodToStr(request.getMethod()), addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
+			notMatchError = true;
+			Logger::instance()->log(MODULE_NAME,lvl::info, "request path {} with method {} unknown from {}.{}.{}.{} : {}", request.getPath(), methodToStr(request.getMethod()), addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
 		}
 
-		if (shouldGoError) {
+		if (notMatchError) {
 			routeResult = FRouter::instance()->route(Method::GET,ERROR_ROUTE_PATH);
 			if (!routeResult.isvalid()) {
-				if (mInternalErrCallback) {
-					mInternalErrCallback(ptr, request, response);
+				if (mRouteNotMatchCallback) {
+					mRouteNotMatchCallback(request, response);
 				}
 				else {
-					//Some default func
+					defaultHandleRouterMismatchFunc(request, response);
 				}
 			}
 		}
 		else {
-			response = routeResult.controllerFunc(request, routeResult.pathVariable);
+			try
+			{
+				response = routeResult.controllerFunc(request, routeResult.pathVariable);
+			}
+			catch (::Fei::FException& exception)
+			{
+				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason {}, \n{}", request.getPath(),exception.what(),exception.stackTrace());
+				if (mInternalErrCallback) {
+					mInternalErrCallback(request, response, exception);
+				}
+				else {
+					defaultExceptionFunc(request, response, exception);
+				}
+			}catch (std::exception& e){
+				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason {}",request.getPath(),e.what());
+				FException exception;
+				defaultExceptionFunc(request, response, exception);
+			}
 		}
 
+		preProcessHttpRequestSend(ptr, request, response);
 		ptr->send(std::move(response.toString()));
-
 	}
 
-	void FHttpServer::handleRequestSend(const FTcpConnPtr& ptr, FHttpResponse& response)
+	void FHttpServer::handleRequestSend(const FTcpConnPtr& ptr, const FHttpRequest& request, FHttpResponse& response)
 	{
-
+		preProcessHttpRequestSend(ptr, request, response);
 	}
 
 	void FHttpServer::preProcessHttpRequestSend(const FTcpConnPtr& ptr, const FHttpRequest& request, FHttpResponse& response)
 	{
 		if (mPreSendCallback) {
-			mPreSendCallback(ptr,request, response);
+			mPreSendCallback(request, response);
 		}
 		bool hasBody = response.getBody().empty();
 		response.setHttpVersion(DEFAULT_HTTP_VERSION);
@@ -109,9 +150,21 @@ namespace Fei::Http {
 		}
 	}
 
+	void FHttpServer::handleTcpConnEstablish(const FTcpConnPtr& ptr)
+	{
+		ptr->setReading(true);
+	}
+
+	void FHttpServer::handleTcpConnClosed(const FTcpConnPtr& ptr)
+	{
+
+	}
+
 	void FHttpServer::preProcessTcpConn(const FTcpConnPtr& ptr, const FHttpRequest& request)
 	{
 		std::string headerAttracted;
+		auto addr = ptr->getAddr();
+		Logger::instance()->log("FHttpServer", lvl::trace, "Http conntection established, from {}.{}.{}.{} : {}", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
 		bool hasConnectionIndicator = request.getHeader("Connection", headerAttracted);
 		bool setKeepAlive = false;
 		if (!hasConnectionIndicator) {
@@ -129,6 +182,21 @@ namespace Fei::Http {
 			ptr->setKeepIdle(TCP_TIMEOUT);
 			ptr->setKeepInterval(TCP_INTERVAL);
 		}
+	}
+
+	void FHttpServer::defaultHandleRouterMismatchFunc(const FHttpRequest& request, FHttpResponse& response)
+	{
+		response.setStatusCode(StatusCode::_404);
+		response.setBody("404: Page not found");
+	}
+
+	void FHttpServer::defaultExceptionFunc(const FHttpRequest& request, FHttpResponse& response,const FException& exception)
+	{
+		response.setStatusCode(StatusCode::_501);
+		std::stringstream ss;
+		ss << "500: Server Internal Error\n" << exception.stackTrace();
+		response.setBody(ss.str());
+		return;
 	}
 
 };
