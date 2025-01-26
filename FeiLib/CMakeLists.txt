@@ -42,7 +42,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC inja)
 set(ABSL_ENABLE_INSTALL ON)
 add_subdirectory(3rd/absl)
 ##Usefull in debugging
-target_link_libraries(3rd/absl::stacktrace)
+target_link_libraries(${PROJECT_NAME} PRIVATE absl::stacktrace)
 
 add_subdirectory(3rd/re2)
 target_link_libraries(${PROJECT_NAME} PUBLIC re2::re2)
