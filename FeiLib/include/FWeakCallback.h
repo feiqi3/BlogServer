@@ -33,7 +33,7 @@ namespace Fei {
 
 	template<typename T, typename... ARGS>
 	auto makeWeakFunction(const std::shared_ptr<T>& ptr, void (T::* func)(ARGS...)) {
-		return makeWeakFunction(std::weak_ptr<T> ptr, func);
+		return makeWeakFunction(std::weak_ptr<T>(ptr), func);
 	}
 
 }

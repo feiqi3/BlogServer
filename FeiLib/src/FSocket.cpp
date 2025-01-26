@@ -370,7 +370,10 @@ int Readv(Socket socket, struct iovec *iov, int count) {
   int r,t = 0;
   while (count) {
     #ifdef _WIN32
-    Recv(socket,(char*)iov->iov_base,iov->iov_len,RecvFlag::None,r);
+    auto status = Recv(socket,(char*)iov->iov_base,iov->iov_len,RecvFlag::None,r);
+    if (status != SocketStatus::Success) {
+        return -1;
+    }
     if (r < 0) {
       return r;
     }

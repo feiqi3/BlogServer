@@ -4,15 +4,14 @@
 #include <thread>
 #include <vector>
 
+#include "FEventLoop.h"
 #include "FAcceptor.h"
 #include "FCallBackDef.h"
 #include "FDef.h"
 #include "FEPollListener.h"
-#include "FEventLoop.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
 #include "FTcpServer.h"
-#include "FTCPServer.h"
 
 #include <functional>
 
@@ -21,6 +20,12 @@ FTcpServer::FTcpServer(uint32 threadNum)
     : m_listenerLoop(
           std::make_unique<FEventLoop>(std::make_unique<FEPollListener>())),
       m_threadNums(threadNum) {}
+
+FTcpServer::~FTcpServer()
+{
+    stop(true);
+}
+
 void FTcpServer::init() { m_threadNums = std::max(m_threadNums, 1u); }
 
 void FTcpServer::run() {

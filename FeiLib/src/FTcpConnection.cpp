@@ -97,7 +97,7 @@ void FTcpConnection::handleRead() {
     handleClose();
   } else {
     // Error
-    handleError();
+    handleError(err);
   }
 }
 
@@ -156,16 +156,27 @@ void FTcpConnection::handleClose() {
       "TcpConnection disconnected. address: {}.{}.{}.{}, port: {}",
       m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1, m_addrIn.un.un_byte.a2,
       m_addrIn.un.un_byte.a3, m_addrIn.port);
-  m_onCloseCallback(shared_from_this());
 
+  volatile int barrier__ = 0;
+  m_onCloseCallback(shared_from_this());
+  //No further code should be here
 }
 
-void FTcpConnection::handleError() {
+void FTcpConnection::handleError(Errno_t err) {
   Logger::instance()->log(
       MODULE_NAME, lvl::trace,
-      "TcpConnection Error, Errno {}. address: {}.{}.{}.{}, port: {}",
+      "TcpConnection Error, Errno {}. address: {}.{}.{}.{}, port: {}, errInfo: {}",
       strerror(errno), m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1,
-      m_addrIn.un.un_byte.a2, m_addrIn.un.un_byte.a3, m_addrIn.port);
+      m_addrIn.un.un_byte.a2, m_addrIn.un.un_byte.a3, m_addrIn.port,GetErrorStr());
+  bool faultError = false;
+    
+  if (err != EINTR && err != EWOULDBLOCK && err != EAGAIN) {
+      faultError = true;
+  }
+
+  if (faultError) {
+      this->forceClose();
+  }
 }
 
 void FTcpConnection::handleWrite() {

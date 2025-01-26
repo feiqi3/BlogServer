@@ -143,9 +143,6 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
       }
     }
     if (findColon == -1) {
-      Logger::instance()->log(
-          "HttpParser", lvl::warn, "Wired header: {}",
-          std::string((char *)&lineView[0], lineView.size()));
       continue;
     }
     std::string header =
@@ -159,6 +156,7 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
       }
     }
 
+    cursor = findFirstNotSpace(lineView, cursor);
     std::string content = std::string((char *)&lineView[cursor],
                                       lineView.size() - cursor - _crlfOffset);
     map.insert({header, content});

@@ -18,7 +18,7 @@
 static const std::string DefaultContentType = DEFAULT_CONTENT_TYPE;
 static const std::string DefaultCharSet = DEFAULT_CHAT_SET;
 static const std::string DefaultServerName = "by FeiLib";
-static const std::unordered_map<std::string, std::string> extensionToContentType;
+extern const std::unordered_map<std::string, std::string> extensionToContentType;
 
 bool getFileExtension(const std::string& filename,std::string& extension) {
 	static std::string fileExtensionSeperator = ".";
@@ -202,7 +202,7 @@ namespace Fei::Http {
 };
 
 
-static const std::unordered_map<std::string, std::string> extensionToContentType =
+const std::unordered_map<std::string, std::string> extensionToContentType =
 {
 {"html","text/html"},
 {"htm","text/html"},

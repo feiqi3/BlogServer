@@ -1,7 +1,5 @@
-#ifndef FEILIBINITER_H
-#define FEILIBINITER_H
-#include "FSocket.h"
 #include "FeiLibIniter.h"
+#include "FSocket.h"
 #include "FLogger.h"
 namespace Fei {
 F_API void FeiLibInit() {
@@ -19,5 +17,3 @@ F_API void FeiLibUnInit() {
 }
 
 }; // namespace Fei
-
-#endif

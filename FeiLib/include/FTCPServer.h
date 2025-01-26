@@ -18,7 +18,7 @@ class FSock;
 class F_API FTcpServer : public FNoCopyable{
     public:
     FTcpServer(uint32 threadNum);
-    ~FTcpServer(){stop(true);}
+    ~FTcpServer();
     void init();
     void run();
     void stop(bool forceClose = false);

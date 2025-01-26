@@ -13,7 +13,6 @@
 
 namespace Fei {
 
-class FPoller;
 class FTimeQueue;
 class FListener;
 class FEvent;

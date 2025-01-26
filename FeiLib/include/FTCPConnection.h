@@ -59,7 +59,7 @@ protected:
   void handleRead();
   void handleWrite();
   void handleClose();
-  void handleError();
+  void handleError(Errno_t err);
   void shutdownInLoop();
   void handleWriteComplete() {}
   void startReadingInLoop();

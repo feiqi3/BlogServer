@@ -47,42 +47,48 @@ uint32 ToEpoll(uint32 events) {
   }
   return epollEvents;
 }
+
+// Some MACRO in system header may consist of multi flag, which cant be match with "&"
+bool binMatch(uint32 a, uint32 b_) {
+    return (a & b_) == b_;
+}
+
 uint32 FromEpoll(uint32 events) {
   uint32 ret = 0;
-  if (events & EPOLLRDNORM) {
+  if (binMatch(events , EPOLLRDNORM)) {
     ret |= Rdnorm;
   }
-  if (events & EPOLLRDBAND) {
+  if (binMatch(events , EPOLLRDBAND)) {
     ret |= Rdband;
   }
-  if (events & EPOLLIN) {
+  if (binMatch(events , EPOLLIN)) {
     ret |= In;
   }
-  if (events & EPOLLOUT) {
+  if (binMatch(events , EPOLLOUT)) {
     ret |= Out;
   }
-  if (events & EPOLLPRI) {
+  if (binMatch(events , EPOLLPRI)) {
     ret |= Pri;
   }
-  if (events & EPOLLWRNORM) {
+  if (binMatch(events , EPOLLWRNORM)) {
     ret |= Wrnorm;
   }
-  if (events & EPOLLWRBAND) {
+  if (binMatch(events , EPOLLWRBAND)) {
     ret |= Wrband;
   }
-  if (events & EPOLLERR) {
+  if (binMatch(events , EPOLLERR)) {
     ret |= Err;
   }
-  if (events & EPOLLHUP) {
+  if (binMatch(events , EPOLLHUP)) {
     ret |= Hup;
   }
-  if (events & EPOLLRDHUP) {
+  if (binMatch(events , EPOLLRDHUP)) {
     ret |= Rdhup;
   }
-  if (events & EPOLLMSG) {
+  if (binMatch(events , EPOLLMSG)) {
     ret |= Msg;
   }
-  if (events & EPOLLONESHOT) {
+  if (binMatch(events , EPOLLONESHOT)) {
     ret |= Oneshot;
   }
   return ret;
@@ -125,39 +131,41 @@ uint32 ToPoll(uint32 events) {
 
   return ret;
 }
+
+//TODO: use binMatch()
 uint32 FromPoll(uint32 events) {
   uint32 ret = 0;
-  if (events & POLLIN) {
+  if (binMatch(events ,POLLIN)) {
     ret |= In;
   }
-  if (events & POLLOUT) {
+  if (binMatch(events , POLLOUT)) {
     ret |= Out;
   }
-  if (events & POLLRDNORM) {
+  if (binMatch(events , POLLRDNORM)) {
     ret |= Rdnorm;
   }
-  if (events & POLLRDBAND) {
+  if (binMatch(events , POLLRDBAND)) {
     ret |= Rdband;
   }
-  if (events & POLLWRNORM) {
+  if (binMatch(events , POLLWRNORM)) {
     ret |= Wrnorm;
   }
-  if (events & POLLWRBAND) {
+  if (binMatch(events , POLLWRBAND)) {
     ret |= Wrband;
   }
-  if (events & POLLPRI) {
+  if (binMatch(events , POLLPRI)) {
     ret |= Pri;
   }
-  if (events & POLLERR) {
+  if (binMatch(events , POLLERR)) {
     ret |= Err;
   }
-  if (events & POLLHUP) {
+  if (binMatch(events , POLLHUP)) {
     ret |= Hup;
   }
-  if (events & POLLRDHUP) {
+  if (binMatch(events , POLLRDHUP)) {
     ret |= Rdhup;
   }
-  if (events & POLLNVAL) {
+  if (binMatch(events , POLLNVAL)) {
     ret |= Nval;
   }
 
