@@ -20,25 +20,52 @@ static const std::string DefaultCharSet = DEFAULT_CHAT_SET;
 static const std::string DefaultServerName = "by FeiLib";
 extern const std::unordered_map<std::string, std::string> extensionToContentType;
 
-bool getFileExtension(const std::string& filename,std::string& extension) {
-	static std::string fileExtensionSeperator = ".";
-	auto dotPos = std::find_first_of(filename.rbegin(), filename.rend(), fileExtensionSeperator.begin(), fileExtensionSeperator.end());
-	if (dotPos != filename.rend()) {
-		extension = std::string(filename.rbegin(), dotPos) + DefaultCharSet;
-		return true;
+namespace {
+
+	bool _getFileExtension(const std::string& filename, std::string& extension) {
+		static std::string fileExtensionSeperator = ".";
+		auto dotPos = std::find_first_of(filename.rbegin(), filename.rend(), fileExtensionSeperator.begin(), fileExtensionSeperator.end());
+		if (dotPos != filename.rend()) {
+			extension = std::string(filename.rbegin(), dotPos) + DefaultCharSet;
+			return true;
+		}
+		else {
+			extension = DefaultContentType + DefaultCharSet;
+			return false;
+		}
 	}
-	else {
-		extension = DefaultContentType + DefaultCharSet;
-		return false;
-	}
+
+bool _getContentTypeByPath(const std::string& path, std::string& extensionName)
+{
+	return _getFileExtension(path, extensionName);
+}
 }
 
 namespace Fei::Http {
 	FHttpServer::FHttpServer(uint32 threadNums) : mTcpServer(std::make_unique<FTcpServer>(threadNums))
 	{
+		if (!FRouter::valid()) {
+			new FRouter;
+		}
 		mTcpServer->setOnConnEstablisedCallback(std::bind(&FHttpServer::handleTcpConnEstablish, this,std::placeholders::_1));
 		mTcpServer->setOnMessageCallback(std::bind(&FHttpServer::handleTcpIn, this, std::placeholders::_1, std::placeholders::_2));
 		mTcpServer->setOnCloseCallback(std::bind( & FHttpServer::handleTcpConnClosed,this,std::placeholders::_1 ));
+	}
+
+	FHttpServer::~FHttpServer() {
+		if (FRouter::valid()) {
+			delete FRouter::instance();
+		}
+	}
+
+	void FHttpServer::addListenPort(uint32 port)
+	{
+		this->mTcpServer->addListenPort(port);
+	}
+
+	void FHttpServer::removeListenPort(uint32 port)
+	{
+		this->mTcpServer->removeListenPort(port);
 	}
 
 	void FHttpServer::run()
@@ -51,14 +78,9 @@ namespace Fei::Http {
 		mTcpServer->stop(force);
 	}
 
-	bool getContentTypeByPath(const std::string& path, std::string& extensionName)
-	{
-		return getFileExtension(path, extensionName);
-	}
-
 	bool FHttpServer::getContentTypeByPath(const std::string& path, std::string& extensionName)
 	{
-		return getContentTypeByPath(path, extensionName);
+		return _getContentTypeByPath(path, extensionName);
 	}
 
 	void FHttpServer::handleTcpIn(const FTcpConnPtr& ptr, FBufferReader& reader)
@@ -69,21 +91,27 @@ namespace Fei::Http {
 
 		FRouter::RouteResult routeResult;
 		bool notMatchError = false;
+		bool isFiltered = false;
 		auto addr = ptr->getAddr();
 		request.setAddr(addr);
-		if (!request.isValid()) {
-			Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error",addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
+
+		FHttpResponse response;
+		if (mConnFilterFunc && mConnFilterFunc(request, response)) {
+			isFiltered = true;
+		}
+		
+		if (!request.isValid() && !isFiltered) {
+			Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.",addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
 			notMatchError = true;
 		}
-		else {
+		else if(!isFiltered) {
 			routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
 		}
 
-		FHttpResponse response;
 		
 		if (!routeResult.isvalid() ) {
 			notMatchError = true;
-			Logger::instance()->log(MODULE_NAME,lvl::info, "request path {} with method {} unknown from {}.{}.{}.{} : {}", request.getPath(), methodToStr(request.getMethod()), addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
+			Logger::instance()->log(MODULE_NAME,lvl::info, "request path {} with method {} unknown from {}.{}.{}.{} : {}, this may cause by browser's preload strategy.", request.getPath(), methodToStr(request.getMethod()), addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
 		}
 
 		if (notMatchError) {
@@ -96,6 +124,9 @@ namespace Fei::Http {
 					defaultHandleRouterMismatchFunc(request, response);
 				}
 			}
+		}
+		else if (isFiltered) {
+			
 		}
 		else {
 			try
@@ -132,7 +163,7 @@ namespace Fei::Http {
 		if (mPreSendCallback) {
 			mPreSendCallback(request, response);
 		}
-		bool hasBody = response.getBody().empty();
+		bool hasBody = !response.getBody().empty();
 		response.setHttpVersion(DEFAULT_HTTP_VERSION);
 		{
 			std::string serverName = "";
@@ -142,9 +173,9 @@ namespace Fei::Http {
 		}
 		if (hasBody) {
 			std::string hasContentType;
-			if (response.getHeader("Content-Type", hasContentType)) {
+			if (!response.getHeader("Content-Type", hasContentType)) {
 				std::string contentType;
-				getContentTypeByPath(request.getPath(), contentType);
+				_getContentTypeByPath(request.getPath(), contentType);
 				response.setContentType(contentType);
 			}
 		}

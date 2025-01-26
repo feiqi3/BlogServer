@@ -19,7 +19,7 @@ namespace Fei::Http{
     }
 
     if (!mBody.empty()) {
-        ss << "Content-Length: " << mBody.size();
+        ss << "Content-Length: " << mBody.size() << LINE_BREAKER;
         ss << LINE_BREAKER;
         ss << mBody;
     }
