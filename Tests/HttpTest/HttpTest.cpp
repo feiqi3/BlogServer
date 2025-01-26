@@ -53,7 +53,7 @@ void FTcpServer_echo() {
     Http::FHttpParser parser(buf);
     Http::FHttpContext ctx;
     parser.parse(ctx);
-    
+    ptr->forceClose();
     //len = buf.readTo(mBytes.data(), len);
 
     //auto addr = ptr->getAddr();

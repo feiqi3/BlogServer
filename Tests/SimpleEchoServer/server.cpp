@@ -1,8 +1,9 @@
 #include "FCallBackDef.h"
 #include "FDef.h"
 #include "FEvent.h"
-#include "FeiLibIniter.h"
 #include "FSocket.h"
+#include "FeiLibIniter.h"
+#include "FREventDef.h"
 #include "FTCPConnection.h"
 #include "FTcpServer.h"
 
@@ -31,7 +32,7 @@ void eventLoop();
 void FTcpServer_echo();
 
 int main() {
-  FTcpServer_echo();
+    FTcpServer_echo();
   return 0;
 }
 
@@ -129,12 +130,23 @@ void simple_echo() {
     printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
            addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
            addr.un.un_byte.a3, recLen, data);
-    Close(client);
     if (status != SocketStatus::Success) {
-      printf("Close client failed: %s\n", StatusToStr(status));
-      printf("Error: %s\n", GetErrorStr().c_str());
-      break;
+        printf("Close client failed: %s\n", StatusToStr(status));
+        printf("Error: %s\n", GetErrorStr().c_str());
+        break;
     }
+    char sending[256] = {};
+    auto len =  sprintf(sending, "Sending from server : hello client %d.%d.%d.%d : %d", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+        addr.un.un_byte.a3, addr.port);
+    int writeLen = 0;
+    Send(client, sending, len,writeLen);
+    if (status != SocketStatus::Success) {
+        printf("Close client failed: %s\n", StatusToStr(status));
+        printf("Error: %s\n", GetErrorStr().c_str());
+        break;
+    }
+    Recv(client, data, 127, RecvFlag::None, recLen);
+    Close(client);
   }
   Close(socket);
   FeiLibUnInit();
@@ -173,41 +185,57 @@ void epoll_echo() {
 
   FEpollEvent event;
   event.events = EPOLLIN;
-  event.data.ptr = nullptr;
+  event.data.sock = socket;
   int ret = EPollCtl(ephnd, EPollOp::Add, socket, &event);
   if (ret == -1) {
     printf("Add epoll failed: %s\n", GetErrorStr().c_str());
     return;
   }
 
+  std::vector<FEpollEvent> readyEvents(36);
+  std::map<Socket, FSocketAddr> addrSock;
   while (true) {
-    int ret = EPollWait(ephnd, &event, 1, -1);
-    if (ret == -1) {
-      printf("Wait epoll failed: %s\n", GetErrorStr().c_str());
-      break;
-    }
+      int ret = EPollWait(ephnd, readyEvents.data(), 36, -1);
+      if (ret == -1) {
+          printf("Wait epoll failed: %s\n", GetErrorStr().c_str());
+          break;
+      }
 
-    Socket client;
-    FSocketAddr addr;
-    status = Accept(socket, client, &addr);
-    if (status != SocketStatus::Success) {
-      printf("Accept failed: %s\n", StatusToStr(status));
-      printf("Error: %s\n", GetErrorStr().c_str());
-      break;
-    }
-    char data[128] = {};
-    int recLen = 0;
-    status = Recv(client, data, 127, RecvFlag::None, recLen);
-    if (status != SocketStatus::Success) {
-      printf("Recv failed: %s\n", StatusToStr(status));
-      printf("Error: %s\n", GetErrorStr().c_str());
-      break;
-    }
+      for (auto&& rEvent : readyEvents) {
+          if (REvent::FromEpoll(rEvent.events) & REvent::In) {
+              Socket client;
+              FSocketAddr addr;
+              status = Accept(rEvent.data.sock, client, &addr);
+              if (status != SocketStatus::Success) {
+                  printf("Accept failed: %s\n", StatusToStr(status));
+                  printf("Error: %s\n", GetErrorStr().c_str());
+                  break;
+              }
+              char data[128] = {};
+              int recLen = 0;
+              status = Recv(client, data, 127, RecvFlag::None, recLen);
+              if (status != SocketStatus::Success) {
+                  printf("Recv failed: %s\n", StatusToStr(status));
+                  printf("Error: %s\n", GetErrorStr().c_str());
+                  break;
+              }
 
-    printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
-           addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
-           addr.un.un_byte.a3, recLen, data);
-    Close(client);
+              printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
+                  addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+                  addr.un.un_byte.a3, recLen, data);
+              char sending[256] = {};
+              auto len = sprintf(sending, "Sending from server : hello client %d.%d.%d.%d : %d", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+                  addr.un.un_byte.a3, addr.port);
+              int writeLen = 0;
+              auto status = Send(client, sending, len, writeLen);
+              if (writeLen < 0) {
+                  std::cout << "Error";
+              }
+              status = Recv(client, sending,len, RecvFlag::None,recLen);
+
+              Close(client);
+          }
+      }
   }
   EPollCtl(ephnd, EPollOp::Del, socket, nullptr);
   EPollClose(ephnd);
@@ -226,6 +254,7 @@ void eventLoop() {
     auto event = FEvent::createEvent(loop, s, loop->getUniqueIdInLoop());
     mMap[s] = event;
     event->enableReading();
+    event->enableWriting();
     auto onClose = [s, addr, loop, &mMap]() {
       printf("Closing client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
              addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
@@ -245,6 +274,16 @@ void eventLoop() {
              addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
              addr.un.un_byte.a3, len, data);
     };
+    event->setWriteCallback([s, addr, loop, &mMap]() {
+        char sending[256];
+
+        auto len = sprintf(sending, "Sending from server : hello client %d.%d.%d.%d : %d", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+            addr.un.un_byte.a3, addr.port);
+        int writeLen = 0;
+
+        Send(s, sending, len, writeLen);
+        mMap[s]->disableWriting();
+        });
     event->setReadCallback(onRead);
 
     event->setCloseCallback(onClose);
@@ -277,6 +316,12 @@ void FTcpServer_echo() {
     printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
            addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
            addr.un.un_byte.a3, len, mBytes.data());
+    char sending[256];
+
+    len = sprintf(sending, "Sending from server : hello client %d.%d.%d.%d : %d", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
+        addr.un.un_byte.a3, addr.port);
+    int writeLen = 0;
+    ptr->send(sending, len);
   });
 
   server->setOnCloseCallback([](FTcpConnPtr ptr) {

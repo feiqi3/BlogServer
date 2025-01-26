@@ -24,6 +24,7 @@ int main() {
   if (status != SocketStatus::Success || realSendLen < 13) {
     printf("Send failed: %s\n", StatusToStr(status));
     printf("Error: %s\n", GetErrorStr().c_str());
+    Close(socket);
     return -1;
   }
   Close(socket);

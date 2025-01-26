@@ -1,5 +1,4 @@
 #include "FSocket.h"
-#include "FeiLib/FSocket.h"
 #include "FeiLibIniter.h"
 #include "cstdio"
 int main() {
@@ -26,6 +25,15 @@ int main() {
     printf("Error: %s\n", GetErrorStr().c_str());
     return -1;
   }
+  char recvBuffer[1024] = {};
+  int realRecvLen = 0;
+  status = Recv(socket, recvBuffer,1024,RecvFlag::None,realRecvLen);
+  if (status != SocketStatus::Success ) {
+      printf("Send failed: %s\n", StatusToStr(status));
+      printf("Error: %s\n", GetErrorStr().c_str());
+      return -1;
+  }
+  std::printf("Receive from server: %s\n", recvBuffer);
   Close(socket);
   FeiLibUnInit();
 }
