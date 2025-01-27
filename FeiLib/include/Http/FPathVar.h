@@ -8,6 +8,15 @@ namespace Fei::Http {
     class F_API FPathVar {
     public:
         uint32 size()const { return mMap.size(); }
+
+        auto begin()const {
+            return mMap.begin();
+        }
+
+        auto end()const {
+            return mMap.end();
+        }
+
         const std::string& get(const std::string& name)const {
             auto itor = mMap.find(name);
             if (itor == mMap.end()) {
