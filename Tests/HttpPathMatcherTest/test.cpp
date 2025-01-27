@@ -143,7 +143,7 @@ void test02()
 	FBuffer buffer(100);
 	FBufferReader reader(buffer);
 	FHttpRequest request(reader);
-	REGISTER_CONTROLLER_CLASS(ControllerTest)
+	REGISTER_CONTROLLER_CLASS_INLINE(ControllerTest)
 	auto matched = FRouter::instance()->route(Method::GET, "/abc");
 	if (matched.isvalid()) {
 		matched.controllerFunc(request, matched.pathVariable);
