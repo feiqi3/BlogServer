@@ -23,7 +23,9 @@ const std::map<std::string, Method> MethodsMap = {
 uint32 findFirstNotSpace(FBufferView &view, uint32 begin = 0) {
   uint32 cnt = begin;
   for (; cnt < view.size(); ++cnt) {
-    if (view[cnt] != ' ' && view[cnt] != '\r' && view[cnt] != '\n') {
+      if (view[cnt] == '\0')
+          break;
+      if (view[cnt] != ' ' && view[cnt] != '\r' && view[cnt] != '\n') {
       break;
     }
   }
@@ -120,7 +122,7 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
   FBufferView lineView(oldView);
   while (1) {
     lineView = newLine(&oldView);
-
+    oldView = lineView;
     uint32 cursor = 0;
     cursor = findFirstNotSpace(lineView);
     // Blank line
@@ -143,7 +145,7 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
       }
     }
     if (findColon == -1) {
-      continue;
+        continue;
     }
     std::string header =
         std::string((char *)&lineView[cursor], findColon - cursor);
@@ -160,7 +162,6 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
     std::string content = std::string((char *)&lineView[cursor],
                                       lineView.size() - cursor - _crlfOffset);
     map.insert({header, content});
-    oldView = lineView;
   }
 
   lineView = newLine(&lineView);

@@ -58,7 +58,12 @@ void FBuffer::Append(const char *data, uint32 len) {
   memcpy(m_buffer.data() + writeIdx, data, len);
 }
 
-void FBuffer::Pop(int len) { readIdx += len; }
+void FBuffer::Pop(int len) {
+    if(readIdx + len > writeIdx){
+        assert(0);
+    }
+    readIdx += len;
+}
 void FBuffer::PopAll() { readIdx = writeIdx; }
 char FBuffer::Get(uint32 offset) const {
   auto readPos = readIdx + offset;
