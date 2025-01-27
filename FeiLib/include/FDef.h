@@ -37,10 +37,10 @@ using Byte = uint8;
 
 #if defined(__linux__) or defined(__APPLE__)
 using EpollHandle = int;
-using Socket = uint64;
+using Socket = int;
 #else
 using EpollHandle = void *;
-using Socket = int;
+using Socket = uint64;
 #endif
 using Event = uint32;
 using AtomicEvent = std::atomic_uint32_t;
