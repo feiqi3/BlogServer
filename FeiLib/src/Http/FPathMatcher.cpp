@@ -3,7 +3,7 @@
 #include "FDef.h"
 // DOOOO Not Use std::regex!!!
 #include "re2/re2.h"
-
+#include "Http/FPathVar.h"
 namespace {
 
 	uint64_t matchAt(const absl::string_view& piece, const std::string& pieceFrom) {
@@ -89,7 +89,7 @@ FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive):mOrigi
 	assert(mPattern->error_code() == RE2::NoError);
 }
 
-bool FPathMatcher::isMatch(const std::string& str, PathVarMap& vars)
+bool FPathMatcher::isMatch(const std::string& str, FPathVar& vars)
 {
 	absl::string_view view(str);
 	std::vector<absl::string_view> varViews(this->varNames.size());
@@ -101,7 +101,7 @@ bool FPathMatcher::isMatch(const std::string& str, PathVarMap& vars)
 	bool isMatch = RE2::FullMatchN(view, *mPattern, args.data(), int(this->varNames.size()));
 	for (auto i = 0; i < args.size(); ++i) {
 		if (!varViews[i].empty()) {
-			vars.insert({ varNames[i],std::string(varViews[i]) });
+			vars.setVar( varNames[i],std::string(varViews[i]) );
 		}
 		delete args[i];
 	}

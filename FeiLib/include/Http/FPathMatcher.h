@@ -12,14 +12,14 @@ namespace re2 {
 };
 
 namespace Fei::Http {
-
+    class FPathVar;
     static const uint32 MaxPathLengthMatcherSupport = 1024;
 //An ANT-Style path matcher
 class FPathMatcher {
 public:
   FPathMatcher(const std::string& pattern) : FPathMatcher(pattern, true) {}
   FPathMatcher(const std::string& pattern,bool caseSensitive);
-  bool isMatch(const std::string& str, PathVarMap& vars);
+  bool isMatch(const std::string& str, FPathVar& vars);
   uint32 getWildCardsNums()const { return mWildCardsNums; }
   uint32 getVariableNums()const { return uint32(varNames.size()); }
   uint32 getUndecidedCharNums()const { return mUndecidedChars; }

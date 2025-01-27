@@ -3,8 +3,32 @@
 #include "FLogger.h"
 #include "tbb/concurrent_priority_queue.h"
 #include "tbb/concurrent_map.h"
-
+#include "FException.h"
 namespace Fei::Http {
+	namespace {
+	
+		class RouterDuplicateRegisterException :public FException {
+		public:
+			RouterDuplicateRegisterException(const std::string& name) :mName(name) {}
+			std::string reason()const override {
+				return "Register duplicated controller name: " + mName;
+			}
+		private:
+			std::string mName;
+		};
+
+		class RouterInvalidControllerNameException :public FException {
+		public:
+			RouterInvalidControllerNameException(const std::string& name) :mName(name) {}
+			std::string reason()const override {
+				return "Unknown controller name: " + mName;
+			}
+		private:
+			std::string mName;
+		};
+	};
+
+
 	struct __ControllerAndPattern {
 		uint64 priority = 0;
 		Method requestMethod = Method::Invalid;
@@ -56,11 +80,8 @@ namespace Fei::Http {
 	}
 	void FRouter::UnRegisterController(const std::string& controllerName)
 	{
-		if (!FRouter::valid()) {
-			Logger::instance()->log("FRouter", lvl::err, "Invalid operation, no Router.");
-			throw std::exception("Invalid operation");
-		}
-		FRouter::instance()->unregController(controllerName);
+		if(FRouter::valid())
+			FRouter::instance()->unregController(controllerName);
 	}
 
 	FRouter::FRouter():_dp(new __FRouterInner)
@@ -87,11 +108,11 @@ namespace Fei::Http {
 	{
 		assert(controller != nullptr);
 		if (_dp->mControllerMap.find(controllerName) != _dp->mControllerMap.end()) {
-			Logger::instance()->log("FRouter", lvl::err, "Duplicated Controller Name");
-			throw std::exception("Duplicated Controller Name");
+			throw RouterDuplicateRegisterException(controllerName);
 		}
 		_dp->mControllerMap.insert({ controllerName ,controller });
-		Logger::instance()->log("FRouter", lvl::trace, "Register Controller {}", controllerName);
+		if (Logger::valid())
+			Logger::instance()->log("FRouter", lvl::trace, "Register Controller {}", controllerName);
 
 	}
 
@@ -104,7 +125,7 @@ namespace Fei::Http {
 			auto itor = _dp->mControllerMap.find(controllerName);
 			if (itor == _dp->mControllerMap.end()) {
 				Logger::instance()->log("FRouter", lvl::err, "Unknown Controller Name");
-				throw std::exception("Unknown Controller Name");
+				throw RouterInvalidControllerNameException(controllerName);
 			}
 
 			controller = itor->second;
@@ -122,7 +143,8 @@ namespace Fei::Http {
 			auto& orderQueue = _dp->mControllerOrderQueue[(uint32)mapMethod];
 			orderQueue.insert({priority ,std::move(_temp) });
 		}
-		Logger::instance()->log("FRouter", lvl::trace, "Register {} Mehtod path pattern: {}", methodToStr(mapMethod), pathPattern);
+		if(Logger::valid() )
+			Logger::instance()->log("FRouter", lvl::trace, "Register {} Mehtod path pattern: {}", methodToStr(mapMethod), pathPattern);
 	}
 	uint64 FRouter::calcPathPatternPriority(FPathMatcher* matcher)
 	{

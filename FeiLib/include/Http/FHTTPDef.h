@@ -5,9 +5,8 @@
 namespace Fei {
 namespace Http {
     
-    using PathVarMap = std::map<std::string, std::string>;
 
-    enum class Method {
+enum class Method {
   GET = 0,
   POST = 1,
   HEAD = 2,

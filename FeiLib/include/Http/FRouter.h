@@ -3,6 +3,8 @@
 #include <string>
 #include <queue>
 #include <functional>
+
+#include "FPathVar.h"
 #include "FSingleton.h"
 #include "FDef.h"
 #include "FHTTPDef.h"
@@ -22,7 +24,7 @@ public:
   static void UnRegisterController(const std::string& controllerName);
 
   struct RouteResult {
-	  std::map<std::string, std::string> pathVariable;
+	  FPathVar pathVariable;
 	  FControllerFunc controllerFunc;
 	  bool isvalid() const{
 		  return controllerSave != nullptr;
@@ -40,7 +42,6 @@ private:
 	void regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, FControllerFunc& func);
 	static uint64 calcPathPatternPriority(FPathMatcher* matcher);
 	void unregController(const std::string& controllerName);
-
 private:
 	__FRouterInner* _dp = 0;
 };
