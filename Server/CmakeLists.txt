@@ -18,9 +18,11 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 #3rd
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/3rd/FeiLib/include)
-
 target_link_libraries(${PROJECT_NAME} PRIVATE FeiLib)
+#sqlite3
+add_subdirectory(3rd/sqlite3)
+target_link_libraries(${PROJECT_NAME} PRIVATE sqlite3)
+set_target_properties(sqlite3 PROPERTIES FOLDER "Server3rd")
 
 # Set compile options
 if(MSVC)
@@ -56,3 +58,9 @@ else()
     message(STATUS "  No compile options set")
 endif()
 
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:FeiLib>
+        $<TARGET_FILE_DIR:${PROJECT_NAME} 
+    COMMENT "Copying Dependency"
+)
