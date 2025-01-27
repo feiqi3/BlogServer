@@ -4,9 +4,9 @@ set (projectname_server ${PROJECT_NAME}_Server)
 set (projectname_client ${PROJECT_NAME}_Client)
 
 add_executable(${projectname_server} server.cpp)
-set_target_properties(${projectname_server} PROPERTIES FOLDER "Libraries")
+set_target_properties(${projectname_server} PROPERTIES FOLDER "Tests")
 add_executable(${projectname_client} client.cpp)
-set_target_properties(${projectname_client} PROPERTIES FOLDER "Libraries")
+set_target_properties(${projectname_client} PROPERTIES FOLDER "Tests")
 
 
 target_link_libraries(${projectname_server} PUBLIC FeiLib)

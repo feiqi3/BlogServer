@@ -3,10 +3,11 @@
 #include <string>
 #include <sstream>
 #include <functional>
+#include "FDef.h"
+#include "Http/FPathVar.h"
 #include "Http/FPathMatcher.h"
 #include "Http/FRouter.h"
 #include "Http/FController.h"
-#include "FDef.h"
 #include "FeiLibIniter.h"
 #include "Http/FHttpRequest.h"
 #include "FBuffer.h"
@@ -114,13 +115,13 @@ class ControllerTest : public Fei::Http::FControllerBase {
 public:
 	ControllerTest():FControllerBase("test") {
 	}
-	Fei::Http::FHttpResponse map_abc(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::PathVarMap& pathVar) {
+	Fei::Http::FHttpResponse map_abc(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::FPathVar& pathVar) {
 		std::cout << "Method Get, /abc \n";
 		return Fei::Http::FHttpResponse{};
 	}
-	Fei::Http::FHttpResponse map_var(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::PathVarMap& pathVar) {
+	Fei::Http::FHttpResponse map_var(const Fei::Http::FHttpRequest& inRequest, const Fei::Http::FPathVar& pathVar) {
 		std::cout << "Method Post, /{id}/hello/path/{uv}"<<" with variable: ";
-		for (auto&& [key, val] : pathVar) {
+		for ( auto&& [key, val] : pathVar) {
 			std::cout << key << " = " << val << " ";
 		}
 		std::cout << "\n";

@@ -26,6 +26,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 #3rd
 add_subdirectory(3rd/spdlog)
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
+set_target_properties(spdlog PROPERTIES FOLDER "3rd")
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/3rd/reflect)
 
@@ -46,6 +47,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE absl::stacktrace)
 
 add_subdirectory(3rd/re2)
 target_link_libraries(${PROJECT_NAME} PUBLIC re2::re2)
+get_target_property(re2_target re2::re2 ALIASED_TARGET)
+set_target_properties(${re2_target} PROPERTIES FOLDER "3rd")
 
 set(TBB_TEST OFF)
 set(TBBMALLOC_BUILD  OFF)
@@ -53,6 +56,8 @@ set(TBBMALLOC_BUILD  OFF)
 set(BUILD_SHARED_LIBS ON)
 add_subdirectory(3rd/oneTBB)
 target_link_libraries(${PROJECT_NAME} PUBLIC TBB::tbb)
+get_target_property(tbb_target TBB::tbb ALIASED_TARGET)
+set_target_properties(${tbb_target} PROPERTIES FOLDER "3rd")
 
 add_custom_target(genexdebug COMMAND ${CMAKE_COMMAND} -E echo " $<TARGET_FILE:TBB::tbb>")
 
