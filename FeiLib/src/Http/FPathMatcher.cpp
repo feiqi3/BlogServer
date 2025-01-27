@@ -4,6 +4,7 @@
 // DOOOO Not Use std::regex!!!
 #include "re2/re2.h"
 #include "Http/FPathVar.h"
+#include <exception>
 namespace {
 
 	uint64_t matchAt(const absl::string_view& piece, const std::string& pieceFrom) {
@@ -20,7 +21,7 @@ namespace {
 			else {
 				stars++;
 				if (stars > 2) {
-					throw std::exception("Invalid path pattern");
+					throw std::exception();
 				}
 
 			}
@@ -40,7 +41,7 @@ namespace Fei::Http {
 RE2 AntStyleMatchPattern = ("(@)|(\\?)|(\\*)|\\{([^/{}\\\\]+|\\\\[{}])+\\}");
 FPathMatcher::FPathMatcher(const std::string& pattern,bool caseSensitive):mOriginPattern(pattern) {
 	if (pattern.size() > MaxPathLengthMatcherSupport) {
-		throw std::exception("Invalid path pattern");
+		throw std::exception();
 	}
 	int end = 0;
 	auto filteredPattern = preFilterPattern(pattern);

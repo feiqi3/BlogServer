@@ -10,7 +10,8 @@ endif()
 add_library(sqlite3 SHARED ${SQLITE_SRC})
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU") # GCC
-    target_compile_options(sqlite3 PRIVATE       
+    target_compile_options(sqlite3 PRIVATE     
+        -fPIC  
         -march=native       
         -mtune=native       
         -fno-omit-frame-pointer 
@@ -18,6 +19,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU") # GCC
     )
 elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang") # Clang
     target_compile_options(sqlite3 PRIVATE
+        -fPIC  
         -march=native
         -mtune=native
         -fno-omit-frame-pointer

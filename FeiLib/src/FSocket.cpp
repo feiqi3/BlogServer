@@ -1,10 +1,8 @@
 #include "FSocket.h"
 #include "FDef.h"
 #include <cassert>
-#include <io.h>
+#include <cstring>
 #include <string>
-#include <winsock2.h>
-#include <ws2ipdef.h>
 
 #ifdef _WIN32
 #include "wepoll.h"
@@ -13,14 +11,21 @@
 #include <WinSock2.h>
 #pragma warning(suppress : 4996)
 
-#elif defined(__linux__)
-#include "poll.h"
-#include <sys/socket.h>
+#elif defined(__linux__) || defined(__APPLE__)
+  #include "poll.h"
+  #include <sys/socket.h>
+  #include <arpa/inet.h> 
+  #include <sys/epoll.h>
+  #include <sys/poll.h>
+  #include <netinet/in.h>
+  #include <netinet/tcp.h>
+  #include <unistd.h>
+#include <fcntl.h>
+  #if defined(__linux__)
+      #include <sys/uio.h>
+  #else
 
-#elif defined(__APPLE__)
-#include "poll.h"
-#include <sys/socket.h>
-
+  #endif
 #endif
 
 namespace Fei {
@@ -202,7 +207,7 @@ SocketStatus Bind(Socket socket, FSocketAddr addr) {
 #else
   sockaddr_in addr_in{};
   addr_in.sin_family = AF_INET;
-  addr_in.sin_port = addr.;
+  addr_in.sin_port = addr.port;
   addr_in.sin_addr.s_addr = addr.un.un_addr;
   int ret = bind(socket, (sockaddr *)&addr_in, sizeof(addr_in));
   if (ret == -1) {
@@ -225,8 +230,8 @@ SocketStatus Accept(Socket listen, Socket &client, FSocketAddr *addr) {
   }
 #else
   sockaddr_in addr_in{};
-  int len_new = sizeof(sockaddr_in);
-  client = accept(listen, &addr_in, &len_new);
+  socklen_t len_new = sizeof(sockaddr_in);
+  client = ::accept(listen, (sockaddr *)&addr_in, &len_new);
   addr->un.un_addr = addr_in.sin_addr.s_addr;
   addr->port = (addr_in.sin_port);
   if (client == -1) {
@@ -348,7 +353,7 @@ SocketStatus Connect(Socket socket, FSocketAddr addr) {
 }
 
 long SendV(Socket socket, iovec *iov, int count) {
-#ifdef _WIN32
+#ifndef __linux__
     long totallen = 0;int tlen = -1;
   while (count) {
     auto status = Send(socket, (const char*)iov->iov_base, iov->iov_len, tlen);
@@ -363,13 +368,13 @@ long SendV(Socket socket, iovec *iov, int count) {
   return totallen;
 
 #else
-  return sendV(socket, (::iovec *)iov, count);
+  return ::writev(socket, (::iovec *)iov, count);
 #endif
 }
 int Readv(Socket socket, struct iovec *iov, int count) {
+#ifndef __linux__
   int r,t = 0;
   while (count) {
-    #ifdef _WIN32
     auto status = Recv(socket,(char*)iov->iov_base,iov->iov_len,RecvFlag::None,r);
     if (status != SocketStatus::Success) {
         return -1;
@@ -387,7 +392,7 @@ int Readv(Socket socket, struct iovec *iov, int count) {
   }
   return t;
 #else
-  return readv(socket, (::iovec *)iov, count);
+  return ::readv(socket, (::iovec *)iov, count);
 #endif
 }
 
@@ -416,13 +421,27 @@ int FPoll(FPollfd *sockets, int num, int timeout) {
 #endif
 }
 
-EpollHandle EPollCreate(int size) { return epoll_create(size); }
+bool isEpollHandleValid(EpollHandle handle){
+  #ifdef _WIN32
+  return handle != nullptr;
+#elif defined(__linux__) or defined(__APPLE__)
+  return handle >= 0;
+#endif
+}
+
+EpollHandle EPollCreate(int size) { return ::epoll_create(size); }
 
 int EPollCtl(EpollHandle ephnd, EPollOp op, Socket sock, FEpollEvent *event) {
   return epoll_ctl(ephnd, (int)op, sock, (epoll_event *)event);
 }
 
-int EPollClose(EpollHandle ephnd) { return epoll_close(ephnd); }
+int EPollClose(EpollHandle ephnd) {
+  #ifdef _WIN32
+   return epoll_close(ephnd); 
+  #else
+  return close(ephnd);
+  #endif
+}
 
 int EPollWait(EpollHandle ephnd, FEpollEvent *events, int maxevents,
               int timeout) {

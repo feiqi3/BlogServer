@@ -35,10 +35,15 @@ using int32 = int32_t;
 using int64 = int64_t;
 using Byte = uint8;
 
+#if defined(__linux__) or defined(__APPLE__)
+using EpollHandle = int;
 using Socket = uint64;
+#else
+using EpollHandle = void *;
+using Socket = int;
+#endif
 using Event = uint32;
 using AtomicEvent = std::atomic_uint32_t;
-using EpollHandle = void *;
 
 typedef union FEpollData {
   void *ptr;

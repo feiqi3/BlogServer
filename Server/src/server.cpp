@@ -4,7 +4,7 @@
 #include "FeiLibIniter.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
-#include "FTcpServer.h"
+#include "FTCPServer.h"
 
 #include <cstdio>
 #include <iostream>
@@ -166,7 +166,7 @@ void epoll_echo() {
   }
 
   EpollHandle ephnd = EPollCreate(100);
-  if (ephnd == nullptr) {
+  if (isEpollHandleValid(ephnd) ) {
     printf("Create epoll failed: %s\n", GetErrorStr().c_str());
     return;
   }

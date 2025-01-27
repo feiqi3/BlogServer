@@ -57,7 +57,7 @@ namespace Fei::Http{
 
 #define REGISTER_CONTROLLER_CLASS_INLINE(CLS_NAME,...) {auto __##CLS_NAME = new ::Fei::Http::ControllerRegisterHelper((CLS_NAME*)nullptr, ##__VA_ARGS__ );}
 #define REGISTER_CONTROLLER_CLASS(CLS_NAME,...) namespace{auto __##CLS_NAME = new ::Fei::Http::ControllerRegisterHelper((CLS_NAME*)nullptr, ##__VA_ARGS__ );}
-#define REGISTER_MAPPING_FUNC(MAPPING_METHOD,MAPPING_PATTERN,CLS_NAME,MAPPING_FUNC) registerMappingFunction(MAPPING_PATTERN,MAPPING_METHOD,std::bind(&##CLS_NAME##::##MAPPING_FUNC,this,std::placeholders::_1,std::placeholders::_2));
+#define REGISTER_MAPPING_FUNC(MAPPING_METHOD,MAPPING_PATTERN,CLS_NAME,MAPPING_FUNC) registerMappingFunction(MAPPING_PATTERN,MAPPING_METHOD,std::bind(& CLS_NAME :: MAPPING_FUNC ,this,std::placeholders::_1,std::placeholders::_2));
 
 #define REGISTER_CONTROLLER_PREFIX(...) {std::string __temp[] = { __VA_ARGS__ };\
         for (size_t i = 0; i < sizeof(__temp) / sizeof(__temp[0]); ++i) { \

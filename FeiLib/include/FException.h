@@ -9,7 +9,7 @@ namespace Fei {
 	public:
 		FException();
 
-		const char* what() const final override;
+		const char* what() const noexcept final override;
 		
 		const std::string& stackTrace()const { return mStackTace; }
 		virtual std::string reason()const { return""; }

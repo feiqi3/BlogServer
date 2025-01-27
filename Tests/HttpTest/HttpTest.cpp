@@ -4,7 +4,7 @@
 #include "FREventDef.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
-#include "FTcpServer.h"
+#include "FTCPServer.h"
 #include "FeiLibIniter.h"
 
 

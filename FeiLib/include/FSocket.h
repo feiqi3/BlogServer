@@ -120,12 +120,23 @@ const short POLLNVAL = 0x0004;
 
 //Linux Specific, means the other side of the connection has closed its write, but still can read
 //In windows we just ignore this flag
-const short POLLRDHUP = 0;
-#else
+#elif defined (__linux__)
+const short POLLRDNORM = 0x040;
+const short POLLRDBAND = 0x080;
+const short POLLIN = 0x001;
+const short POLLPRI = 0x002;
 
+const short POLLWRNORM = 0x100;
+const short POLLOUT = 0x004;
+const short POLLWRBAND = 0x200;
+
+const short POLLERR = 0x008;
+const short POLLHUP = 0x010;
+const short POLLNVAL = 0x020;
+const short POLLRDHUP	= 0x2000;
 #endif
 
-
+#ifdef _WIN32
 const int   EPOLLIN = (int)(1U << 0),
             EPOLLPRI = (int)(1U << 1),
             EPOLLOUT = (int)(1U << 2), 
@@ -138,11 +149,25 @@ const int   EPOLLIN = (int)(1U << 0),
             EPOLLMSG = (int)(1U << 10), /* Never reported. */
             EPOLLRDHUP = (int)(1U << 13),
             EPOLLONESHOT = (int)(1U << 31);
-
+#elif defined (__linux__)
+const int
+    EPOLLIN = 0x001,
+    EPOLLPRI = 0x002,
+    EPOLLOUT = 0x004,
+    EPOLLRDNORM = 0x040,
+    EPOLLRDBAND = 0x080,
+    EPOLLWRNORM = 0x100,
+    EPOLLWRBAND = 0x200,
+    EPOLLMSG = 0x400,
+    EPOLLERR = 0x008,
+    EPOLLHUP = 0x010,
+    EPOLLRDHUP = 0x2000,
+    EPOLLONESHOT = 1u << 30;
+#endif
 
 
 enum class EPollOp { Add = 1, Mod = 2, Del = 3};
-
+F_API bool isEpollHandleValid(EpollHandle handle);
 F_API EpollHandle EPollCreate(int size);
 //under win32, only support Level Triggered
 F_API EpollHandle EPollCreate1(int flags);

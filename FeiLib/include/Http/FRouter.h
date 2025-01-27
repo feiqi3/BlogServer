@@ -7,7 +7,7 @@
 #include "FPathVar.h"
 #include "FSingleton.h"
 #include "FDef.h"
-#include "FHTTPDef.h"
+#include "FHttpDef.h"
 #include "FNoCopyable.h"
 #include "FController.h"
 namespace Fei::Http {

@@ -21,7 +21,7 @@ Fei::FException::FException()
 	mStackTace = ss.str();
 }
 
-const char* Fei::FException::what() const
+const char* Fei::FException::what() const noexcept
 {
 	mErrorStr = reason() + std::string("\n") + mErrorStr;
 	return mErrorStr.c_str();

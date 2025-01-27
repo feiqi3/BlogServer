@@ -26,7 +26,7 @@ std::string preFilterPattern(const std::string& pattern) {
 		else {
 			stars++;
 			if (stars > 2) {
-				throw std::exception("Invalid path pattern");
+				throw std::exception();
 			}
 
 		}

@@ -23,6 +23,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+#if(not WIN32)
+    add_compile_options(-fPIC)
+#endif
+
 #3rd
 add_subdirectory(3rd/spdlog)
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
@@ -49,7 +53,6 @@ add_subdirectory(3rd/re2)
 target_link_libraries(${PROJECT_NAME} PUBLIC re2::re2)
 get_target_property(re2_target re2::re2 ALIASED_TARGET)
 set_target_properties(${re2_target} PROPERTIES FOLDER "3rd")
-
 set(TBB_TEST OFF)
 set(TBBMALLOC_BUILD  OFF)
 #for TBB
