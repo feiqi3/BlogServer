@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
 project(Server)
-
 # Specify C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,13 +8,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add source files
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE SOURCES "src/*.cpp"  "src/*.h")
 
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Include directories
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 #3rd
 target_link_libraries(${PROJECT_NAME} PRIVATE FeiLib)
@@ -57,6 +56,26 @@ if(COMPILE_OPTIONS)
 else()
     message(STATUS "  No compile options set")
 endif()
+
+## code filter 
+function(collect_sources DIR GROUP_NAME)
+    set(SOURCES )
+    file(GLOB_RECURSE FILES "${DIR}/*")
+    foreach(FILE ${FILES})
+        if(IS_DIRECTORY ${FILE})
+            continue()
+        endif()
+        list(APPEND ${SOURCES} ${FILE})
+    endforeach()
+    source_group(${GROUP_NAME} FILES ${FILES} )
+endfunction()
+
+collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Controller Controller SRC_SOURCE)
+collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/DAO DAO SRC_SOURCE)
+collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/MODEL Model SRC_SOURCE)
+collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Service Service SRC_SOURCE)
+collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Utils Utils SRC_SOURCE)
+collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Server Server SRC_SOURCE)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
