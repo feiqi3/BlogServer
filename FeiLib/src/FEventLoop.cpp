@@ -31,7 +31,6 @@ void FEventLoop::Loop() {
     _this_thread_loop = (uint64)this;
   }
   while (!m_quit) {
-    mActiveEvents.clear();
     m_listener->listen(10, mActiveEvents);
     TimeStamp onReceviceTime = std::chrono::system_clock::now().time_since_epoch().count();
     for (auto& event : mActiveEvents) {
@@ -48,6 +47,7 @@ void FEventLoop::Loop() {
         break;
       func();
     }
+    mActiveEvents.clear();
   }
   m_stoped = true;
 }

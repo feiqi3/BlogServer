@@ -15,7 +15,7 @@ namespace Fei {
 void FEPollListener::listen(uint32 timeoutMs,
                             std::vector<FEventPtr> &outEvents) {
   FEpollEvent EPollevents[MAX_EVENTS];
-  int num = EPollWait(m_epollfd, EPollevents, m_pollEvents.size(), timeoutMs);
+  int num = EPollWait(m_epollfd, EPollevents, MAX_EVENTS, timeoutMs);
   if (num >= 0) {
     for (int i = 0; i < num; i++) {
       // Store id in EPollevevnts.data.u64
@@ -32,10 +32,11 @@ void FEPollListener::listen(uint32 timeoutMs,
         outEvents.push_back(event);
         assert(event->getId() == id);
       } else {
-        assert(0);
+        Logger::instance()->log("FEPollListener",lvl::err,"Epoll event not found, internal error may happened.");
       }
     }
   } else {
+        Logger::instance()->log("FEPollListener",lvl::err,"Epoll wait failed, reason: {}",GetErrorStr());
     // Error
   }
 }

@@ -166,7 +166,29 @@ const int
 #endif
 
 
-enum class EPollOp { Add = 1, Mod = 2, Del = 3};
+enum class EPollOp { 
+  Add
+  #ifdef _WIN32
+   = 1 
+  #else
+   = 1
+  #endif
+  ,
+  Mod 
+    #ifdef _WIN32
+   = 2 
+  #else
+   = 3
+  #endif
+  , 
+  Del 
+    #ifdef _WIN32
+   = 3 
+  #else
+   = 2
+  #endif
+  ,
+  };
 F_API bool isEpollHandleValid(EpollHandle handle);
 F_API EpollHandle EPollCreate(int size);
 //under win32, only support Level Triggered

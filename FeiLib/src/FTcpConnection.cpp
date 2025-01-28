@@ -29,6 +29,8 @@ void guardian(FTcpConnPtr ptr) {
 
 FTcpConnection::~FTcpConnection() {
   assert(mstate == TcpConnState::DisConnected);
+  //Remove event out of loop
+  m_event->remove();
 }
 
 FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn)

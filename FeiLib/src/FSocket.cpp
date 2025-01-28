@@ -12,7 +12,6 @@
 #pragma warning(suppress : 4996)
 
 #elif defined(__linux__) || defined(__APPLE__)
-  #include "poll.h"
   #include <sys/socket.h>
   #include <arpa/inet.h> 
   #include <sys/epoll.h>
@@ -20,12 +19,13 @@
   #include <netinet/in.h>
   #include <netinet/tcp.h>
   #include <unistd.h>
-#include <fcntl.h>
+  #include <fcntl.h>
   #if defined(__linux__)
       #include <sys/uio.h>
   #else
 
   #endif
+  #include "signal.h"
 #endif
 
 namespace Fei {
@@ -152,8 +152,12 @@ SocketStatus FeiInit() {
   if (ret != 0) {
     return SocketStatus::Fail;
   }
-#elif defined(__linux__)
-#elif defined(__APPLE__)
+#elif defined(__linux__) || defined(__APPLE__)
+    struct sigaction sa;
+    sa.sa_handler = [](int){};
+    sa.sa_flags = SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
 #endif
   return SocketStatus::Success;
 }
@@ -451,6 +455,8 @@ int EPollWait(EpollHandle ephnd, FEpollEvent *events, int maxevents,
 EpollHandle EPollCreate1(int flags) {
 #ifdef _WIN32
   flags = 0;
+#else
+  flags |= EPOLL_CLOEXEC;
 #endif
   // under win32, only support Level Triggered
   return epoll_create1(flags);
