@@ -124,6 +124,9 @@ namespace Fei::Http {
 					defaultHandleRouterMismatchFunc(request, response);
 				}
 			}
+			else {
+				response = routeResult.controllerFunc(request, routeResult.pathVariable);
+			}
 		}
 		else if (isFiltered) {
 			

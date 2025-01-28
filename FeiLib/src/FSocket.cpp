@@ -6,7 +6,6 @@
 
 #ifdef _WIN32
 #include "wepoll.h"
-#include "ws2ipdef.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 #pragma warning(suppress : 4996)

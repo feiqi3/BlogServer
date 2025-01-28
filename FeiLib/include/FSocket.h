@@ -117,6 +117,7 @@ const short POLLWRBAND = 0x0020;
 const short POLLERR = 0x0001;
 const short POLLHUP = 0x0002;
 const short POLLNVAL = 0x0004;
+const short POLLRDHUP = 0;
 
 //Linux Specific, means the other side of the connection has closed its write, but still can read
 //In windows we just ignore this flag
