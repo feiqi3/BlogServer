@@ -33,7 +33,7 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC") # Microsoft Visual C++
 	
 endif()
 
-
+target_include_directories(sqlite3 PUBLIC include/)
 
 target_compile_definitions(sqlite3 PRIVATE
     SQLITE_ENABLE_FTS5        
