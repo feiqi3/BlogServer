@@ -22,8 +22,8 @@ public:
 		res.setBody(ss.str());
 		return res;
 	}
-	REGISTER_MAPPING_BEGIN("/")
-		REGISTER_MAPPING_FUNC(Method::GET,"{val}", ControllerValue, GetValueInPath)
+	REGISTER_MAPPING_BEGIN("","/value")
+		REGISTER_MAPPING_FUNC(Method::GET,"/{val}", ControllerValue, GetValueInPath)
 	REGISTER_MAPPING_END
 };
 
