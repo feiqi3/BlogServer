@@ -11,7 +11,7 @@ namespace Fei {
 // --> so there is only one single instance memory exists in multi-dlls   
 // --> BTW It's a Win32 problem only
 // --> Magic OwO 
-template <typename T> class F_API FSingleton {
+template <typename T> class FSingleton {
 public:
   FSingleton() {
     assert(sInstance == 0 && "Double new singleton.");

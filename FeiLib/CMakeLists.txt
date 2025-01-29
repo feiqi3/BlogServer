@@ -23,16 +23,17 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-#if(not WIN32)
+if(UNIX)
     add_compile_options(-fPIC)
-#endif
+endif()
 
 #3rd
 add_subdirectory(3rd/spdlog)
-target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
+target_link_libraries(${PROJECT_NAME} PUBLIC spdlog)
 set_target_properties(spdlog PROPERTIES FOLDER "3rd")
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/3rd/reflect)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/3rd/reflect)
+
 
 add_subdirectory(3rd/json)
 target_link_libraries(${PROJECT_NAME} PUBLIC nlohmann_json::nlohmann_json)
