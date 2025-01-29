@@ -22,13 +22,14 @@ namespace Blog {
 		_BLOB,
 	};
 	class DBResult;
-
+	using DBResultPtr = std::shared_ptr<DBResult>;
 	class DatabaseOperation : public Singleton<DatabaseOperation> {
 	public:
 		DatabaseOperation();
 		~DatabaseOperation();
 		void LoadDB(const std::string& databaseName);
-		std::shared_ptr<DBResult> Exec(const std::string& sql);
+		DBResultPtr Exec(const std::string& sql)const;
+		DBResultPtr Exec(const std::string& sqlFmt,const std::vector<std::string>& userInParameter)const;
 	private:
 		DatabaseOperationPrivate* dp = nullptr;
 	};

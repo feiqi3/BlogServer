@@ -102,7 +102,7 @@ public:
 		}
 	}
 
-	std::shared_ptr<DBResult> execWithResult(const std::string& sql) {
+	DBResultPtr execWithResult(const std::string& sql,const std::string* strs = 0,uint32 length = 0) {
 		auto conn = getDbConn();
 		sqlite3_stmt* stmt = 0;
 		const char* unknownSql = 0;
@@ -110,6 +110,9 @@ public:
 			Logger::instance()->log(lvl::err,"SQL error, sql: \"{}\",error part: \"{\"}, reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
 			return 0;
 			});
+		for (auto i = 0; i < length; ++i) {
+			sqlite3_bind_text(stmt, 1, strs[i].c_str(), -1, SQLITE_STATIC);
+		}
 		int columnCount = sqlite3_column_count(stmt);
 		std::vector<DataType> dtp;
 		for (auto i = 0; i < columnCount; ++i) {
@@ -197,9 +200,14 @@ void Blog::DatabaseOperation::LoadDB(const std::string& databaseName)
 	});
 }
 
-std::shared_ptr<DBResult> Blog::DatabaseOperation::Exec(const std::string& sql)
+std::shared_ptr<DBResult> Blog::DatabaseOperation::Exec(const std::string& sql)const
 {
 	return dp->execWithResult(sql);
+}
+
+DBResultPtr Blog::DatabaseOperation::Exec(const std::string& sqlFmt, const std::vector<std::string>& userInParameter)const
+{
+	return dp->execWithResult(sqlFmt, userInParameter.data(), userInParameter.size());
 }
 
 
