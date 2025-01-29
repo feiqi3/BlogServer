@@ -1,5 +1,6 @@
 #include <sqlite3.h>
 #include <vector>
+#include <memory>
 
 #include "DataBaseOperation.h"
 #include "FLogger.h"
@@ -101,13 +102,13 @@ public:
 		}
 	}
 
-	DBResult execWithResult(const std::string& sql) {
+	std::shared_ptr<DBResult> execWithResult(const std::string& sql) {
 		auto conn = getDbConn();
 		sqlite3_stmt* stmt = 0;
 		const char* unknownSql = 0;
 		SQL_CHECK(sqlite3_prepare_v2(conn, sql.c_str(), sql.size(), &stmt, &unknownSql), {
 			Logger::instance()->log(lvl::err,"SQL error, sql: \"{}\",error part: \"{\"}, reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
-			return DBResult(0, {});
+			return 0;
 			});
 		int columnCount = sqlite3_column_count(stmt);
 		std::vector<DataType> dtp;
@@ -115,9 +116,10 @@ public:
 			auto type = sqlite3_column_type(stmt, i);
 			dtp.push_back(toBlogType(type));
 		}
+		return std::make_shared<DBResult>(stmt, dtp);
 	}
 
-	int getInteger(sqlite3_stmt* stmt, uint32 col, DataType type) {
+	static int getInteger(sqlite3_stmt* stmt, uint32 col, DataType type) {
 #ifdef SQL_STRICT_TYPE_CHECK
 		if (type != DataType::_INT) {
 			Logger::instance()->log(MODULE_NAME, lvl::warn, "Implicit data cast may happen.");
@@ -126,25 +128,25 @@ public:
 		return sqlite3_column_int(stmt, col);
 	}
 
-	int64_t getInteger64(sqlite3_stmt* stmt, uint32 col, DataType type) {
+	static int64_t getInteger64(sqlite3_stmt* stmt, uint32 col, DataType type) {
 #ifdef SQL_STRICT_TYPE_CHECK
-		if (type != DataType::_INT) {
+		if (type != DataType::_FLOAT && type != DataType::_INT) {
 			Logger::instance()->log(MODULE_NAME, lvl::warn, "Implicit data cast may happen.");
 		}
 #endif // SQL_STRICT_TYPE_CHECK
 		return sqlite3_column_int64(stmt, col);
 	}
 
-	double getFloat(sqlite3_stmt* stmt, uint32 col, DataType type) {
+	static double getFloat(sqlite3_stmt* stmt, uint32 col, DataType type) {
 #ifdef SQL_STRICT_TYPE_CHECK
 		if (type != DataType::_FLOAT && type != DataType::_INT) {
-			Logger::instance()->log(MODULE_NAME, lvl::warn, "Implicit data cast may happen.");
+			Logger::instance()->log(MODULE_NAME, lvl::warn, "Invalid data cast may happen.");
 		}
 #endif // SQL_STRICT_TYPE_CHECK
 		return sqlite3_column_double(stmt, col);
 	}
 
-	const unsigned char* getString(sqlite3_stmt* stmt, uint32 col, DataType type) {
+	static const unsigned char* getString(sqlite3_stmt* stmt, uint32 col, DataType type) {
 #ifdef SQL_STRICT_TYPE_CHECK
 		if (type != DataType::_TEXT && type != DataType::_BLOB) {
 			Logger::instance()->log(MODULE_NAME, lvl::warn, "Implicit data cast may happen.");
@@ -195,19 +197,49 @@ void Blog::DatabaseOperation::LoadDB(const std::string& databaseName)
 	});
 }
 
-void Blog::DatabaseOperation::Exec(const std::string& sql)
+std::shared_ptr<DBResult> Blog::DatabaseOperation::Exec(const std::string& sql)
 {
-
+	return dp->execWithResult(sql);
 }
 
 
 
-const char* Blog::DBResult::getString(uint32 col) const
+const char* Blog::DBResult::getString(uint32_t col) const
 {
-	return 0;
+	innerCheck(col);
+	return (const char*)DatabaseOperationPrivate::getString((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+}
+
+int Blog::DBResult::getInteger(uint32_t col) const
+{
+	innerCheck(col);
+	return DatabaseOperationPrivate::getInteger((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+}
+
+int64_t Blog::DBResult::getInteger64(uint32_t col) const
+{
+	innerCheck(col);
+	return DatabaseOperationPrivate::getInteger64((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+}
+
+double Blog::DBResult::getFloat(uint32_t col) const
+{
+	innerCheck(col);
+	return DatabaseOperationPrivate::getFloat((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+}
+
+bool Blog::DBResult::step()
+{
+	return sqlite3_step((sqlite3_stmt*)mData) == SQLITE_ROW;
 }
 
 Blog::DBResult::~DBResult()
 {
 	sqlite3_finalize((sqlite3_stmt*)this->mData);
+}
+
+void Blog::DBResult::innerCheck(uint32_t col) const
+{
+	if (col >= cols)
+		throw DatabaseExcceptionColOutofRange();
 }

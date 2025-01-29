@@ -1,11 +1,12 @@
 #ifndef FEXCEPTION_H
 #define FEXCEPTION_H
+#include "FDef.h"
 #include<string>
 #include <exception>
 
 namespace Fei {
 
-	class FException : public std::exception {
+	class F_API FException : public std::exception {
 	public:
 		FException();
 
