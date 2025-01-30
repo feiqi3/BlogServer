@@ -57,6 +57,9 @@ else()
     message(STATUS "  No compile options set")
 endif()
 
+## Server Related
+target_compile_definitions(${PROJECT_NAME} PRIVATE SERVER_RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
+
 ## code filter 
 function(collect_sources DIR GROUP_NAME)
     set(SOURCES )

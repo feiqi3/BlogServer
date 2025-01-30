@@ -111,7 +111,7 @@ public:
 			return 0;
 			});
 		for (auto i = 0; i < length; ++i) {
-			sqlite3_bind_text(stmt, 1, strs[i].c_str(), -1, SQLITE_STATIC);
+			sqlite3_bind_text(stmt, i+1, strs[i].c_str(), -1, SQLITE_STATIC);
 		}
 		int columnCount = sqlite3_column_count(stmt);
 		std::vector<DataType> dtp;
