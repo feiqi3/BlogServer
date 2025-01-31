@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(Server)
+
+option(BlogGenTools "Gen tools for server" ON)
+
 # Specify C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,6 +60,11 @@ else()
     message(STATUS "  No compile options set")
 endif()
 
+#tools
+if(BlogGenTools)
+	add_subdirectory(Tools)
+endif()
+
 ## Server Related
 target_compile_definitions(${PROJECT_NAME} PRIVATE SERVER_RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
 
@@ -86,3 +94,4 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         $<TARGET_FILE_DIR:${PROJECT_NAME} 
     COMMENT "Copying Dependency"
 )
+

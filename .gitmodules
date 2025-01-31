@@ -20,3 +20,9 @@
 	path = FeiLib/3rd/oneTBB
 	url = https://github.com/uxlfoundation/oneTBB.git
 	tag = v2021.13.0
+[submodule "Server/Tools/FontBaker/3rd/uchardet"]
+	path = Server/Tools/FontBaker/3rd/uchardet
+	url = https://github.com/feiqi3/uchardet.git
+[submodule "Server/Tools/FontBaker/3rd/iconvWin"]
+	path = Server/Tools/FontBaker/3rd/iconvWin
+	url = https://github.com/win-iconv/win-iconv.git
