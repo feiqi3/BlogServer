@@ -1,99 +1,181 @@
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <codecvt>
+#include <locale>
+#include <cstdlib>
+
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
-#include "iconv.h"
-#include "uchardet.h"
+struct Rect {
+    int x, y, w, h;
+};
 
-#include <iostream>
-#include <memory>
-#include <string>
-#include <stdio.h>
-#include <stdlib.h>
+class ImagePacker {
+private:
+    int canvasWidth, canvasHeight;      
+    std::vector<Rect> placedRects;      
 
-#define FONT_SIZE  64   // 字体大小
-#define SDF_WIDTH  64   // 生成 SDF 纹理的尺寸
-#define SDF_PADDING 5   // 额外的填充以保证边界不丢失
+public:
+    ImagePacker(int width, int height)
+        : canvasWidth(width), canvasHeight(height) {}
 
-// 读取字体文件
-unsigned char* ReadFile(const char* filename, int* size) {
-    FILE* file = fopen(filename, "rb");
-    if (!file) {
-        printf("Failed to open font file!\n");
-        return NULL;
+    bool overlaps(const Rect& a, const Rect& b) {
+        return !(a.x + a.w <= b.x ||   
+            a.x >= b.x + b.w ||   
+            a.y + a.h <= b.y ||   
+            a.y >= b.y + b.h);    
     }
-    fseek(file, 0, SEEK_END);
-    *size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    bool findPosition(int w, int h, int& outX, int& outY) {
+        for (int y = 0; y <= canvasHeight - h; y++) {
+            for (int x = 0; x <= canvasWidth - w; x++) {
+                Rect candidate = { x, y, w, h };
+                bool conflict = false;
+                for (const auto& placed : placedRects) {
+                    if (overlaps(candidate, placed)) {
+                        conflict = true;
+                        break;
+                    }
+                }
+                if (!conflict) {
+                    outX = x;
+                    outY = y;
+                    placedRects.push_back(candidate);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+};
 
-    unsigned char* data = (unsigned char*)malloc(*size);
-    fread(data, 1, *size, file);
-    fclose(file);
-    return data;
+
+std::vector<unsigned char> loadBinaryFile(const std::string& filename) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "无法打开文件 " << filename << std::endl;
+        return {};
+    }
+    return std::vector<unsigned char>((std::istreambuf_iterator<char>(file)),
+        std::istreambuf_iterator<char>());
+}
+
+std::string loadTextFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file) {
+        std::cerr << "无法打开文本文件 " << filename << std::endl;
+        return "";
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+// 将 UTF-8 转换为 UTF-32 Unicode 码点序列
+std::u32string utf8_to_utf32(const std::string& utf8) {
+    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> conv;
+    return conv.from_bytes(utf8);
 }
 
 int main(int argc, char* argv[]) {
-    assert(argc == 5);
-    if (argc != 6)return -1;
+    if (argc != 6) {
+        std::cout << "Usage: " << argv[0] << "<font_file> <text_file> <font_size> <out_image_size_x> <out_image_size_x>" << std::endl;
+        return -1;
+    }
+
     std::string fontPath = argv[1];
-    int fontsize = std::stoi(argv[2]);
-    if (fontsize <= 0)return -1;
-    int fontPicSize = std::stoi(argv[3]);
-    if (fontPicSize <= 0)return -1;
-    int fontPadding = std::stoi(argv[4]);
-    if (fontPadding <= 0)return -1;
-    int wordsSize = 0;
-    unsigned char* words = ReadFile("words.txt", &wordsSize);
-    if (!words) return -1;
-    int ttfSize = 0;
-    unsigned char* fontBuffer = ReadFile("font.ttf", &ttfSize);
-    if (!fontBuffer) { return -1; }
-
-    auto detector = uchardet_new();
-    uchardet_handle_data(detector,(char*)words, wordsSize);
-    auto charSetName = uchardet_get_charset(detector);
-    uchardet_delete(detector);
-    if (charSetName == 0) {
-        printf("Gving words in unknown charset.");
+    std::string textFilename = argv[2];
+    float fontSize = std::atof(argv[3]);
+    if (fontSize <= 0) {
+        std::cerr << "无效的字体大小：" << argv[3] << std::endl;
         return -1;
     }
-    auto ic = iconv_open("UTF−8", charSetName);
 
-    size_t wordsize = wordsSize;
-    size_t newBufferSize = wordsSize * 3;
-    std::u8string  wordsUTF8;
-    {
-        auto newBuffer = std::unique_ptr<char[]>(new char[newBufferSize]);
-        auto bufferNew = newBuffer.get();
-        size_t newCvtSIze =
-        iconv(ic, (char**)&words, &wordsize, &bufferNew, &newBufferSize);
-        wordsUTF8 = std::u8string((char8_t*)bufferNew, newCvtSIze);
+    int imgSizeX = std::atof(argv[4]);
+    int imgSizeY = std::atof(argv[5]);
+    if (imgSizeX <= 0) {
+        std::cerr << "无效的图片大小：" << argv[4] << std::endl;
+        return -1;
     }
-    iconv_close(ic);
+    if (imgSizeY <= 0) {
+        std::cerr << "无效的图片大小：" << argv[5] << std::endl;
+        return -1;
+    }
+
+    std::string text = loadTextFile(textFilename);
+    if (text.empty()) {
+        std::cerr << "文本为空或者读取失败" << std::endl;
+        return -1;
+    }
+
+    std::u32string unicodeText = utf8_to_utf32(text);
+
+    std::vector<unsigned char> fontBuffer = loadBinaryFile(fontPath);
+    if (fontBuffer.empty()) {
+        std::cerr << "加载字体文件失败: " << fontPath << std::endl;
+        return -1;
+    }
+
     stbtt_fontinfo font;
-    if (!stbtt_InitFont(&font, fontBuffer, stbtt_GetFontOffsetForIndex(fontBuffer, 0))) {
-        printf("Failed to initialize font!\n");
-        free(fontBuffer);
+    if (!stbtt_InitFont(&font, fontBuffer.data(), 0)) {
+        std::cerr << "无法初始化字体" << std::endl;
         return -1;
     }
 
-    // 生成 SDF 字体纹理
-    float pixelDistScale = 1.0f / FONT_SIZE; // 控制距离场缩放
-    unsigned char* sdfBitmap = stbtt_GetCodepointSDF(&font, pixelDistScale, 'A', SDF_PADDING, 128, 64, NULL);
+    float scale = stbtt_ScaleForPixelHeight(&font, fontSize);
 
-    if (sdfBitmap) {
-        // 这里可以将 SDF 数据存入纹理或保存为图像
-        FILE* file = fopen("sdf_A.raw", "wb");
-        fwrite(sdfBitmap, 1, SDF_WIDTH * SDF_WIDTH, file);
-        fclose(file);
+    // SDF 参数设置
+    float onedge_value = 128.0f;
+    float pixel_dist_scale = fontSize; // 此处用字体大小作为距离域缩放参数，可根据需求调整
 
-        stbtt_FreeSDF(sdfBitmap, NULL);
+    std::vector<uint8_t> image(imgSizeX * imgSizeY, '\0');
+
+    ImagePacker packer(imgSizeX,imgSizeY);
+
+    for (char32_t ch : unicodeText) {
+        if (ch == U' ' || ch == U'\n' || ch == U'\r' || ch == U'\t')
+            continue;
+
+        // 获取对应字符的 glyph index
+        int glyphIndex = stbtt_FindGlyphIndex(&font, static_cast<int>(ch));
+
+        int width, height, xoff, yoff;
+        unsigned char* sdf_bitmap = stbtt_GetGlyphSDF(&font, scale, glyphIndex,5 ,
+            onedge_value, pixel_dist_scale,
+            &width, &height, &xoff, &yoff);
+
+        int xPos = 0, yPos = 0;
+        bool findPos = packer.findPosition(width, height, xPos, yPos);
+
+        if (!findPos) {
+            std::cerr << "图片没有足够的空间容纳字符 U+" << std::hex << static_cast<int>(ch) << std::dec
+                << " 的 SDF 大小: " << width << "x" << height << std::endl;
+            continue;
+        }
+
+        if (sdf_bitmap) {
+            std::cout << "字符 U+" << std::hex << static_cast<int>(ch) << std::dec
+                << " 的 SDF 大小: " << width << "x" << height
+                << ", xoff: " << xoff << ", yoff: " << yoff << std::endl;
+            
+            int offset = 0;
+            for (int y = yPos; y < yPos + height; ++y) {
+                int x = xPos;
+                memcpy(image.data() + y * imgSizeX + xPos, sdf_bitmap + offset, width);
+                offset += width;
+            }
+
+            free(sdf_bitmap);
+        }
+        else {
+            std::cerr << "生成字符 U+" << std::hex << static_cast<int>(ch) << std::dec << " 的 SDF 失败" << std::endl;
+        }
     }
-    else {
-        printf("Failed to generate SDF bitmap!\n");
-    }
-
-    free(fontBuffer);
+    stbi_write_jpg("output.jpg", imgSizeX, imgSizeY, 1, image.data(), 100);
     return 0;
 }
