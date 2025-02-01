@@ -38,7 +38,7 @@ namespace Blog {
 	public:
 		ServerConfig(const std::string& configDir);
 		template<class T>
-		bool get(const std::string& key,T& out)const;
+		bool get(const std::string& key,T& out);
 		template<class T>
 		bool set(const std::string& key, T& val);
 	private:
@@ -46,7 +46,7 @@ namespace Blog {
 	};
 
 	template<class T>
-	inline bool ServerConfig::get(const std::string& key, T& out) const
+	inline bool ServerConfig::get(const std::string& key, T& out)
 	{
 		auto& j = mConfigJson;
 		configStrProcess(key, j, true);
