@@ -6,7 +6,7 @@
 #include <codecvt>
 #include <locale>
 #include <cstdlib>
-
+#include "nlohmann/json.hpp"
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -129,6 +129,8 @@ int main(int argc, char* argv[]) {
 
     float scale = stbtt_ScaleForPixelHeight(&font, fontSize);
 
+    nlohmann::json sdf_json;
+
     // SDF 参数设置
     float onedge_value = 128.0f;
     float pixel_dist_scale = fontSize; // 此处用字体大小作为距离域缩放参数，可根据需求调整
@@ -159,6 +161,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (sdf_bitmap) {
+            sdf_json[std::to_string(static_cast<int>(ch))] = { { "w", width }, {"h",height}, {"xoff",xoff}, {"yoff", yoff} };
             std::cout << "字符 U+" << std::hex << static_cast<int>(ch) << std::dec
                 << " 的 SDF 大小: " << width << "x" << height
                 << ", xoff: " << xoff << ", yoff: " << yoff << std::endl;
@@ -177,5 +180,10 @@ int main(int argc, char* argv[]) {
         }
     }
     stbi_write_jpg("output.jpg", imgSizeX, imgSizeY, 1, image.data(), 100);
+    std::ofstream outJson("output.json");
+    if (!outJson.is_open()) {
+        std::cerr<<"创建文件\"output.json\"失败"<<"\n";
+    }
+    outJson << sdf_json;
     return 0;
 }
