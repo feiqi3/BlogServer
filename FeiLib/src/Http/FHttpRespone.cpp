@@ -18,11 +18,9 @@ namespace Fei::Http{
         ss << cookie.outSetCookie()<<LINE_BREAKER;
     }
 
-    if (!mBody.empty()) {
-        ss << "Content-Length: " << mBody.size() << LINE_BREAKER;
-        ss << LINE_BREAKER;
-        ss << mBody;
-    }
+    ss << "Content-Length: " << mBody.size() << LINE_BREAKER;
+    ss << LINE_BREAKER;
+    ss << mBody;
 
     return ss.str();
   }

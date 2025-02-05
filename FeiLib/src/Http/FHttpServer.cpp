@@ -37,7 +37,12 @@ namespace {
 
 bool _getContentTypeByPath(const std::string& path, std::string& extensionName)
 {
-	return _getFileExtension(path, extensionName);
+	_getFileExtension(path, extensionName);
+	auto itor = extensionToContentType.find(extensionName);
+	if (itor == extensionToContentType.end())return false;
+	extensionName = itor->second;
+	return true;
+
 }
 }
 
@@ -106,12 +111,6 @@ namespace Fei::Http {
 		}
 		else if(!isFiltered) {
 			routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
-		}
-
-		
-		if (!routeResult.isvalid() ) {
-			notMatchError = true;
-			Logger::instance()->log(MODULE_NAME,lvl::info, "request path {} with method {} unknown from {}.{}.{}.{} : {}, this may cause by browser's preload strategy.", request.getPath(), methodToStr(request.getMethod()), addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
 		}
 
 		if (notMatchError) {
