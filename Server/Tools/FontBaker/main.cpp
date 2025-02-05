@@ -179,7 +179,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "生成字符 U+" << std::hex << static_cast<int>(ch) << std::dec << " 的 SDF 失败" << std::endl;
         }
     }
-    stbi_write_jpg("output.jpg", imgSizeX, imgSizeY, 1, image.data(), 100);
+    stbi_write_jpg("output.jpg", imgSizeX, imgSizeY, 1, image.data(),80);
     std::ofstream outJson("output.json");
     if (!outJson.is_open()) {
         std::cerr<<"创建文件\"output.json\"失败"<<"\n";
