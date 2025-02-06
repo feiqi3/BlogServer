@@ -6,7 +6,7 @@
 #include "FTCPConnection.h"
 #include "Http/FRouter.h"
 #include "FLogger.h"
-
+#include <algorithm>
 #define MODULE_NAME "HttpServer"
 #define TCP_TIMEOUT 60
 #define TCP_INTERVAL 5
