@@ -2,7 +2,7 @@
 #include <fstream>
 #include <string>
 #include "FException.h"
-#include "Flogger.h"
+#include "FLogger.h"
 namespace Blog {
     // 模式选项：只读、只写、可读可写
     enum class Mode {
@@ -24,12 +24,7 @@ namespace Blog {
                     size_ = fs.tellg();
                 }
             }
-            try {
-                open();
-            }
-            catch (Fei::FException e) {
-                Fei::Logger::instance()->log("MemoryMappedFile", Fei::lvl::err, e.what());
-            }
+            open();
         }
 
         ~MemoryMappedFile() {

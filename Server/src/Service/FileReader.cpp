@@ -129,7 +129,7 @@ namespace Blog{
             }
 #else
             if (mode_ == Mode::ReadOnly) {
-                fileDescriptor_ = open(filename_.c_str(), O_RDONLY);
+                fileDescriptor_ = ::open(filename_.c_str(), O_RDONLY);
                 if (fileDescriptor_ == -1) {
                     throw RuntimeError("Failed to open file (ReadOnly)");
                 }
@@ -142,7 +142,7 @@ namespace Blog{
             }
             else if (mode_ == Mode::WriteOnly) {
                 // 写模式：以读写方式打开文件，因为 mmap 写映射要求读写文件描述符
-                fileDescriptor_ = open(filename_.c_str(), O_RDWR | O_CREAT, 0666);
+                fileDescriptor_ = ::open(filename_.c_str(), O_RDWR | O_CREAT, 0666);
                 if (fileDescriptor_ == -1) {
                     throw RuntimeError("Failed to open file (WriteOnly)");
                 }
@@ -161,7 +161,7 @@ namespace Blog{
                 }
             }
             else if (mode_ == Mode::ReadWrite) {
-                fileDescriptor_ = open(filename_.c_str(), O_RDWR | O_CREAT, 0666);
+                fileDescriptor_ = ::open(filename_.c_str(), O_RDWR | O_CREAT, 0666);
                 if (fileDescriptor_ == -1) {
                     throw RuntimeError("Failed to open file (ReadWrite)");
                 }
