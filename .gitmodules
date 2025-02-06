@@ -18,7 +18,7 @@
 	url = https://github.com/abseil/abseil-cpp.git
 [submodule "FeiLib/3rd/oneTBB"]
 	path = FeiLib/3rd/oneTBB
-	url = https://github.com/uxlfoundation/oneTBB.git
+	url = https://github.com/feiqi3/oneTBB.git
 	tag = v2021.13.0
 [submodule "Server/Tools/FontBaker/3rd/uchardet"]
 	path = Server/Tools/FontBaker/3rd/uchardet
