@@ -137,7 +137,7 @@ namespace Fei::Http {
 			}
 			catch (::Fei::FException& exception)
 			{
-				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason {}, \n{}", request.getPath(),exception.what(),exception.stackTrace());
+				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason: {}", request.getPath(),exception.what());
 				if (mInternalErrCallback) {
 					mInternalErrCallback(request, response, exception);
 				}
@@ -145,7 +145,7 @@ namespace Fei::Http {
 					defaultExceptionFunc(request, response, exception);
 				}
 			}catch (std::exception& e){
-				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason {}",request.getPath(),e.what());
+				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason: {}",request.getPath(),e.what());
 				FException exception;
 				defaultExceptionFunc(request, response, exception);
 			}
@@ -227,7 +227,10 @@ namespace Fei::Http {
 	{
 		response.setStatusCode(StatusCode::_501);
 		std::stringstream ss;
-		ss << "500: Server Internal Error\n" << exception.stackTrace();
+		ss << "500: Server Internal Error";
+		for(auto&& str : exception.stackTrace()){
+			ss<<"<br>"<<str;			
+		}
 		response.setBody(ss.str());
 		return;
 	}
