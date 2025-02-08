@@ -28,6 +28,7 @@ void guardian(FTcpConnPtr ptr) {
 }
 
 FTcpConnection::~FTcpConnection() {
+  m_loop->isInLoopAssert();
   assert(mstate == TcpConnState::DisConnected);
   //Remove event out of loop
   m_event->remove();
@@ -51,6 +52,7 @@ FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn)
 }
 
 void FTcpConnection::sendInLoop(const char *data, uint64 len) {
+  m_loop->isInLoopAssert();
   if (mstate == TcpConnState::DisConnected) {
     return;
   }
@@ -86,6 +88,9 @@ void FTcpConnection::sendInLoop(const char *data, uint64 len) {
 }
 
 void FTcpConnection::handleRead() {
+  m_loop->isInLoopAssert();
+  if(mstate == TcpConnState::DisConnected)
+    return;
   Errno_t err = 0;
   auto len = this->inBuffer->Read(m_sock->getFd(), err);
 

@@ -25,6 +25,11 @@
 
 #define FAUTO_LOCK(_mutex) std::lock_guard<std::mutex> lock##_mutex(_mutex)
 
+#ifdef _WIN32
+#define EPOLL_EVENT_STRUCT_ALIGN
+#elif defined(__linux__) or defined(__APPLE__)
+#define EPOLL_EVENT_STRUCT_ALIGN __attribute__((__packed__))
+#endif
 
 namespace Fei {
 using uint8 = uint8_t;
@@ -56,7 +61,7 @@ typedef union FEpollData {
 struct F_API FEpollEvent {
   uint32 events;
   FEpollData data;
-};
+}EPOLL_EVENT_STRUCT_ALIGN;
 
 struct F_API FSocketAddr {
   // Impl in Socket.cpp
