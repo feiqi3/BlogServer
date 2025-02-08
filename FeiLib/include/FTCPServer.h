@@ -23,7 +23,7 @@ class F_API FTcpServer : public FNoCopyable{
     void run();
     void stop(bool forceClose = false);
 
-    void addListenPort(uint32 port);
+    void addListenPort(uint32 port,bool reuseport =false);
     void removeListenPort(uint32 port);
     void setOnConnEstablisedCallback(TcpConnectionEstablishedCallback cb){mOnEstablishedCallback = std::move(cb);}
     void setOnMessageCallback(TcpMessageCallback cb){mOnMessageCallback = std::move(cb);}

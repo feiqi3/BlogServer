@@ -15,8 +15,8 @@
 #define DEFAULT_CHAT_SET "; charset=UTF-8"
 #define DEFAULT_HTTP_VERSION Version::Http11
 
-static const std::string DefaultContentType = DEFAULT_CONTENT_TYPE;
 static const std::string DefaultCharSet = DEFAULT_CHAT_SET;
+static const std::string DefaultContentType = DEFAULT_CONTENT_TYPE + DefaultCharSet;
 static const std::string DefaultServerName = "by FeiLib";
 extern const std::unordered_map<std::string, std::string> extensionToContentType;
 
@@ -26,11 +26,12 @@ namespace {
 		static std::string fileExtensionSeperator = ".";
 		auto dotPos = std::find_first_of(filename.rbegin(), filename.rend(), fileExtensionSeperator.begin(), fileExtensionSeperator.end());
 		if (dotPos != filename.rend()) {
-			extension = std::string(filename.rbegin(), dotPos) + DefaultCharSet;
+			auto dotPosIdx = filename.rend() - dotPos;
+			extension = std::string(filename.begin() + dotPosIdx, filename.end());
 			return true;
 		}
 		else {
-			extension = DefaultContentType + DefaultCharSet;
+			extension = DefaultContentType;
 			return false;
 		}
 	}
@@ -65,7 +66,7 @@ namespace Fei::Http {
 
 	void FHttpServer::addListenPort(uint32 port)
 	{
-		this->mTcpServer->addListenPort(port);
+		this->mTcpServer->addListenPort(port,true);
 	}
 
 	void FHttpServer::removeListenPort(uint32 port)

@@ -80,9 +80,9 @@ void FTcpServer::stop(bool forceClose) {
   m_running = false;
 }
 
-void FTcpServer::addListenPort(uint32 port) {
+void FTcpServer::addListenPort(uint32 port,bool reuseport ) {
   auto acc = std::make_unique<FAcceptor>(m_listenerLoop.get(),
-                                                       inAddrAny, port, false);
+                                                       inAddrAny, port, reuseport);
   auto functor = (std::bind(&FTcpServer::onNewConnIn,this,std::placeholders::_1,std::placeholders::_2));
   acc->SetOnNewConnCallback(functor);
   m_acceptors.emplace_back(std::move(acc));
