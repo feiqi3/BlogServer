@@ -11,20 +11,20 @@
 #pragma warning(suppress : 4996)
 
 #elif defined(__linux__) || defined(__APPLE__)
-  #include <sys/socket.h>
-  #include <arpa/inet.h> 
-  #include <sys/epoll.h>
-  #include <sys/poll.h>
-  #include <netinet/in.h>
-  #include <netinet/tcp.h>
-  #include <unistd.h>
-  #include <fcntl.h>
-  #if defined(__linux__)
-      #include <sys/uio.h>
-  #else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/epoll.h>
+#include <sys/poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#if defined(__linux__)
+#include <sys/uio.h>
+#else
 
-  #endif
-  #include "signal.h"
+#endif
+#include "signal.h"
 #endif
 
 namespace Fei {
@@ -85,6 +85,8 @@ FSocketAddr::FSocketAddr(const char *ip, uint16 port) {
   un.un_addr = inet_addr(ip);
 #endif
 }
+
+uint16 FSocketAddr::getPort() const { return ntohs(this->port); }
 
 void FSocketAddr::toHumanFriendyType(char *buf, uint32 len, uint16 *port) {
   if (port) {
@@ -152,11 +154,11 @@ SocketStatus FeiInit() {
     return SocketStatus::Fail;
   }
 #elif defined(__linux__) || defined(__APPLE__)
-    struct sigaction sa;
-    sa.sa_handler = [](int){};
-    sa.sa_flags = SA_RESTART;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGINT, &sa, NULL);
+  struct sigaction sa;
+  sa.sa_handler = [](int) {};
+  sa.sa_flags = SA_RESTART;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGINT, &sa, NULL);
 #endif
   return SocketStatus::Success;
 }
@@ -357,11 +359,12 @@ SocketStatus Connect(Socket socket, FSocketAddr addr) {
 
 long SendV(Socket socket, iovec *iov, int count) {
 #ifndef __linux__
-    long totallen = 0;int tlen = -1;
+  long totallen = 0;
+  int tlen = -1;
   while (count) {
-    auto status = Send(socket, (const char*)iov->iov_base, iov->iov_len, tlen);
+    auto status = Send(socket, (const char *)iov->iov_base, iov->iov_len, tlen);
     if (status != SocketStatus::Success) {
-        break;
+      break;
     }
     totallen += tlen;
     iov++;
@@ -376,18 +379,19 @@ long SendV(Socket socket, iovec *iov, int count) {
 }
 int Readv(Socket socket, struct iovec *iov, int count) {
 #ifndef __linux__
-  int r,t = 0;
+  int r, t = 0;
   while (count) {
-    auto status = Recv(socket,(char*)iov->iov_base,iov->iov_len,RecvFlag::None,r);
+    auto status =
+        Recv(socket, (char *)iov->iov_base, iov->iov_len, RecvFlag::None, r);
     if (status != SocketStatus::Success) {
-        return -1;
+      return -1;
     }
     if (r < 0) {
       return r;
     }
     t += r;
     if (r < iov->iov_len) {
-        break;
+      break;
     }
 
     iov++;
@@ -424,8 +428,8 @@ int FPoll(FPollfd *sockets, int num, int timeout) {
 #endif
 }
 
-bool isEpollHandleValid(EpollHandle handle){
-  #ifdef _WIN32
+bool isEpollHandleValid(EpollHandle handle) {
+#ifdef _WIN32
   return handle != nullptr;
 #elif defined(__linux__) or defined(__APPLE__)
   return handle >= 0;
@@ -439,11 +443,11 @@ int EPollCtl(EpollHandle ephnd, EPollOp op, Socket sock, FEpollEvent *event) {
 }
 
 int EPollClose(EpollHandle ephnd) {
-  #ifdef _WIN32
-   return epoll_close(ephnd); 
-  #else
+#ifdef _WIN32
+  return epoll_close(ephnd);
+#else
   return close(ephnd);
-  #endif
+#endif
 }
 
 int EPollWait(EpollHandle ephnd, FEpollEvent *events, int maxevents,
@@ -461,20 +465,20 @@ EpollHandle EPollCreate1(int flags) {
   return epoll_create1(flags);
 }
 
-int SetSockOpt(Socket s,SockOpt opt, int v){
+int SetSockOpt(Socket s, SockOpt opt, int v) {
   int _opt = 0;
   int lvl = SOL_SOCKET;
-  if(opt == SockOpt::KeepIntvl){
+  if (opt == SockOpt::KeepIntvl) {
     _opt = TCP_KEEPINTVL;
     lvl = IPPROTO_TCP;
-  }else if(opt == SockOpt::KeepIdle){
+  } else if (opt == SockOpt::KeepIdle) {
     _opt = TCP_KEEPIDLE;
     lvl = IPPROTO_TCP;
-  }else{
+  } else {
     return -1;
   }
 
-  return ::setsockopt(s, lvl, _opt,(char*)&v, sizeof(v));
+  return ::setsockopt(s, lvl, _opt, (char *)&v, sizeof(v));
 }
 
 int SetSockOpt(Socket s, SockOpt opt, bool on) {
@@ -492,14 +496,14 @@ int SetSockOpt(Socket s, SockOpt opt, bool on) {
   }
   int data = on ? 1 : 0;
   if (_opt != 0)
-    return setsockopt(s, SOL_SOCKET, _opt, (char*)&data, sizeof(data));
+    return setsockopt(s, SOL_SOCKET, _opt, (char *)&data, sizeof(data));
 
 //-------------------------------------------//
 #ifdef _WIN32
   if (opt == SockOpt::NoneBlock || opt == SockOpt::NoneBlockAndCloseOnExec) {
     unsigned long _temp = 1;
     return ioctlsocket(s, FIONBIO, &_temp);
-  } else if(opt == SockOpt::CloseOnExec){
+  } else if (opt == SockOpt::CloseOnExec) {
     return 0;
     // No close on exec in windows
   }
@@ -523,7 +527,7 @@ int SetSockOpt(Socket s, SockOpt opt, bool on) {
   }
 
 #endif
-return -1;
+  return -1;
 }
 
 }; // namespace Fei

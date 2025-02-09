@@ -34,8 +34,8 @@ FTcpConnection::~FTcpConnection() {
   m_event->remove();
 }
 
-FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn)
-    : m_loop(loop), m_sock(new FSock(s)), m_addrIn(addrIn),
+FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,FSocketAddr addrAccept)
+    : m_loop(loop), m_sock(new FSock(s)), m_addrIn(addrIn),m_addrAccept(addrAccept),
       m_event(FEvent::createEvent(loop, s, loop->getUniqueIdInLoop())),
       inBuffer(std::make_unique<FBuffer>(1024)),
       outBuffer(std::make_unique<FBuffer>(1024)),

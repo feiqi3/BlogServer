@@ -1,4 +1,5 @@
 #pragma once
+#include "FDef.h"
 #ifndef FHTTPREQUEST_H
 #define FHTTPREQUEST_H
 #include <memory>
@@ -21,14 +22,19 @@ public:
   const std::string& getPath()const;
   bool getQuery(const std::string &key, std::string &outVal) const;
   std::string_view getRequestBody() const;
-  void setAddr(const FSocketAddr& addr) {
-	  mAddr = addr;
+  void setAddrIn(const FSocketAddr& addr) {
+	  mAddrIn = addr;
+  }
+  void setAddrHost(const FSocketAddr& addr) {
+	  mAddrHost = addr;
   }
 
-  const FSocketAddr& getAddr()const { return mAddr; }
+  const FSocketAddr& getAddrIn()const { return mAddrIn; }
+  const FSocketAddr& getAddrHost()const { return mAddrHost; }
 private:
   std::shared_ptr<FHttpContext> mHttpCtx;
-  FSocketAddr mAddr;
+  FSocketAddr mAddrIn;
+  FSocketAddr mAddrHost;
   bool mIsValid = true;
 };
 }; // namespace Fei::Http

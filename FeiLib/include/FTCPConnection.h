@@ -28,15 +28,15 @@ public:
     DisConnecting
   };
 
-  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn) {
-    return std::make_shared<FTcpConnection>(loop, s, addrIn);
+  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn, FSocketAddr addrAccept) {
+    return std::make_shared<FTcpConnection>(loop, s, addrIn,addrAccept);
   }
 
   // High water callback: when there are too much data in inBuffer/outBuffer
   //                      While user consume it slow, then this will be called
   // Low  water callback: when data in buffer reach a user set limit, call this.
 
-  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn);
+  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,FSocketAddr addrAccept);
   ~FTcpConnection();
 
   TcpConnState getState() const { return mstate; }
@@ -51,7 +51,7 @@ public:
   void forceCloseInDelay(uint32 ms);
 
   FSocketAddr getAddr() const { return m_addrIn; }
-
+  FSocketAddr getAddrAccept()const{return m_addrAccept;}
 protected:
   // When output buffer is empty, send directly,
   // else queued in loop and send by buffer.
@@ -84,6 +84,7 @@ protected:
   std::unique_ptr<FSock> m_sock;
 
   FSocketAddr m_addrIn;
+  FSocketAddr m_addrAccept;
   std::shared_ptr<FEvent> m_event;
 
   std::unique_ptr<FBuffer> inBuffer;

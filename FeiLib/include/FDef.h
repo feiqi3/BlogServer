@@ -67,6 +67,10 @@ struct F_API FSocketAddr {
   // Impl in Socket.cpp
   FSocketAddr(const char *ip, uint16 port);
   FSocketAddr() = default;
+
+// get port in proper order.
+  uint16 getPort()const;
+
   union {
     struct {
       uint8 a0;

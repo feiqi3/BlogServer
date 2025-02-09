@@ -254,18 +254,18 @@ void eventLoop() {
   // Important: event's lifetime
   std::map<uint32, FEventPtr> mMap;
   FAcceptor::OnNewConnectionFunc func = [loop, &mMap](Socket s,
-                                                      FSocketAddr addr) {
+                                                      FSocketAddr addrIn,FSocketAddr addrHost) {
     auto event = FEvent::createEvent(loop, s, loop->getUniqueIdInLoop());
     mMap[s] = event;
     event->enableReading();
     event->enableWriting();
-    auto onClose = [s, addr, loop, &mMap]() {
-      printf("Closing client: %d.%d.%d.%d\n", addr.un.un_byte.a0,
-             addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3);
+    auto onClose = [s, addrIn, loop, &mMap]() {
+      printf("Closing client: %d.%d.%d.%d\n", addrIn.un.un_byte.a0,
+             addrIn.un.un_byte.a1, addrIn.un.un_byte.a2, addrIn.un.un_byte.a3);
       Close(s);
       mMap.erase(s);
     };
-    auto onRead = [addr, s, onClose]() {
+    auto onRead = [addrIn, s, onClose]() {
       char data[128];
       int len = 0;
       auto status = Recv(s, data, 127, RecvFlag::None, len);
@@ -275,16 +275,16 @@ void eventLoop() {
         return;
       }
       printf("Accept client: %d.%d.%d.%d, data len: %d, data: %s\n",
-             addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2,
-             addr.un.un_byte.a3, len, data);
+             addrIn.un.un_byte.a0, addrIn.un.un_byte.a1, addrIn.un.un_byte.a2,
+             addrIn.un.un_byte.a3, len, data);
     };
-    event->setWriteCallback([s, addr, loop, &mMap]() {
+    event->setWriteCallback([s, addrIn, loop, &mMap]() {
       char sending[256];
 
       auto len = sprintf(sending,
                          "Sending from server : hello client %d.%d.%d.%d : %d",
-                         addr.un.un_byte.a0, addr.un.un_byte.a1,
-                         addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
+                         addrIn.un.un_byte.a0, addrIn.un.un_byte.a1,
+                         addrIn.un.un_byte.a2, addrIn.un.un_byte.a3, addrIn.port);
       int writeLen = 0;
 
       Send(s, sending, len, writeLen);

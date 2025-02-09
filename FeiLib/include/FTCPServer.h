@@ -31,7 +31,7 @@ class F_API FTcpServer : public FNoCopyable{
     void setOnWriteCompleteCallback(TcpWriteCompleteCallback cb){mWriteCompleteCallback = std::move(cb);}
     private:
     
-    void onNewConnIn(Socket inSock,FSocketAddr addr);
+    void onNewConnIn(Socket inSock,FSocketAddr addr,FSocketAddr addrAccept);
     void onClose(FTcpConnPtr ptr);
     TcpConnectionEstablishedCallback mOnEstablishedCallback;
     TcpMessageCallback mOnMessageCallback;

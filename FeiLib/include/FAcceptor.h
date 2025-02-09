@@ -10,7 +10,7 @@
 namespace Fei {
 class F_API FAcceptor : public FNoCopyable {
 public:
-  using OnNewConnectionFunc = std::function<void(Socket,FSocketAddr)>;
+  using OnNewConnectionFunc = std::function<void(Socket,FSocketAddr,FSocketAddr)>;
 
 public:
   FAcceptor(class FEventLoop *loop, const char *listenAddr,int port, bool reusePort);

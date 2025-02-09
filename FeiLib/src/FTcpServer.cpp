@@ -83,7 +83,7 @@ void FTcpServer::stop(bool forceClose) {
 void FTcpServer::addListenPort(uint32 port,bool reuseport ) {
   auto acc = std::make_unique<FAcceptor>(m_listenerLoop.get(),
                                                        inAddrAny, port, reuseport);
-  auto functor = (std::bind(&FTcpServer::onNewConnIn,this,std::placeholders::_1,std::placeholders::_2));
+  auto functor = (std::bind(&FTcpServer::onNewConnIn,this,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
   acc->SetOnNewConnCallback(functor);
   m_acceptors.emplace_back(std::move(acc));
 }
@@ -104,11 +104,11 @@ void FTcpServer::onClose(FTcpConnPtr ptr) {
   mOnCloseCallback(ptr);
 }
 
-void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr) {
+void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr, FSocketAddr addrAccept) {
   
   auto choosenLoop = m_subLoops[IOThread_Chooser++].get();
   IOThread_Chooser = IOThread_Chooser % m_subLoops.size();
-  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr);
+  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr,addrAccept);
   ptr->setCloseCallback(std::bind(&FTcpServer::onClose,this,std::placeholders::_1));
   ptr->setMessageCallback(mOnMessageCallback);
   ptr->setWriteCompleteCallback(mWriteCompleteCallback);

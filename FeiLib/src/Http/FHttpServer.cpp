@@ -99,8 +99,8 @@ namespace Fei::Http {
 		bool notMatchError = false;
 		bool isFiltered = false;
 		auto addr = ptr->getAddr();
-		request.setAddr(addr);
-
+		request.setAddrIn(addr);
+		request.setAddrHost(ptr->getAddrAccept());
 		FHttpResponse response;
 		if (mConnFilterFunc && mConnFilterFunc(request, response)) {
 			isFiltered = true;

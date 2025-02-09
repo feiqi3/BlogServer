@@ -52,7 +52,7 @@ void FAcceptor::handleRead() {
   auto status = Accept(m_sock.getFd(), socket, &addrNew);
   if (status == SocketStatus::Success) {
     if (_newConnCb) {
-      _newConnCb(socket, addrNew);
+      _newConnCb(socket, addrNew,m_addr);
     } else {
       Close(socket);
     }
