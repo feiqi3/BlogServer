@@ -1,6 +1,6 @@
 #include "FileController.h"
 #include "Service/QuickRedirect.h"
-#include "Service/FileReader.h"
+#include "Utils/FileReader.h"
 const std::string ServerWebImagePath = SERVER_RESOURCE_DIR "web/img/";
 
 Fei::Http::FHttpResponse Blog::FileController::getFile(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var)

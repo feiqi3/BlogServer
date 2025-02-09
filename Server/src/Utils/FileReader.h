@@ -50,4 +50,5 @@ namespace Blog {
 #endif
 
     };
+    using MemMapedFilePtr = std::shared_ptr<MemoryMappedFile>;
 }

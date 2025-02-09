@@ -13,6 +13,7 @@ Blog::Server::Server()
 
 	server = new Fei::Http::FHttpServer(10);
 	server->addListenPort(80);
+	server->addListenPort(443);
 }
 
 void Blog::Server::run()
