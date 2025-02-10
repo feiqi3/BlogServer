@@ -154,6 +154,7 @@ void FTcpConnection::setReading(bool v) {
 }
 
 void FTcpConnection::handleClose() {
+  m_loop->isInLoopAssert();
   mstate = TcpConnState::DisConnected;
   m_event->disableAll();
   m_onWriteComplete = nullptr;
@@ -170,6 +171,7 @@ void FTcpConnection::handleClose() {
 }
 
 void FTcpConnection::handleError(Errno_t err) {
+  m_loop->isInLoopAssert();
   Logger::instance()->log(
       MODULE_NAME, lvl::trace,
       "TcpConnection Error, Errno {}. address: {}.{}.{}.{}, port: {}, errInfo: {}",
@@ -187,6 +189,7 @@ void FTcpConnection::handleError(Errno_t err) {
 }
 
 void FTcpConnection::handleWrite() {
+  m_loop->isInLoopAssert();
   if (!m_event->isWriting() || mstate == TcpConnState::DisConnected) {
     return;
   }
@@ -213,6 +216,7 @@ void FTcpConnection::handleWrite() {
 }
 
 void FTcpConnection::shutdownInLoop() {
+  m_loop->isInLoopAssert();
   mstate = TcpConnState::DisConnecting;
   if (!m_event->isWriting()) {
     ShutDown(m_sock->getFd(), true, false);
