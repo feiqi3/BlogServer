@@ -121,47 +121,54 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
   HeaderMap map;
   FBufferView lineView(oldView);
   while (1) {
-    lineView = newLine(&oldView);
-    oldView = lineView;
-    uint32 cursor = 0;
-    cursor = findFirstNotSpace(lineView);
-    // Blank line
-    if (lineView.size() == 0 || lineView.size() - 1 == cursor)
-      break;
-    // To long?
-    if (lineView.size() > HttpMaxRequestPathLen) {
-      Logger::instance()->log("HttpParser", lvl::warn,
-                              "Too long http header {} out of limit {}",
-                              lineView.size(), HttpMaxRequestPathLen);
-      continue;
-    }
-
-    // Find colon
-    int findColon = -1;
-    for (int i = 0; i < (int)lineView.size(); ++i) {
-      if (lineView[i] == ':') {
-        findColon = i;
-        break;
+      lineView = newLine(&oldView);
+      oldView = lineView;
+      uint32 cursor = 0;
+      cursor = findFirstNotSpace(lineView);
+      // Blank line 
+      if (lineView.size() == 0 || lineView.size() == cursor)
+          break;
+      // To long?
+      if (lineView.size() > HttpMaxRequestPathLen) {
+          Logger::instance()->log("HttpParser", lvl::warn,
+              "Too long http header {} out of limit {}",
+              lineView.size(), HttpMaxRequestPathLen);
+          continue;
       }
-    }
-    if (findColon == -1) {
-        continue;
-    }
-    std::string header =
-        std::string((char *)&lineView[cursor], findColon - cursor);
-    cursor = findColon + 1;
-    uint32 _crlfOffset = 0;
-    if (lineView.size() - cursor >= 2) {
-      if (lineView[lineView.size() - 2] == '\r' &&
-          lineView[lineView.size() - 1] == '\n') {
-        _crlfOffset = 2;
-      }
-    }
 
-    cursor = findFirstNotSpace(lineView, cursor);
-    std::string content = std::string((char *)&lineView[cursor],
-                                      lineView.size() - cursor - _crlfOffset);
-    map.insert({header, content});
+      // Find colon
+      int findColon = -1;
+      for (int i = 0; i < (int)lineView.size(); ++i) {
+          if (lineView[i] == ':') {
+              findColon = i;
+              break;
+          }
+      }
+      if (findColon == -1) {
+          continue;
+      }
+      std::string header =
+          std::string((char*)&lineView[cursor], findColon - cursor);
+      cursor = findColon + 1;
+      cursor = findFirstNotSpace(lineView, cursor);
+      if (cursor == lineView.size()) {
+          //end of line --> only header.
+          map.insert({ header, "" });
+      }
+      else {
+
+          uint32 _crlfOffset = 0;
+          if (lineView.size() - cursor >= 2) {
+              if (lineView[lineView.size() - 2] == '\r' &&
+                  lineView[lineView.size() - 1] == '\n') {
+                  _crlfOffset = 2;
+              }
+          }
+
+          std::string content = std::string((char *)&lineView[cursor],
+              lineView.size() - cursor - _crlfOffset);
+          map.insert({header, content});
+      }
   }
 
   lineView = newLine(&lineView);
@@ -223,9 +230,10 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
 bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
                                uint32 &cursor) {
-  auto beg = findFirstNotSpace(view, cursor);
-  auto end = findFirstSpace(view, beg);
-  if (end == beg)return false;
+  int64_t beg = findFirstNotSpace(view, cursor);
+  //blank line?
+  int64_t end = findFirstSpace(view, beg);
+  if (end - beg <= 0)return false;
   cursor = end + 1;
   outVersion = Version::Unknown;
   if (end - beg < 8) {
@@ -244,9 +252,9 @@ bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
 
 bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
                             HttpQueryMap &outmap, uint32 &cursor) {
-  auto beg = findFirstNotSpace(view, cursor);
-  auto end = findFirstSpace(view, cursor);
-  if (end - beg == 0)return false;
+  int64_t beg = findFirstNotSpace(view, cursor);
+  int64_t end = findFirstSpace(view, cursor);
+  if (end - beg <= 0)return false;
 
   if (end - beg > HttpMaxRequestPathLen) {
     Logger::instance()->log("HttpParser", lvl::warn,
@@ -305,10 +313,10 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
 }
 
 Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
-  auto findTokenBeg = findFirstNotSpace(inView, cursor);
+  int64 findTokenBeg = findFirstNotSpace(inView, cursor);
   cursor = findTokenBeg;
-  auto findTokenEnd = findFirstSpace(inView, findTokenBeg);
-  if (findTokenBeg == findTokenEnd) {
+  int64 findTokenEnd = findFirstSpace(inView, findTokenBeg);
+  if (findTokenEnd - findTokenBeg <= 0) {
       return Http::Method::Invalid;
   }
   std::string method((char *)&inView[cursor], findTokenEnd - cursor);
