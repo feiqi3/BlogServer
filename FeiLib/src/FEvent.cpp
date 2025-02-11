@@ -83,6 +83,10 @@ void FEvent::remove() {
 }
 
 void FEvent::handleEvent() {
+  //Removed from loop?
+  if (!mAddedToLoop)
+    return;
+  
   mEventHandling = true;
   if (mRevents & REvent::Nval) {
   }

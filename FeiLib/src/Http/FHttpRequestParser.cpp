@@ -208,7 +208,12 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
   Version ver;
   if (!parseVersion(lineView, ver, cursor)) {
-    return false;
+    //Assume version is http1.1
+    ver = Version::Http11;
+    //TODO:
+    /* if(config.forceHTTP11)return false; */
+
+    //return false;
     // Do something?
   }
 
