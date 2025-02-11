@@ -106,7 +106,7 @@ namespace Fei::Http {
 			isFiltered = true;
 		}
 		
-		if (!request.isValid() && !isFiltered) {
+		if (!request.isValid()) {
 			Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.",addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
 			notMatchError = true;
 		}

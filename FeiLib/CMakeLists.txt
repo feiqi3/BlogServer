@@ -63,6 +63,10 @@ target_link_libraries(${PROJECT_NAME} PUBLIC TBB::tbb)
 get_target_property(tbb_target TBB::tbb ALIASED_TARGET)
 set_target_properties(${tbb_target} PROPERTIES FOLDER "3rd")
 
+find_package(OpenSSL REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+target_include_directories(${PROJECT_NAME} PRIVATE ${OPENSSL_INCLUDE_DIR})
+
 add_custom_target(genexdebug COMMAND ${CMAKE_COMMAND} -E echo " $<TARGET_FILE:TBB::tbb>")
 
 add_custom_command(

@@ -21,12 +21,6 @@
 
 namespace Fei {
 
-void guardian(FTcpConnPtr ptr) {
-  (void)ptr;
-  // Do Nothing, but hold a reference count and queued in loop after the need
-  // protected task, to protect this conn from being destroyed.
-}
-
 FTcpConnection::~FTcpConnection() {
   m_loop->isInLoopAssert();
   assert(mstate == TcpConnState::DisConnected);
