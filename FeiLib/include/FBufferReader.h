@@ -8,7 +8,7 @@
 
 namespace Fei {
 class FBuffer;
-
+class FBufferReader;
 // A light-weight buffer reader, do not control buffer's lifetime
 class FBufferView {
 public:
@@ -17,6 +17,10 @@ public:
   const Byte &operator[](uint32 pos) const;
   uint32 size() const { return end - beg; }
   bool isEOF()const;
+  void resetSize(uint32 size){
+    size = std::min(this->size(),size);
+    end = beg + size;
+  }
 private:
   FBuffer *buffer;
   uint32 beg, end;
@@ -42,6 +46,8 @@ public:
   void popLine();
   FBufferView readLineNoPop(
       LineBreaker linebreaker = FBufferReader::LineBreaker::CRLF) const;
+
+  FBufferView peekAll()const;
 
   // Pop view's range
   void expireView(const FBufferView &view);

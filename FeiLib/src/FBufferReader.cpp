@@ -16,6 +16,12 @@ int FBufferReader::readTo(void *buffer, int bufLen) {
   }
 }
 
+FBufferView FBufferReader::peekAll() const {
+  int size = mBuffer.getReadableSize();
+  auto view = FBufferView(mBuffer, 0, size);
+  return view;
+}
+
 std::string FBufferReader::readLine(LineBreaker linebreaker) {
   const auto &reader = readLineNoPop(linebreaker);
   auto sizeParsed = reader.size();
@@ -27,10 +33,9 @@ std::string FBufferReader::readLine(LineBreaker linebreaker) {
   return ret;
 }
 
-void FBufferReader::popLine()
-{
-    auto view = readLineNoPop();
-    expireView(view);
+void FBufferReader::popLine() {
+  auto view = readLineNoPop();
+  expireView(view);
 }
 
 FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
@@ -73,11 +78,9 @@ char FBufferReader::readNext() {
 }
 
 FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
-    : buffer(&inBuffer), beg(_beg + buffer->readIdx), end(_end + buffer->readIdx) {
-}
-  bool FBufferView::isEOF()const{
-    return buffer->Get(beg)== '\0';
-  }
+    : buffer(&inBuffer), beg(_beg + buffer->readIdx),
+      end(_end + buffer->readIdx) {}
+bool FBufferView::isEOF() const { return buffer->Get(beg) == '\0'; }
 
 const Byte &FBufferView::operator[](uint32 pos) const {
   assert(pos + beg < end);
