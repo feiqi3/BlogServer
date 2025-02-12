@@ -159,6 +159,7 @@ SocketStatus FeiInit() {
   sa.sa_flags = SA_RESTART;
   sigemptyset(&sa.sa_mask);
   sigaction(SIGINT, &sa, NULL);
+  signal(SIGPIPE,SIG_IGN);
 #endif
   return SocketStatus::Success;
 }

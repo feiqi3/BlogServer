@@ -112,6 +112,9 @@ namespace Fei::Http {
 		}
 		else if(!isFiltered) {
 			routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
+			if(!routeResult.isvalid()){
+				notMatchError = true;
+			}
 		}
 
 		if (notMatchError) {

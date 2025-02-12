@@ -90,19 +90,24 @@ void FEvent::handleEvent() {
   mEventHandling = true;
   if (mRevents & REvent::Nval) {
   }
-  if ((mRevents & REvent::Hup) && !(mRevents & REvent::In)) {
+
+//------------------------------------------//
+// prevent from reacting after conn closed.
+
+  if (mAddedToLoop && (mRevents & REvent::Hup) && !(mRevents & REvent::In)) {
     if (mCloseCallback)
       mCloseCallback();
   }
-  if (mRevents & (REvent::Err | REvent::Nval)) {
+
+  if (mAddedToLoop && mRevents & (REvent::Err | REvent::Nval)) {
     if (mErrorCallback)
       mErrorCallback();
   }
-  if (mRevents & (REvent::In | REvent::Pri | REvent::Rdhup)) {
+  if (mAddedToLoop && mRevents & (REvent::In | REvent::Pri | REvent::Rdhup)) {
     if (mReadCallback)
       mReadCallback();
   }
-  if (mRevents & REvent::Out) {
+  if (mAddedToLoop && mRevents & REvent::Out) {
     if (mWriteCallback)
       mWriteCallback();
   }
