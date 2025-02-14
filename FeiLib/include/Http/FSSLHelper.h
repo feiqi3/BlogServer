@@ -9,13 +9,15 @@ namespace Fei::Http {
 
 class _FSSLHelperPrivate;
 
-class FSSLEnv : FSingleton<FSSLEnv> {
+class FSSLEnv :public FSingleton<FSSLEnv> {
 public:
   // SetUp SSL Context
   FSSLEnv(const std::string &path);
   // Destroy SSL Context
   ~FSSLEnv();
-
+  void* getSSLContext()const{
+    return SSLContext;
+  }
 private:
   void *SSLContext = 0;
 };
@@ -28,13 +30,11 @@ public:
   bool shakeHand(const FTcpConnPtr &ptr, FBufferReader &reader);
 
   // Will throw FException e
-  FBufferView EncryptSendingData(const std::string &inData);
-  FBufferView DecryptRecvingData(FBufferReader &reader);
+  FBufferReader EncryptSendingData(const std::string &inData);
+  FBufferReader DecryptRecvingData(FBufferReader &reader);
 
 private:
-  void *sslHandler = 0;
-  void *rbio = 0;
-  void *wbio = 0;
+
   std::unique_ptr<_FSSLHelperPrivate> dp;
 };
 } // namespace Fei::Http
