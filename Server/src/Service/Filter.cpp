@@ -24,7 +24,7 @@ namespace{
 }
 bool Blog::filterAll(const FHTTP::FHttpRequest& request, FHTTP::FHttpResponse& response)
 {
-	if (request.getPath() == "/404" || request.getPath() == "/file/favicon.ico")
+	if (request.getPath() == "/404" || request.getPath().starts_with("/file/"))
 		return false;
 	response = Redirector::RedirectTo("/404");
 	return true;
