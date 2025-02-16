@@ -37,6 +37,9 @@ public:
 public:
 	FRouter();
 	RouteResult route(Method method, const std::string& path);
+	
+	//Remove cache idled for long time.
+	void checkRouteCache(uint64 timeNow);
 private:
 	void regController(const std::string& controllerName, FControllerPtr controller);
 	void regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, FControllerFunc& func);

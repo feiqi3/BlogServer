@@ -4,11 +4,11 @@
 #include <thread>
 #include <vector>
 
-#include "FEventLoop.h"
 #include "FAcceptor.h"
 #include "FCallBackDef.h"
 #include "FDef.h"
 #include "FEPollListener.h"
+#include "FEventLoop.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
 #include "FTCPServer.h"
@@ -21,15 +21,13 @@ FTcpServer::FTcpServer(uint32 threadNum)
           std::make_unique<FEventLoop>(std::make_unique<FEPollListener>())),
       m_threadNums(threadNum) {}
 
-FTcpServer::~FTcpServer()
-{
-    stop(true);
-}
+FTcpServer::~FTcpServer() { stop(true); }
 
 void FTcpServer::init() { m_threadNums = std::max(m_threadNums, 1u); }
 
 void FTcpServer::run() {
-  if(m_running) return;
+  if (m_running)
+    return;
   m_running = true;
   {
     std::thread _mainLoop([this]() { m_listenerLoop->Loop(); });
@@ -80,10 +78,12 @@ void FTcpServer::stop(bool forceClose) {
   m_running = false;
 }
 
-void FTcpServer::addListenPort(uint32 port,bool reuseport ) {
-  auto acc = std::make_unique<FAcceptor>(m_listenerLoop.get(),
-                                                       inAddrAny, port, reuseport);
-  auto functor = (std::bind(&FTcpServer::onNewConnIn,this,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
+void FTcpServer::addListenPort(uint32 port, bool reuseport) {
+  auto acc = std::make_unique<FAcceptor>(m_listenerLoop.get(), inAddrAny, port,
+                                         reuseport);
+  auto functor =
+      (std::bind(&FTcpServer::onNewConnIn, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3));
   acc->SetOnNewConnCallback(functor);
   m_acceptors.emplace_back(std::move(acc));
 }
@@ -104,12 +104,14 @@ void FTcpServer::onClose(FTcpConnPtr ptr) {
   mOnCloseCallback(ptr);
 }
 
-void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr, FSocketAddr addrAccept) {
-  
+void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr,
+                             FSocketAddr addrAccept) {
+
   auto choosenLoop = m_subLoops[IOThread_Chooser++].get();
   IOThread_Chooser = IOThread_Chooser % m_subLoops.size();
-  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr,addrAccept);
-  ptr->setCloseCallback(std::bind(&FTcpServer::onClose,this,std::placeholders::_1));
+  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr, addrAccept);
+  ptr->setCloseCallback(
+      std::bind(&FTcpServer::onClose, this, std::placeholders::_1));
   ptr->setMessageCallback(mOnMessageCallback);
   ptr->setWriteCompleteCallback(mWriteCompleteCallback);
   choosenLoop->AddTask(std::bind(mOnEstablishedCallback, ptr));
@@ -118,6 +120,32 @@ void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr, FSocketAddr addrAc
     m_tcpConns.insert({inSock, ptr});
   } // TODO: set more cb
   // this->mOnEstablishedCallback(ptr);
+}
+
+TickEventId FTcpServer::addTickEvent(AppTickEvent event) {
+  FAUTO_LOCK(m_tickEventMutex);
+  auto id = m_tickEventId++;
+  m_tickEvents.insert({id, std::move(event)});
+  return id;
+}
+
+void FTcpServer::removeEvent(TickEventId id) {
+  FAUTO_LOCK(m_tickEventMutex);
+  auto itor = m_tickEvents.find(id);
+  if (itor == m_tickEvents.end())
+    return;
+  m_tickEvents.erase(itor);
+}
+
+void FTcpServer::tickUserEvent() {
+  FAUTO_LOCK(m_tickEventMutex);
+  uint64 timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::system_clock::now().time_since_epoch())
+                       .count();
+
+  for (auto &&i : m_tickEvents) {
+    i.second(timeNow);
+  }
 }
 
 } // namespace Fei

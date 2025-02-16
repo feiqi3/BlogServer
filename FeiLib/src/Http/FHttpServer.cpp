@@ -1,3 +1,4 @@
+#include <functional>
 #include <sstream>
 #include "Http/FHttpServer.h"
 #include "Http/FHttpRequest.h"
@@ -56,9 +57,11 @@ namespace Fei::Http {
 		mTcpServer->setOnConnEstablisedCallback(std::bind(&FHttpServer::handleTcpConnEstablish, this,std::placeholders::_1));
 		mTcpServer->setOnMessageCallback(std::bind(&FHttpServer::handleTcpIn, this, std::placeholders::_1, std::placeholders::_2));
 		mTcpServer->setOnCloseCallback(std::bind( & FHttpServer::handleTcpConnClosed,this,std::placeholders::_1 ));
+		mRouteCacheCleanEventId = mTcpServer->addTickEvent(std::bind(&FRouter::checkRouteCache,FRouter::instance(),std::placeholders::_1));
 	}
 
 	FHttpServer::~FHttpServer() {
+		mTcpServer->removeEvent(mRouteCacheCleanEventId);
 		if (FRouter::valid()) {
 			delete FRouter::instance();
 		}
@@ -82,6 +85,18 @@ namespace Fei::Http {
 	void FHttpServer::stop(bool force)
 	{
 		mTcpServer->stop(force);
+	}
+
+	TickEventId FHttpServer::addAppTickEvent(AppTickEvent event){
+		return mTcpServer->addTickEvent(event);
+	}
+
+	void FHttpServer::removeAppTickEvent(TickEventId id){
+		mTcpServer->removeEvent(id);
+	}
+
+	void FHttpServer::tickAppEvents(){
+		mTcpServer->tickUserEvent();
 	}
 
 	bool FHttpServer::getContentTypeByPath(const std::string& path, std::string& extensionName)

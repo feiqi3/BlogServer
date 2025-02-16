@@ -1,5 +1,6 @@
 #ifndef FFTcpServer_H
 #define FFTcpServer_H
+#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -29,6 +30,11 @@ class F_API FTcpServer : public FNoCopyable{
     void setOnMessageCallback(TcpMessageCallback cb){mOnMessageCallback = std::move(cb);}
     void setOnCloseCallback(TcpCloseCallback cb){mOnCloseCallback = std::move(cb);}
     void setOnWriteCompleteCallback(TcpWriteCompleteCallback cb){mWriteCompleteCallback = std::move(cb);}
+    
+    //Tick by user in there app
+    TickEventId addTickEvent(AppTickEvent event);
+    void removeEvent(TickEventId);
+    void tickUserEvent();
     private:
     
     void onNewConnIn(Socket inSock,FSocketAddr addr,FSocketAddr addrAccept);
@@ -42,9 +48,11 @@ class F_API FTcpServer : public FNoCopyable{
     uint32 m_threadNums;
     std::vector<std::unique_ptr<FAcceptor>> m_acceptors;
     std::map<Socket, FTcpConnPtr> m_tcpConns;
+    std::map<TickEventId, AppTickEvent> m_tickEvents;
+    std::atomic_int m_tickEventId = 0;
     uint32 IOThread_Chooser = 0;
     bool m_running = false;
-
+    std::mutex m_tickEventMutex;
     std::mutex m_mutex;
 };
 }

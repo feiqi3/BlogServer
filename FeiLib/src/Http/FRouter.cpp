@@ -1,9 +1,13 @@
 #include "Http/FRouter.h"
+#include "FDef.h"
 #include "Http/FPathMatcher.h"
 #include "FLogger.h"
 #include "tbb/concurrent_priority_queue.h"
 #include "tbb/concurrent_map.h"
 #include "FException.h"
+
+#define CACHE_CLEAR_CACHE_UNUSED_TIME 1000 * 60 * 60 * 1 //ms --> 1h
+
 namespace Fei::Http {
 	namespace {
 	
@@ -161,6 +165,15 @@ namespace Fei::Http {
 	{
 	}
 
+	void FRouter::checkRouteCache(uint64 timeNow){
+		static uint64 lastCheckTime  = 0;
+		if(timeNow - lastCheckTime <  CACHE_CLEAR_CACHE_UNUSED_TIME  >> 2){
+			return;
+		}
+		lastCheckTime = timeNow;
+		_dp->checkCacheOverdue(CACHE_CLEAR_CACHE_UNUSED_TIME);
+	}
+
 	FRouter::RouteResult FRouter::route(Method method, const std::string& path)
 	{
 		RouteResult res{};
@@ -245,6 +258,9 @@ namespace Fei::Http {
 
 	void FRouter::unregController(const std::string& controllerName)
 	{
+		//Lock until other unreg finished
+		while(_dp->isHandleUnreg);
+		
 		__DoHandle handle(_dp->isHandleUnreg);
 		//Spin wait.
 		while (_dp->isHandleRoute);

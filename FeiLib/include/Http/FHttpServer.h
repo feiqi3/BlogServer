@@ -5,6 +5,7 @@
 #include "FCallBackDef.h"
 
 #include "FDef.h"
+
 namespace Fei{
 	class FTcpServer;
 }
@@ -31,6 +32,9 @@ public:
 	void setOnRoutNotMatchCB(RouteNotMatchCallback cb) { mRouteNotMatchCallback = std::move(cb); }
 	void setPreSendResponseCB(PreSendHttpResponseCallback cb) { mPreSendCallback = std::move(cb); }
 	void setConnFilterCB(ConnectionFilterCallback cb) { mConnFilterFunc = std::move(cb); }
+	TickEventId addAppTickEvent(AppTickEvent event);
+	void removeAppTickEvent(TickEventId id);
+	void tickAppEvents();
 public:
 	static bool getContentTypeByPath(const std::string& path,std::string& extensionName);
 
@@ -51,6 +55,7 @@ private:
 	InternalErrorCallback mInternalErrCallback;
 	RouteNotMatchCallback mRouteNotMatchCallback;
 	ConnectionFilterCallback mConnFilterFunc;
+	TickEventId mRouteCacheCleanEventId = 0;
 };
 } // namespace Fei
 

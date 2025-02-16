@@ -19,4 +19,8 @@ typedef std::function<void(FTcpConnPtr,FBufferReader&)> TcpMessageCallback;
 typedef std::function<void(FTcpConnPtr)> TcpWriteCompleteCallback;
 typedef std::function<void(FTcpConnPtr)> TcpConnectionEstablishedCallback;
 typedef std::function<void(FTcpConnPtr)> TcpCloseCallback;
+
+//void(uint64 callTimeMs)
+using TickEventId = int;
+typedef std::function<void(uint64_t)> AppTickEvent;
 } // namespace Fei
