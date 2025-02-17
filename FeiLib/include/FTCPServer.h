@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -21,10 +22,14 @@ class F_API FTcpServer : public FNoCopyable{
     FTcpServer(uint32 threadNum);
     ~FTcpServer();
     void init();
+    //Not thread safe, will cause running serve GG
+    static void initGlobalSSLEnv(const std::string& verifyLocation);
+    static void deinitGlobalSSLEnv();
     void run();
     void stop(bool forceClose = false);
 
     void addListenPort(uint32 port,bool reuseport =false);
+    void addSslListenPort(uint32 port,bool reuseport = false);
     void removeListenPort(uint32 port);
     void setOnConnEstablisedCallback(TcpConnectionEstablishedCallback cb){mOnEstablishedCallback = std::move(cb);}
     void setOnMessageCallback(TcpMessageCallback cb){mOnMessageCallback = std::move(cb);}
@@ -47,6 +52,7 @@ class F_API FTcpServer : public FNoCopyable{
     std::vector<std::unique_ptr<FEventLoop>> m_subLoops;
     uint32 m_threadNums;
     std::vector<std::unique_ptr<FAcceptor>> m_acceptors;
+    std::vector<uint32> m_sslPort;
     std::map<Socket, FTcpConnPtr> m_tcpConns;
     std::map<TickEventId, AppTickEvent> m_tickEvents;
     std::atomic_int m_tickEventId = 0;

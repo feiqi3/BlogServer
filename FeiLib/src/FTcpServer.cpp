@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -9,10 +10,10 @@
 #include "FDef.h"
 #include "FEPollListener.h"
 #include "FEventLoop.h"
+#include "FSSLHelper.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
 #include "FTCPServer.h"
-
 #include <functional>
 
 namespace Fei {
@@ -24,6 +25,18 @@ FTcpServer::FTcpServer(uint32 threadNum)
 FTcpServer::~FTcpServer() { stop(true); }
 
 void FTcpServer::init() { m_threadNums = std::max(m_threadNums, 1u); }
+
+void FTcpServer::deinitGlobalSSLEnv() {
+  if (FSSLEnv::valid())
+    delete FSSLEnv::instance();
+}
+
+void FTcpServer::initGlobalSSLEnv(const std::string &sslPath) {
+  if (!FSSLEnv::valid())
+    new FSSLEnv(sslPath);
+  else
+    throw std::runtime_error("Double init SSL Environment");
+}
 
 void FTcpServer::run() {
   if (m_running)
@@ -78,6 +91,10 @@ void FTcpServer::stop(bool forceClose) {
   m_running = false;
 }
 
+void FTcpServer::addSslListenPort(uint32 port, bool reuseport) {
+  addListenPort(port, reuseport);
+  m_sslPort.push_back(port);
+}
 void FTcpServer::addListenPort(uint32 port, bool reuseport) {
   auto acc = std::make_unique<FAcceptor>(m_listenerLoop.get(), inAddrAny, port,
                                          reuseport);
@@ -95,6 +112,14 @@ void FTcpServer::removeListenPort(uint32 port) {
       return false;
   });
   m_acceptors.resize(m_acceptors.size() - 1);
+
+  std::erase_if(m_sslPort, [port](auto &in) {
+    if (in == port)
+      return true;
+    else
+      return false;
+  });
+  m_sslPort.resize(m_sslPort.size() - 1);
 }
 void FTcpServer::onClose(FTcpConnPtr ptr) {
   {
@@ -109,7 +134,14 @@ void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr,
 
   auto choosenLoop = m_subLoops[IOThread_Chooser++].get();
   IOThread_Chooser = IOThread_Chooser % m_subLoops.size();
-  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr, addrAccept);
+  bool isSSL = false;
+  for(auto&& sslPort : this->m_sslPort){
+    if(sslPort == addr.getPort()){
+      isSSL = true;
+      break;
+    }
+  }
+  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr, addrAccept,isSSL);
   ptr->setCloseCallback(
       std::bind(&FTcpServer::onClose, this, std::placeholders::_1));
   ptr->setMessageCallback(mOnMessageCallback);

@@ -5,14 +5,14 @@
 #include "FSingleton.h"
 #include <memory>
 #include <string>
-namespace Fei::Http {
+namespace Fei{
 
 class _FSSLHelperPrivate;
 
 class FSSLEnv :public FSingleton<FSSLEnv> {
 public:
   // SetUp SSL Context
-  FSSLEnv(const std::string &path);
+  FSSLEnv(const std::string &certificateFile);
   // Destroy SSL Context
   ~FSSLEnv();
   void* getSSLContext()const{
@@ -26,11 +26,10 @@ class FSSLHelper {
 public:
   FSSLHelper();
   ~FSSLHelper();
-  // DO Check This excplict
-  bool shakeHand(const FTcpConnPtr &ptr, FBufferReader &reader);
-
+  bool shakeHand(FTcpConnection* ptr, FBufferReader &reader);
+  bool hasShakeHandFin()const;
   // Will throw FException e
-  FBufferReader EncryptSendingData(const std::string &inData);
+  FBufferReader EncryptSendingData(const char* inData,int len);
   FBufferReader DecryptRecvingData(FBufferReader &reader);
 
 private:

@@ -12,8 +12,8 @@
 #include "FBufferReader.h"
 #include "FException.h"
 #include "FLogger.h"
+#include "FSSLHelper.h"
 #include "FTCPConnection.h"
-#include "Http/FSSLHelper.h"
 
 #define MODULE_NAME "SSLHelper"
 
@@ -24,7 +24,20 @@ public:
   }
 };
 
-namespace Fei::Http {
+namespace Fei {
+
+// SetUp SSL Context
+FSSLEnv::FSSLEnv(const std::string &path) {
+  OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
+  OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
+  SSLContext = (void *)SSL_CTX_new(TLS_server_method());
+}
+// Destroy SSL Context
+FSSLEnv::~FSSLEnv() {
+  SSL_CTX_free((SSL_CTX *)SSLContext);
+  SSLContext = nullptr;
+}
+
 class _FSSLHelperPrivate {
 public:
   _FSSLHelperPrivate() : inBuffer(128), outBuffer(128) {}
@@ -53,7 +66,13 @@ FSSLHelper::FSSLHelper() : dp(new _FSSLHelperPrivate) {
   SSL_set_bio(dp->sslHandler, dp->rbio, dp->wbio);
   SSL_set_accept_state(dp->sslHandler);
 }
-bool FSSLHelper::shakeHand(const FTcpConnPtr &ptr, FBufferReader &reader) {
+
+bool FSSLHelper::hasShakeHandFin() const {
+  SSL *ssl = dp->sslHandler;
+  return SSL_is_init_finished(ssl);
+}
+
+bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
   SSL *ssl = dp->sslHandler;
   if (SSL_is_init_finished(ssl))
     return true;
@@ -86,9 +105,9 @@ bool FSSLHelper::shakeHand(const FTcpConnPtr &ptr, FBufferReader &reader) {
   return false;
 }
 
-FBufferReader FSSLHelper::EncryptSendingData(const std::string &inData) {
+FBufferReader FSSLHelper::EncryptSendingData(const char *inData, int len) {
   SSL *ssl = dp->sslHandler;
-  if (!SSL_is_init_finished(ssl)) {
+  if (!hasShakeHandFin()) {
     throw SSLNotPreparedException();
   }
   BIO *ioIn = dp->rbio;
@@ -96,7 +115,7 @@ FBufferReader FSSLHelper::EncryptSendingData(const std::string &inData) {
   int readSize = 0;
   if (dp->inBuffer.getReadableSize() > 0) {
 
-    dp->inBuffer.Append(inData.data(), inData.size());
+    dp->inBuffer.Append(inData, len);
     FBufferReader reader(dp->inBuffer);
     auto view = reader.peekAll();
     readSize = BIO_read(ioIn, (void *)view.get(), view.size());
@@ -105,14 +124,14 @@ FBufferReader FSSLHelper::EncryptSendingData(const std::string &inData) {
       reader.expireView(view);
     }
   } else {
-    readSize = BIO_read(ioIn, (void *)inData.data(), inData.size());
-    if (readSize >= 0 && readSize < (int)inData.size()) {
-      dp->inBuffer.Append(inData.data() + readSize, inData.size() - readSize);
+    readSize = BIO_read(ioIn, (void *)inData, len);
+    if (readSize >= 0 && readSize < len) {
+      dp->inBuffer.Append(inData + readSize, len - readSize);
     }
   }
   if (readSize < 0) {
     auto r = SSL_get_error(ssl, readSize);
-    auto err = ERR_error_string(r,0);
+    auto err = ERR_error_string(r, 0);
     Logger::instance()->log(MODULE_NAME, lvl::warn,
                             "SSL read error, reason \"{}\"", err);
     return FBufferReader(dp->outBuffer);
@@ -124,7 +143,7 @@ FBufferReader FSSLHelper::EncryptSendingData(const std::string &inData) {
   int writeSize = BIO_write(ioOut, (void *)temp.get(), pending);
   if (writeSize < 0) {
     auto r = SSL_get_error(ssl, writeSize);
-    auto err = ERR_error_string(r,0);
+    auto err = ERR_error_string(r, 0);
     Logger::instance()->log(MODULE_NAME, lvl::warn,
                             "SSL write error, reason \"{}\"", err);
     return FBufferReader(dp->outBuffer);
@@ -137,7 +156,7 @@ FBufferReader FSSLHelper::EncryptSendingData(const std::string &inData) {
 
 FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   SSL *ssl = dp->sslHandler;
-  if (!SSL_is_init_finished(ssl)) {
+  if (!hasShakeHandFin()) {
     throw SSLNotPreparedException();
   }
   auto view = reader.peekAll();
@@ -146,7 +165,7 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   auto read = BIO_read(ioIn, (void *)view.get(), view.size());
   if (read < 0) {
     int r = SSL_get_error(ssl, read);
-    auto err = ERR_error_string(r,0);
+    auto err = ERR_error_string(r, 0);
     Logger::instance()->log(MODULE_NAME, lvl::warn,
                             "SSL read error, reason \"{}\"", err);
     return dp->outBuffer;
@@ -159,7 +178,7 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   int writeSize = BIO_write(ioOut, (void *)temp.get(), pending);
   if (writeSize < 0) {
     int r = SSL_get_error(ssl, writeSize);
-    auto err = ERR_error_string(r,0);
+    auto err = ERR_error_string(r, 0);
     Logger::instance()->log(MODULE_NAME, lvl::warn,
                             "SSL write error, reason \"{}\"", err);
     return dp->outBuffer;
@@ -169,4 +188,4 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   return dp->outBuffer;
 }
 
-} // namespace Fei::Http
+} // namespace Fei

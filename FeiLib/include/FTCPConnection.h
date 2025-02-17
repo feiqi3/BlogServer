@@ -14,6 +14,7 @@ class FEventLoop;
 class FEvent;
 class FSock;
 class FBuffer;
+class FSSLHelper;
 
 class F_API FTcpConnection
     : public FNoCopyable,
@@ -28,20 +29,20 @@ public:
     DisConnecting
   };
 
-  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn, FSocketAddr addrAccept) {
-    return std::make_shared<FTcpConnection>(loop, s, addrIn,addrAccept);
+  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn, FSocketAddr addrAccept,bool sslSupport) {
+    return std::make_shared<FTcpConnection>(loop, s, addrIn,addrAccept,sslSupport);
   }
 
   // High water callback: when there are too much data in inBuffer/outBuffer
   //                      While user consume it slow, then this will be called
   // Low  water callback: when data in buffer reach a user set limit, call this.
 
-  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,FSocketAddr addrAccept);
+  FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,FSocketAddr addrAccept,bool sslSupport);
   ~FTcpConnection();
 
   TcpConnState getState() const { return mstate; }
   void setReading(bool v);
-  void send(const char *data, uint64 len);
+  void send(char *data, uint64 len);
   void send(std::string&& data);
   void setKeepAlive(bool v);
   void setKeepIdle(int idleTime);
@@ -52,10 +53,15 @@ public:
 
   FSocketAddr getAddr() const { return m_addrIn; }
   FSocketAddr getAddrAccept()const{return m_addrAccept;}
+
+  inline bool isSSLConnection()const{
+    return sslHelper!=nullptr;
+  }
+
 protected:
   // When output buffer is empty, send directly,
   // else queued in loop and send by buffer.
-  void sendInLoop(const char *data, uint64 len);
+  void sendInLoop(char *data, uint64 len);
   void handleRead();
   void handleWrite();
   void handleClose();
@@ -89,6 +95,7 @@ protected:
 
   std::unique_ptr<FBuffer> inBuffer;
   std::unique_ptr<FBuffer> outBuffer;
+  std::unique_ptr<FSSLHelper> sslHelper;
   TcpMessageCallback m_onMessage;
   TcpWriteCompleteCallback m_onWriteComplete;
   TcpCloseCallback m_onCloseCallback;

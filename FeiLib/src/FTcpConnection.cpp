@@ -6,11 +6,13 @@
 #include "FEvent.h"
 #include "FEventLoop.h"
 #include "FLogger.h"
+#include "FSSLHelper.h"
 #include "FSockWrapper.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
 #include "FWeakCallback.h"
 
+#include <cassert>
 #include <cerrno>
 #include <cstring>
 #include <functional>
@@ -24,12 +26,14 @@ namespace Fei {
 FTcpConnection::~FTcpConnection() {
   m_loop->isInLoopAssert();
   assert(mstate == TcpConnState::DisConnected);
-  //Remove event out of loop
+  // Remove event out of loop
   m_event->remove();
 }
 
-FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,FSocketAddr addrAccept)
-    : m_loop(loop), m_sock(new FSock(s)), m_addrIn(addrIn),m_addrAccept(addrAccept),
+FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,
+                               FSocketAddr addrAccept, bool sslSupport)
+    : m_loop(loop), m_sock(new FSock(s)), m_addrIn(addrIn),
+      m_addrAccept(addrAccept),
       m_event(FEvent::createEvent(loop, s, loop->getUniqueIdInLoop())),
       inBuffer(std::make_unique<FBuffer>(1024)),
       outBuffer(std::make_unique<FBuffer>(1024)),
@@ -43,9 +47,12 @@ FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,FS
       "TcpConnection Establish. address: {}.{}.{}.{}, port: {}",
       m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1, m_addrIn.un.un_byte.a2,
       m_addrIn.un.un_byte.a3, m_addrIn.port);
+  if (sslSupport) {
+    sslHelper = std::make_unique<FSSLHelper>();
+  }
 }
 
-void FTcpConnection::sendInLoop(const char *data, uint64 len) {
+void FTcpConnection::sendInLoop(char *data, uint64 len) {
   m_loop->isInLoopAssert();
   if (mstate == TcpConnState::DisConnected) {
     return;
@@ -53,10 +60,22 @@ void FTcpConnection::sendInLoop(const char *data, uint64 len) {
   int sendLen = 0;
 
   SocketStatus status = SocketStatus::Success;
+
+
+  if(isSSLConnection() && sslHelper->hasShakeHandFin()){
+    auto reader = sslHelper->EncryptSendingData(data, len);
+    auto view = reader.peekAll();
+    data = (char*)view.get();
+    len = view.size();
+    //!!!!! Important : in current implementation we dont free the ptr to data immediately, so this is legal !!!!!
+    reader.expireView(view);
+  }
+
   // A simple clone of muduo
   // Send directly if no data in buffer
   bool faultError = false;
   int remaining = len;
+
   if (!m_event->isWriting() && outBuffer->getReadableSize() == 0) {
     status = Send(m_sock->getFd(), data, len, sendLen);
     if (status != SocketStatus::Success) {
@@ -83,16 +102,26 @@ void FTcpConnection::sendInLoop(const char *data, uint64 len) {
 
 void FTcpConnection::handleRead() {
   m_loop->isInLoopAssert();
-  if(mstate == TcpConnState::DisConnected)
+  if (mstate == TcpConnState::DisConnected)
     return;
   Errno_t err = 0;
   auto len = this->inBuffer->Read(m_sock->getFd(), err);
 
   mstate = TcpConnState::Connected;
   if (len > 0) {
-    if (m_onMessage) {
-      FBufferReader reader(*inBuffer);
-      m_onMessage(shared_from_this(), reader);
+    FBufferReader reader(*inBuffer);
+
+    if (isSSLConnection()) {
+      if (sslHelper->shakeHand(this, reader)) {
+        auto newReader = sslHelper->DecryptRecvingData(reader);
+        if (m_onMessage) {
+          m_onMessage(shared_from_this(), newReader);
+        }
+      }
+    } else {
+      if (m_onMessage) {
+        m_onMessage(shared_from_this(), reader);
+      }
     }
   } else if (len == 0) {
     handleClose();
@@ -108,26 +137,24 @@ void FTcpConnection::setKeepIdle(int idleTime) {
   m_sock->setKeepIdle(idleTime);
 }
 
-void FTcpConnection::setKeepInterval(int intervalTime)
-{
-    m_sock->setKeepInterval(intervalTime);
+void FTcpConnection::setKeepInterval(int intervalTime) {
+  m_sock->setKeepInterval(intervalTime);
 }
 
-void FTcpConnection::forceClose()
-{
-    if (m_loop->isInLoopThread()) {
-        forceCloseInLoop();
-    }
-    else {
-        auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
-        m_loop->AddTask(func);
-    }
+void FTcpConnection::forceClose() {
+  if (m_loop->isInLoopThread()) {
+    forceCloseInLoop();
+  } else {
+    auto func =
+        makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
+    m_loop->AddTask(func);
+  }
 }
 
-void FTcpConnection::forceCloseInDelay(uint32 ms)
-{
-    auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
-    m_loop->RunAfter(ms, func);
+void FTcpConnection::forceCloseInDelay(uint32 ms) {
+  auto func =
+      makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
+  m_loop->RunAfter(ms, func);
 }
 
 void FTcpConnection::setReading(bool v) {
@@ -137,13 +164,15 @@ void FTcpConnection::setReading(bool v) {
       startReadingInLoop();
       return;
     }
-    m_loop->AddTask(std::bind(&FTcpConnection::startReadingInLoop, shared_from_this()));
+    m_loop->AddTask(
+        std::bind(&FTcpConnection::startReadingInLoop, shared_from_this()));
   } else if (v == false && m_event->isReading()) {
     if (m_loop->isInLoopThread()) {
       stopReadingInLoop();
       return;
     }
-    m_loop->AddTask(std::bind(&FTcpConnection::stopReadingInLoop, shared_from_this()));
+    m_loop->AddTask(
+        std::bind(&FTcpConnection::stopReadingInLoop, shared_from_this()));
   }
 }
 
@@ -161,24 +190,25 @@ void FTcpConnection::handleClose() {
 
   volatile int barrier__ = 0;
   m_onCloseCallback(shared_from_this());
-  //No further code should be here
+  // No further code should be here
 }
 
 void FTcpConnection::handleError(Errno_t err) {
   m_loop->isInLoopAssert();
-  Logger::instance()->log(
-      MODULE_NAME, lvl::trace,
-      "TcpConnection Error, Errno {}. address: {}.{}.{}.{}, port: {}, errInfo: {}",
-      strerror(errno), m_addrIn.un.un_byte.a0, m_addrIn.un.un_byte.a1,
-      m_addrIn.un.un_byte.a2, m_addrIn.un.un_byte.a3, m_addrIn.port,GetErrorStr());
+  Logger::instance()->log(MODULE_NAME, lvl::trace,
+                          "TcpConnection Error, Errno {}. address: "
+                          "{}.{}.{}.{}, port: {}, errInfo: {}",
+                          strerror(errno), m_addrIn.un.un_byte.a0,
+                          m_addrIn.un.un_byte.a1, m_addrIn.un.un_byte.a2,
+                          m_addrIn.un.un_byte.a3, m_addrIn.port, GetErrorStr());
   bool faultError = false;
-    
+
   if (err != EINTR && err != EWOULDBLOCK && err != EAGAIN) {
-      faultError = true;
+    faultError = true;
   }
 
   if (faultError) {
-      this->forceClose();
+    this->forceClose();
   }
 }
 
@@ -219,24 +249,22 @@ void FTcpConnection::shutdownInLoop() {
 
 Socket FTcpConnection::getFd() { return m_sock->getFd(); }
 
-void FTcpConnection::send(const char *data, uint64 len) {
+void FTcpConnection::send(char *data, uint64 len) {
   if (m_loop->isInLoopThread()) {
     sendInLoop(data, len);
   } else {
-    m_loop->AddTask(
-        std::bind(&FTcpConnection::sendInLoopStr, shared_from_this(), std::string(data)));
+    m_loop->AddTask(std::bind(&FTcpConnection::sendInLoopStr,
+                              shared_from_this(), std::string(data)));
   }
 }
 
-void FTcpConnection::send(std::string&& data)
-{
-    if (m_loop->isInLoopThread()) {
-        sendInLoop(data.data(), data.size());
-    }
-    else {
-        m_loop->AddTask(
-            std::bind(&FTcpConnection::sendInLoopStr, shared_from_this(), std::move(data)));
-    }
+void FTcpConnection::send(std::string &&data) {
+  if (m_loop->isInLoopThread()) {
+    send(data.data(), data.size());
+  } else {
+    m_loop->AddTask(std::bind(&FTcpConnection::sendInLoopStr,
+                              shared_from_this(), std::move(data)));
+  }
 }
 
 void FTcpConnection::startReadingInLoop() { m_event->enableReading(); }
@@ -247,10 +275,9 @@ void FTcpConnection::sendInLoopStr(std::string data) {
   sendInLoop(data.data(), data.size());
 }
 
-void FTcpConnection::forceCloseInLoop()
-{
-    m_loop->isInLoopAssert();
-    handleClose();
+void FTcpConnection::forceCloseInLoop() {
+  m_loop->isInLoopAssert();
+  handleClose();
 }
 
 } // namespace Fei
