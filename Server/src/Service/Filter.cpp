@@ -24,7 +24,7 @@ namespace{
 }
 bool Blog::filterAll(const FHTTP::FHttpRequest& request, FHTTP::FHttpResponse& response)
 {
-	if (request.getPath() == "/404" || request.getPath().starts_with("/file/"))
+	if (request.getPath() == "/404" || request.getPath().starts_with("/file/") || request.getPath().starts_with("/.well-known/acme-challenge/"))
 		return false;
 	response = Redirector::RedirectTo("/404");
 	return true;
