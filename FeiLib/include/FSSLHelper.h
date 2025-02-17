@@ -12,7 +12,9 @@ class _FSSLHelperPrivate;
 class FSSLEnv :public FSingleton<FSSLEnv> {
 public:
   // SetUp SSL Context
-  FSSLEnv(const std::string &certificateFile);
+  //certificateFile --> like "cert.pem"
+  //privateKeyFile --> like "key.pem"
+  FSSLEnv(const std::string &certificateFile,const std::string &privateKeyFile);
   // Destroy SSL Context
   ~FSSLEnv();
   void* getSSLContext()const{

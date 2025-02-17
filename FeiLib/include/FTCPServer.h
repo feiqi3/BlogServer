@@ -23,7 +23,7 @@ class F_API FTcpServer : public FNoCopyable{
     ~FTcpServer();
     void init();
     //Not thread safe, will cause running serve GG
-    static void initGlobalSSLEnv(const std::string& verifyLocation);
+    static void initGlobalSSLEnv(const std::string& certificateFile,const std::string& privateKeyFile);
     static void deinitGlobalSSLEnv();
     void run();
     void stop(bool forceClose = false);

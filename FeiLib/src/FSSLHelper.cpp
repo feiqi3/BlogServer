@@ -27,10 +27,38 @@ public:
 namespace Fei {
 
 // SetUp SSL Context
-FSSLEnv::FSSLEnv(const std::string &path) {
+FSSLEnv::FSSLEnv(const std::string &certificateFile,
+                 const std::string &privateKeyFile) {
   OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
   SSLContext = (void *)SSL_CTX_new(TLS_server_method());
+  if (!SSLContext) {
+    auto errCode = ERR_get_error();
+    auto reason = ERR_GET_REASON(errCode);
+    Logger::instance()->log(MODULE_NAME, lvl::critical,
+                            "Unable to create SSL context, reason: \"{}\"",
+                            reason);
+  }
+  SSL_CTX *ctx = (SSL_CTX *)SSLContext;
+  /* Set the key and cert */
+  if (SSL_CTX_use_certificate_file(ctx, certificateFile.c_str(),
+                                   SSL_FILETYPE_PEM) <= 0) {
+    auto errCode = ERR_get_error();
+    auto reason = ERR_GET_REASON(errCode);
+    Logger::instance()->log(
+        MODULE_NAME, lvl::critical,
+        "Unable to load SSL certificate file, reason: \"{}\"", reason);
+  }
+
+  if (SSL_CTX_use_PrivateKey_file(ctx, privateKeyFile.c_str(),
+                                  SSL_FILETYPE_PEM) <= 0) {
+    auto errCode = ERR_get_error();
+    auto reason = ERR_GET_REASON(errCode);
+    Logger::instance()->log(
+        MODULE_NAME, lvl::critical,
+        "Unable to load SSL private key file, reason: \"{}\"", reason);
+  }
+  
 }
 // Destroy SSL Context
 FSSLEnv::~FSSLEnv() {

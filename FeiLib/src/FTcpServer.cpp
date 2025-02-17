@@ -31,9 +31,9 @@ void FTcpServer::deinitGlobalSSLEnv() {
     delete FSSLEnv::instance();
 }
 
-void FTcpServer::initGlobalSSLEnv(const std::string &sslPath) {
+void FTcpServer::initGlobalSSLEnv(const std::string& certificateFile,const std::string& privateKeyFile) {
   if (!FSSLEnv::valid())
-    new FSSLEnv(sslPath);
+    new FSSLEnv(certificateFile,privateKeyFile);
   else
     throw std::runtime_error("Double init SSL Environment");
 }
