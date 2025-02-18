@@ -1,6 +1,7 @@
 #ifndef FHTTPSERVER_H
 #define FHTTPSERVER_H
 #include <memory>
+#include <string>
 #include "FException.h"
 #include "FCallBackDef.h"
 
@@ -24,7 +25,10 @@ class F_API FHttpServer {
 public:
 	FHttpServer(uint32 threadNums);
 	~FHttpServer();
+	static void initSSLenv(const std::string& certFile,const std::string& privateKey);
+	static void deinitSSLenv();
 	void addListenPort(uint32 port);
+	void addSSLPort(uint32 port);
 	void removeListenPort(uint32 port);
 	void run(); 
 	void stop(bool force = false);

@@ -49,6 +49,15 @@ bool _getContentTypeByPath(const std::string& path, std::string& extensionName)
 }
 
 namespace Fei::Http {
+
+	void FHttpServer::initSSLenv(const std::string& certFile,const std::string& privateKey){
+		FTcpServer::initGlobalSSLEnv(certFile, privateKey);
+	}
+
+	void FHttpServer::deinitSSLenv(){
+		FTcpServer::deinitGlobalSSLEnv();		
+	}
+
 	FHttpServer::FHttpServer(uint32 threadNums) : mTcpServer(std::make_unique<FTcpServer>(threadNums))
 	{
 		if (!FRouter::valid()) {
@@ -70,6 +79,10 @@ namespace Fei::Http {
 	void FHttpServer::addListenPort(uint32 port)
 	{
 		this->mTcpServer->addListenPort(port,true);
+	}
+
+	void FHttpServer::addSSLPort(uint32 port){
+		this->mTcpServer->addSslListenPort(port,true);
 	}
 
 	void FHttpServer::removeListenPort(uint32 port)

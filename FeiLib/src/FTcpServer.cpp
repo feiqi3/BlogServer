@@ -136,7 +136,7 @@ void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr,
   IOThread_Chooser = IOThread_Chooser % m_subLoops.size();
   bool isSSL = false;
   for(auto&& sslPort : this->m_sslPort){
-    if(sslPort == addr.getPort()){
+    if(sslPort == addrAccept.getPort()){
       isSSL = true;
       break;
     }
