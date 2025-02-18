@@ -56,6 +56,7 @@ void FBuffer::Append(const char *data, uint32 len) {
   uint32 newSize = writeIdx + len;
   m_buffer.resize(newSize);
   memcpy(m_buffer.data() + writeIdx, data, len);
+  writeIdx = newSize;
 }
 
 void FBuffer::Pop(int len) {

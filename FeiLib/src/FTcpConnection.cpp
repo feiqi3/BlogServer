@@ -5,6 +5,7 @@
 #include "FBuffer.h"
 #include "FEvent.h"
 #include "FEventLoop.h"
+#include "FException.h"
 #include "FLogger.h"
 #include "FSSLHelper.h"
 #include "FSockWrapper.h"
@@ -61,20 +62,26 @@ void FTcpConnection::sendInLoop(char *data, uint64 len) {
 
   SocketStatus status = SocketStatus::Success;
 
-
-  if(isSSLConnection() && sslHelper->hasShakeHandFin()){
-    auto reader = sslHelper->EncryptSendingData(data, len);
-    auto view = reader.peekAll();
-    data = (char*)view.get();
-    len = view.size();
-    //!!!!! Important : in current implementation we dont free the ptr to data immediately, so this is legal !!!!!
-    reader.expireView(view);
+  try {
+    if (isSSLConnection() && sslHelper->hasShakeHandFin()) {
+      auto reader = sslHelper->EncryptSendingData(data, len);
+      auto view = reader.peekAll();
+      data = (char *)view.get();
+      len = view.size();
+      //!!!!! Important : in current implementation we dont free the ptr to data
+      //! immediately, so this is legal !!!!!
+      reader.expireView(view);
+    }
+  } catch (FException &e) {
+    Logger::instance()->log(MODULE_NAME, lvl::warn,"%s", e.what());
+    handleClose();
+    return;
   }
 
   // A simple clone of muduo
   // Send directly if no data in buffer
-  bool faultError = false;
   int remaining = len;
+  bool faultError = false;
 
   if (!m_event->isWriting() && outBuffer->getReadableSize() == 0) {
     status = Send(m_sock->getFd(), data, len, sendLen);
@@ -112,12 +119,20 @@ void FTcpConnection::handleRead() {
     FBufferReader reader(*inBuffer);
 
     if (isSSLConnection()) {
-      if (sslHelper->shakeHand(this, reader)) {
-        auto newReader = sslHelper->DecryptRecvingData(reader);
-        if (m_onMessage) {
-          m_onMessage(shared_from_this(), newReader);
+      //For tcp connection
+      try {
+        if (sslHelper->shakeHand(this, reader)) {
+          auto newReader = sslHelper->DecryptRecvingData(reader);
+          if (m_onMessage) {
+            m_onMessage(shared_from_this(), newReader);
+          }
         }
+      } catch (FException &e) {
+        Logger::instance()->log(MODULE_NAME, lvl::warn,"%s", e.what());
+        handleClose();
+        return;
       }
+
     } else {
       if (m_onMessage) {
         m_onMessage(shared_from_this(), reader);
