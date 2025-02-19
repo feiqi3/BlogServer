@@ -251,3 +251,10 @@ void Blog::DBResult::innerCheck(uint32_t col) const
 	if (col >= cols)
 		throw DatabaseExcceptionColOutofRange();
 }
+
+std::string Blog::safeStr(const std::string &in) {
+	char * str = sqlite3_mprintf("%q", in.c_str());
+	std::string ret(str);
+	sqlite3_free(str);
+	return ret;
+}

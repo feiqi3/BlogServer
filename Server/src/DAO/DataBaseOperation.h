@@ -55,5 +55,7 @@ namespace Blog {
 		std::vector<DataType> mResultTypeByCol;
 		int cols = 0;
 	};
+
+	std::string safeStr(const std::string& in);
 }
 #endif
