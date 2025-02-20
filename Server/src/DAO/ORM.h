@@ -11,35 +11,37 @@ namespace Blog {
 
 template <class T>
 concept StringLike = std::is_convertible_v<T, std::string_view>;
+template <class T>
+concept NotStringLike = !std::is_convertible_v<T, std::string_view>;
 
 template <typename T> class Condition {
 public:
   template <StringLike U>
-  constexpr Condition(std::string field, std::string op, U &val) {
-    _expr = field + op + "\'" + safeStr(std::string(val)) + "\'";
+  constexpr Condition(const std::string& field,const std::string& op, U &&val) {
+    _expr = field + op + safeStr(std::string(val)) ;
   }
 
-  template <typename U>
-  constexpr Condition(std::string field, std::string op, U val) {
+  template <NotStringLike U>
+  constexpr Condition(std::string field,const std::string& op, U val) {
     _expr = field + op + std::to_string(val);
   }
 
-  constexpr Condition(Condition<T> a, Condition<T> b, std::string op) {
+  constexpr Condition(Condition<T> a, Condition<T> b,const std::string& op) {
     _expr = "(" + a.toStr() + op + b.toStr() + ")";
   }
 
-  constexpr Condition(Condition<T> rhs, bool) {
-    _expr = "( NOT " + rhs.toStr() + ")";
+  constexpr Condition(Condition<T>& rhs, bool) {
+    _expr = "NOT " + rhs.toStr() + "";
   }
 
-  Condition<T> operator!() { return Condition(*this, false); }
+  Condition<T> operator!() { return Condition<T>(*this, false); }
 
   Condition<T> operator&&(Condition<T> rhs) {
-    return Condition(*this, rhs, "and");
+    return Condition(*this, rhs, " AND ");
   }
 
   Condition<T> operator||(Condition<T> rhs) {
-    return Condition(*this, rhs, "or");
+    return Condition(*this, rhs, " OR ");
   }
   std::string toStr() { return _expr; }
 
@@ -49,53 +51,52 @@ private:
 
 template <typename T, typename U> class Field {
 public:
-  static constexpr Field GetField(T *cls, void *field, U __VERIFY) {
-    (void)__VERIFY;
-    constexpr auto de = (uint64_t)field - (uint64_t)cls;
-    static_assert(de < sizeof(T), "Error in field.");
-    reflect::for_each([cls, field](auto i) {
+  static constexpr Field<T,U> GetField(uint64_t fieldOffset) {
+    T tmp;
+    std::string str;
+    reflect::for_each([&tmp,fieldOffset,&str](auto i) {
       bool isMatch =
-          reflect::offset_of<i>(*cls) == (uint64_t)field - (uint64_t)cls;
+          reflect::offset_of<i>(tmp) == fieldOffset;
       if (isMatch) {
-        auto sv = reflect::member_name<i>(*cls);
-        return Field<T, U>(sv, reflect::offset_of<i>(*cls));
+        str = reflect::member_name<i>(tmp);
+        return;
       }
-    });
-    return Field<T, U>("");
+    },tmp);
+    return Field<T, U>(str, fieldOffset);
   }
 
-  constexpr Condition<T> operator==(U val) {
-    return Condition(fieldSV, " = ", std::move(val));
+  constexpr Condition<T> operator==(U&& val) {
+    return Condition<T>(fieldSV, " = ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator!=(U val) {
-    return Condition(fieldSV, " != ", std::move(val));
+  constexpr Condition<T> operator!=(U&& val) {
+    return Condition<T>(fieldSV, " != ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator<(U val) {
-    return Condition(fieldSV, " < ", std::move(val));
+  constexpr Condition<T> operator<(U&& val) {
+    return Condition<T>(fieldSV, " < ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator<=(U val) {
-    return Condition(fieldSV, " <= ", std::move(val));
+  constexpr Condition<T> operator<=(U&& val) {
+    return Condition<T>(fieldSV, " <= ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator>(U val) {
-    return Condition(fieldSV, " > ", std::move(val));
+  constexpr Condition<T> operator>(U&& val) {
+    return Condition<T>(fieldSV, " > ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator>=(U val) {
-    return Condition(fieldSV, " >= ", std::move(val));
+  constexpr Condition<T> operator>=(U&& val) {
+    return Condition<T>(fieldSV, " >= ", std::forward<U>(val));
   }
 
 protected:
   constexpr std::string_view getFieldName() const { return fieldSV; }
   constexpr uint64_t getFieldOffset() const { return offset; }
-  constexpr Field(const std::string_view &view, uint64_t off)
+  constexpr Field(const std::string &view, uint64_t off)
       : fieldSV(view), offset(off) {}
 
 private:
-  std::string_view fieldSV;
+  std::string fieldSV;
   uint64_t offset;
 };
 
@@ -105,13 +106,15 @@ public:
       : selectTableName(table), whereStr(""), mskip(0), mlimit(0) {}
 
   constexpr Query &Select() {
-    op = "SELECT * FROM " + selectTableName;
+    op = " SELECT * FROM " + selectTableName;
     return *this;
   }
 
-  constexpr Query &Insert(const T &cls) {
-    op = "INSERT INTO " + getClsDefineList() + "VALUES ";
+  constexpr Query &Delete() { op = " DELETE FROM " + selectTableName; }
 
+  constexpr Query &Insert(const T &cls) {
+    op = " INSERT INTO " + getClsDefineList() + " VALUES ";
+    op += getClsValueList(cls);
     return *this;
   }
 
@@ -124,7 +127,7 @@ public:
   }
 
   template <class U> constexpr Query &OrderByDesc(Field<T, U> field) {
-    order = "ORDER BY " + field.getFieldName() + " DESC";
+    order = "ORDER BY " + field.getFieldName() + " DESC ";
   }
 
   constexpr Query &skip(int s) { mskip = s; }
@@ -132,7 +135,7 @@ public:
   constexpr Query &limit(int s) { mlimit = s; }
 
   constexpr std::string toSql() const {
-    std::string ret = op + selectTableName + " WHERE " + whereStr;
+    std::string ret = op + " WHERE " + whereStr;
     if (!order.empty()) {
       ret += " " + order;
     }
@@ -140,9 +143,15 @@ public:
   }
 
 private:
+  template <StringLike Str> static std::string to_string(Str &v) {
+    return safeStr(std::string(v));
+  }
+  template <class V> static std::string to_string(V &v) {
+    return std::to_string(v);
+  }
+
   constexpr std::string getClsDefineList() {
-    std::string ret = "";
-    ret += "(";
+    std::string ret = "(";
     int idx = 0;
     reflect::for_each([&idx, &ret](int i) {
       if (idx != 0) {
@@ -154,7 +163,7 @@ private:
     return ret;
   }
 
-  constexpr std::string getClsDefineList(T &t) {
+  constexpr std::string getClsValueList(const T &t) {
     std::string ret = "";
     ret += "(";
     int idx = 0;
@@ -168,12 +177,6 @@ private:
     ret += ") ";
     return ret;
   }
-  template <StringLike Str> static std::string to_string(Str &v) {
-    return safeStr(std::string(v));
-  }
-  template <class V> static std::string to_string(V &v) {
-    return std::to_string(v);
-  }
 
 
 private:
@@ -185,5 +188,7 @@ private:
   std::string op;
 };
 }; // namespace Blog
+
+#define FIELD(CLS,MEMBER) ::Blog::Field<CLS,decltype(((CLS*)0)->MEMBER)>::GetField( offsetof(CLS,MEMBER))
 
 #endif

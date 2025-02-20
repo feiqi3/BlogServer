@@ -170,10 +170,13 @@ public:
 
 Blog::DatabaseOperation::DatabaseOperation():dp(new DatabaseOperationPrivate)
 {
+	sqlite3_initialize();
 }
 
 Blog::DatabaseOperation::~DatabaseOperation()
 {
+	sqlite3_shutdown();
+
 	delete dp;
 	dp = 0;
 }
@@ -253,7 +256,7 @@ void Blog::DBResult::innerCheck(uint32_t col) const
 }
 
 std::string Blog::safeStr(const std::string &in) {
-	char * str = sqlite3_mprintf("%q", in.c_str());
+	char * str = sqlite3_mprintf("%Q", in.c_str());
 	std::string ret(str);
 	sqlite3_free(str);
 	return ret;
