@@ -8,7 +8,7 @@ Currently can run on linux and windows.
 The features I am working on :       
 
 - Simple orm  
-- OpenSSL integrete (https support)
+- A Good looking Blog 
 
 
 Requirement:    
