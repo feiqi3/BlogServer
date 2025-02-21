@@ -102,6 +102,27 @@ public:
 		}
 	}
 
+	DBResultPtr exec(sqlite3_stmt* stmt){
+		int columnCount = sqlite3_column_count(stmt);
+		std::vector<DataType> dtp;
+		for (auto i = 0; i < columnCount; ++i) {
+			auto type = sqlite3_column_type(stmt, i);
+			dtp.push_back(toBlogType(type));
+		}
+		return std::make_shared<DBResult>(stmt, dtp);
+	}
+
+	sqlite3_stmt* prepare(const std::string& sql){
+		auto conn = getDbConn();
+		sqlite3_stmt* stmt = 0;
+		const char* unknownSql = 0;
+		SQL_CHECK(sqlite3_prepare_v2(conn, sql.c_str(), sql.size(), &stmt, &unknownSql), {
+			Logger::instance()->log(lvl::err,"SQL error, sql: \"{}\",error part: \"{\"}, reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
+			return 0;
+			});
+		return stmt;
+	}
+
 	DBResultPtr execWithResult(const std::string& sql,const std::string* strs = 0,uint32 length = 0) {
 		auto conn = getDbConn();
 		sqlite3_stmt* stmt = 0;
@@ -167,6 +188,29 @@ public:
 	}
 
 };
+void Blog::DatabaseOperation::bind(void* stmt,int i,std::nullptr_t nullable){
+	auto _s = (sqlite3_stmt*) stmt;
+	sqlite3_bind_null(_s, i);
+}
+
+void Blog::DatabaseOperation::bind(void* stmt,int i,int v){
+	auto _s = (sqlite3_stmt*) stmt;
+	 sqlite3_bind_int(_s, i, v);
+}
+void Blog::DatabaseOperation::bind(void* stmt,int i,int64_t v){
+	auto _s = (sqlite3_stmt*) stmt;
+	sqlite3_bind_int64(_s, i, v);
+}
+
+void Blog::DatabaseOperation::bind(void* stmt,int i,double v){
+	auto _s = (sqlite3_stmt*) stmt;
+	sqlite3_bind_double(_s, i, v);
+
+}
+void Blog::DatabaseOperation::bind(void* stmt,int i,const std::string& v){
+	auto _s = (sqlite3_stmt*) stmt;
+	sqlite3_bind_text(_s, i, v.c_str(),v.size(),0);
+}
 
 Blog::DatabaseOperation::DatabaseOperation():dp(new DatabaseOperationPrivate)
 {
@@ -201,6 +245,15 @@ void Blog::DatabaseOperation::LoadDB(const std::string& databaseName)
 	SQL_CHECK(sqlite3_close_v2(dbConn), {
 		Logger::instance()->log(MODULE_NAME,lvl::err,"Try close database failed. reason \"{}\"", sqlite3_errmsg(dbConn));
 	});
+}
+
+DBResultPtr Blog::DatabaseOperation::exec(void* stmt){
+	auto _s = (sqlite3_stmt*)stmt;
+	return dp->exec(_s);
+}
+
+void* Blog::DatabaseOperation::stmtPrepare(const std::string& sql){
+	return dp->prepare(sql);
 }
 
 std::shared_ptr<DBResult> Blog::DatabaseOperation::Exec(const std::string& sql)const

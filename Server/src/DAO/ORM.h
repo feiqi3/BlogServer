@@ -1,10 +1,15 @@
 #ifndef ORM_H
 #define ORM_H
+
 #include "reflect"
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "DataBaseOperation.h"
 namespace Blog {
@@ -17,20 +22,25 @@ concept NotStringLike = !std::is_convertible_v<T, std::string_view>;
 template <typename T> class Condition {
 public:
   template <StringLike U>
-  constexpr Condition(const std::string& field,const std::string& op, U &&val) {
-    _expr = field + op + safeStr(std::string(val)) ;
+  constexpr Condition(const std::string &field, const std::string &op,
+                      U &&val) {
+    _expr = field + op + safeStr(std::string(val));
   }
 
   template <NotStringLike U>
-  constexpr Condition(std::string field,const std::string& op, U val) {
+  constexpr Condition(std::string field, const std::string &op, U val) {
     _expr = field + op + std::to_string(val);
   }
 
-  constexpr Condition(Condition<T> a, Condition<T> b,const std::string& op) {
+  constexpr Condition(const std::string &field, const std::string &op) {
+    _expr = field + op;
+  }
+
+  constexpr Condition(Condition<T> a, Condition<T> b, const std::string &op) {
     _expr = "(" + a.toStr() + op + b.toStr() + ")";
   }
 
-  constexpr Condition(Condition<T>& rhs, bool) {
+  constexpr Condition(Condition<T> &rhs, bool) {
     _expr = "NOT " + rhs.toStr() + "";
   }
 
@@ -49,46 +59,82 @@ private:
   std::string _expr;
 };
 
+struct FieldParameter{};
+
 template <typename T, typename U> class Field {
 public:
-  static constexpr Field<T,U> GetField(uint64_t fieldOffset) {
+  struct Value{};
+public:
+  static constexpr Field<T, U> GetField(uint64_t fieldOffset) {
     T tmp;
     std::string str;
-    reflect::for_each([&tmp,fieldOffset,&str](auto i) {
-      bool isMatch =
-          reflect::offset_of<i>(tmp) == fieldOffset;
-      if (isMatch) {
-        str = reflect::member_name<i>(tmp);
-        return;
-      }
-    },tmp);
+    reflect::for_each(
+        [&tmp, fieldOffset, &str](auto i) {
+          bool isMatch = reflect::offset_of<i>(tmp) == fieldOffset;
+          if (isMatch) {
+            str = reflect::member_name<i>(tmp);
+            return;
+          }
+        },
+        tmp);
     return Field<T, U>(str, fieldOffset);
   }
 
-  constexpr Condition<T> operator==(U&& val) {
+  constexpr Condition<T> operator==(std::nullptr_t) {
+    return Condition<T>(fieldSV, " NOT ", "NULL");
+  }
+
+  constexpr Condition<T> operator!=(std::nullptr_t) {
+    return Condition<T>(fieldSV, " IS NOT ", "NULL");
+  }
+
+  constexpr Condition<T> operator==(U &&val) {
     return Condition<T>(fieldSV, " = ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator!=(U&& val) {
+  constexpr Condition<T> operator!=(U &&val) {
     return Condition<T>(fieldSV, " != ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator<(U&& val) {
+  constexpr Condition<T> operator<(U &&val) {
     return Condition<T>(fieldSV, " < ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator<=(U&& val) {
+  constexpr Condition<T> operator<=(U &&val) {
     return Condition<T>(fieldSV, " <= ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator>(U&& val) {
+  constexpr Condition<T> operator>(U &&val) {
     return Condition<T>(fieldSV, " > ", std::forward<U>(val));
   }
 
-  constexpr Condition<T> operator>=(U&& val) {
+  constexpr Condition<T> operator>=(U &&val) {
     return Condition<T>(fieldSV, " >= ", std::forward<U>(val));
   }
 
+  constexpr Condition<T> operator==(FieldParameter) {
+    return Condition<T>(fieldSV, " = ? ");
+  }
+
+  constexpr Condition<T> operator!=(FieldParameter) {
+    return Condition<T>(fieldSV, " != ? ");
+  }
+
+  constexpr Condition<T> operator<(FieldParameter) {
+    return Condition<T>(fieldSV, " < ?");
+  }
+
+  constexpr Condition<T> operator<=(FieldParameter) {
+    return Condition<T>(fieldSV, " <= ? ");
+  }
+
+  constexpr Condition<T> operator>(FieldParameter) {
+    return Condition<T>(fieldSV, " > ? ");
+  }
+
+  constexpr Condition<T> operator>=(FieldParameter) {
+    return Condition<T>(fieldSV, " >= ? ");
+  }
 protected:
   constexpr std::string_view getFieldName() const { return fieldSV; }
   constexpr uint64_t getFieldOffset() const { return offset; }
@@ -178,6 +224,11 @@ private:
     return ret;
   }
 
+  std::vector<T> getVector() const;
+  DBResultPtr getResult() const { return result; }
+  template <typename... Args> Query &exec(Args &&...arg) {
+    result = DatabaseOperation::instance()->Exec(toSql(), std::forward(arg)...);
+  }
 
 private:
   std::string selectTableName;
@@ -186,9 +237,23 @@ private:
   int mskip;
   int mlimit;
   std::string op;
+  DBResultPtr result;
+
+private:
+  T ToEntity() {
+    T temp{};
+    assert(reflect::size<T>() == result->getCols());
+    reflect::for_each(
+        [&temp, this](auto I) { result->setByCol(reflect::get<I>(temp), I); },
+        temp);
+  };
 };
 }; // namespace Blog
 
-#define FIELD(CLS,MEMBER) ::Blog::Field<CLS,decltype(((CLS*)0)->MEMBER)>::GetField( offsetof(CLS,MEMBER))
+#define PARAM ::Blog::FieldParameter{}
+
+#define FIELD(CLS, MEMBER)                                                     \
+  ::Blog::Field<CLS, decltype(((CLS *)0)->MEMBER)>::GetField(                  \
+      offsetof(CLS, MEMBER))
 
 #endif
