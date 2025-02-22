@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -59,11 +60,41 @@ private:
   std::string _expr;
 };
 
-struct FieldParameter{};
+struct FieldParameter {};
+
+// 判断类型T是否为tuple
+template <typename T> struct is_tuple : std::false_type {};
+
+template <typename... Ts>
+struct is_tuple<std::tuple<Ts...>> : std::true_type {};
+
+// 合并两个tuple类型的辅助结构体
+template <typename TA, typename TB> struct merge_tuples;
+
+// 当TA和TB都是tuple时
+template <typename... Ts1, typename... Ts2>
+struct merge_tuples<std::tuple<Ts1...>, std::tuple<Ts2...>> {
+  using type = std::tuple<Ts1..., Ts2...>;
+};
+
+// 当TA是非tuple类型，TB是tuple时
+template <typename T, typename... Ts>
+struct merge_tuples<T, std::tuple<Ts...>> {
+  using type = std::tuple<T, Ts...>;
+};
+
+// 当TA和TB都是非tuple类型
+template <typename T1, typename T2> struct merge_tuples {
+  using type = std::tuple<T1, T2>;
+};
 
 template <typename T, typename U> class Field {
-public:
-  struct Value{};
+private:
+  constexpr void conditionStaticAssert() {
+    static_assert(!is_tuple<T>::value || !is_tuple<U>::value,
+                  "Cannot use Field select as a condition.");
+  }
+
 public:
   static constexpr Field<T, U> GetField(uint64_t fieldOffset) {
     T tmp;
@@ -80,70 +111,106 @@ public:
     return Field<T, U>(str, fieldOffset);
   }
 
+  template <typename RT, typename RU>
+  constexpr auto operator-(const Field<RT, RU> &fr) {
+    using TupleRet = merge_tuples<U, RU>::type;
+    std::string _TA = fieldSV;
+    std::string _TB = fr.getFieldName();
+    if constexpr (!std::is_same_v<RT, T>) {
+      if constexpr (!is_tuple<T>::value) {
+        _TA = std::string(reflect::type_name<T>()) + "." + _TA;
+      }
+      if constexpr (!is_tuple<RT>::value) {
+        _TB = std::string(reflect::type_name<RT>()) + "." + _TB;
+      }
+      return Field<merge_tuples<T, RT>, TupleRet>(_TA + "," + _TB);
+    } else {
+      return Field<T, TupleRet>(_TA + "," + _TB);
+    }
+  }
+
+  constexpr std::string toFieldSelect() const { return fieldSV; }
+
   constexpr Condition<T> operator==(std::nullptr_t) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " NOT ", "NULL");
   }
 
   constexpr Condition<T> operator!=(std::nullptr_t) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " IS NOT ", "NULL");
   }
 
   constexpr Condition<T> operator==(U &&val) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " = ", std::forward<U>(val));
   }
 
   constexpr Condition<T> operator!=(U &&val) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " != ", std::forward<U>(val));
   }
 
   constexpr Condition<T> operator<(U &&val) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " < ", std::forward<U>(val));
   }
 
   constexpr Condition<T> operator<=(U &&val) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " <= ", std::forward<U>(val));
   }
 
   constexpr Condition<T> operator>(U &&val) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " > ", std::forward<U>(val));
   }
 
   constexpr Condition<T> operator>=(U &&val) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " >= ", std::forward<U>(val));
   }
 
   constexpr Condition<T> operator==(FieldParameter) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " = ? ");
   }
 
   constexpr Condition<T> operator!=(FieldParameter) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " != ? ");
   }
 
   constexpr Condition<T> operator<(FieldParameter) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " < ?");
   }
 
   constexpr Condition<T> operator<=(FieldParameter) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " <= ? ");
   }
 
   constexpr Condition<T> operator>(FieldParameter) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " > ? ");
   }
 
   constexpr Condition<T> operator>=(FieldParameter) {
+    conditionStaticAssert();
     return Condition<T>(fieldSV, " >= ? ");
   }
-protected:
-  constexpr std::string_view getFieldName() const { return fieldSV; }
+
+  constexpr const std::string &getFieldName() const { return fieldSV; }
   constexpr uint64_t getFieldOffset() const { return offset; }
+
   constexpr Field(const std::string &view, uint64_t off)
       : fieldSV(view), offset(off) {}
+  constexpr Field(const std::string &view) : fieldSV(view), offset(0) {}
 
-private:
-  std::string fieldSV;
-  uint64_t offset;
+protected:
+  const std::string fieldSV;
+  const uint64_t offset;
 };
 
 template <typename T> class Query {
@@ -152,15 +219,30 @@ public:
       : selectTableName(table), whereStr(""), mskip(0), mlimit(0) {}
 
   constexpr Query &Select() {
-    op = " SELECT * FROM " + selectTableName;
+    op = " SELECT * FROM ";
     return *this;
   }
 
-  constexpr Query &Delete() { op = " DELETE FROM " + selectTableName; }
+  // Use field return type as query type
+  template <class FT> constexpr Query(const Field<FT, T> &queryField) {
+    op = "SELECT " + queryField.toFieldSelect() + " FROM ";
+  }
+
+  constexpr Query &From(const std::string &table) {
+    static_assert(is_tuple<T>::value || std::is_integral_v<T> ||
+                      std::is_floating_point_v<T> ||
+                      std::is_convertible_v<T, std::string>,
+                  "Only for queries select specific cols can call this.");
+    selectTableName = table;
+    return *this;
+  }
+
+  constexpr Query &Delete() { op = " DELETE FROM "; }
 
   constexpr Query &Insert(const T &cls) {
-    op = " INSERT INTO " + getClsDefineList() + " VALUES ";
-    op += getClsValueList(cls);
+    op = " INSERT INTO ";
+    selectTableName = getClsDefineList();
+    insertValues = " VALUES " + getClsValueList(cls);
     return *this;
   }
 
@@ -181,7 +263,14 @@ public:
   constexpr Query &limit(int s) { mlimit = s; }
 
   constexpr std::string toSql() const {
-    std::string ret = op + " WHERE " + whereStr;
+    std::string ret = op;
+    ret += selectTableName;
+    if (!insertValues.empty()) {
+      ret += insertValues;
+    }
+    if (!whereStr.empty()) {
+      ret += " WHERE " + whereStr;
+    }
     if (!order.empty()) {
       ret += " " + order;
     }
@@ -199,12 +288,15 @@ private:
   constexpr std::string getClsDefineList() {
     std::string ret = "(";
     int idx = 0;
-    reflect::for_each([&idx, &ret](int i) {
-      if (idx != 0) {
-        ret = ret + ",";
-      }
-      ret = ret + reflect::member_name<i, T>();
-    });
+    T t;
+    reflect::for_each(
+        [&idx, &ret](int i) {
+          if (idx != 0) {
+            ret = ret + ",";
+          }
+          ret = ret + reflect::member_name<i, T>();
+        },
+        t);
     ret += ") ";
     return ret;
   }
@@ -232,6 +324,7 @@ private:
 
 private:
   std::string selectTableName;
+  std::string insertValues;
   std::string whereStr;
   std::string order;
   int mskip;
@@ -241,16 +334,32 @@ private:
 
 private:
   T ToEntity() {
-    T temp{};
-    assert(reflect::size<T>() == result->getCols());
-    reflect::for_each(
-        [&temp, this](auto I) { result->setByCol(reflect::get<I>(temp), I); },
-        temp);
+    if constexpr (is_tuple<T>::value) {
+      T temp{};
+      constexpr auto size = std::tuple_size_v<T>;
+      for (int i = 0; i < size; ++i) {
+        result->setByCol(std::get<i>(temp), i);
+      }
+      return temp;
+    } else if (std::is_integral_v<T> || std::is_floating_point_v<T> ||
+               std::is_convertible_v<T, std::string>) {
+      T t;
+      result->setByCol(t, 0);
+      return t;
+    } else {
+      T temp{};
+      assert(reflect::size<T>() == result->getCols());
+      reflect::for_each(
+          [&temp, this](auto I) { result->setByCol(reflect::get<I>(temp), I); },
+          temp);
+      return temp;
+    }
   };
 };
 }; // namespace Blog
 
-#define PARAM ::Blog::FieldParameter{}
+#define PARAM                                                                  \
+  ::Blog::FieldParameter {}
 
 #define FIELD(CLS, MEMBER)                                                     \
   ::Blog::Field<CLS, decltype(((CLS *)0)->MEMBER)>::GetField(                  \
