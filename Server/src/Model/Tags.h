@@ -7,6 +7,7 @@ class Tag{
 public:
 uint64_t id;
 std::string name;
+ENTITY_TABLE(Tags)
 };
 
 }

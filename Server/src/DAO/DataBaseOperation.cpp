@@ -81,10 +81,7 @@ public:
 
 	void makeConThreadLocal() {
 		if (_db != nullptr)return;
-		int flag = 0;
-#ifdef SQL_SINGLE_CONNECTION 
-		flag |= SQLITE_OPEN_SHAREDCACHE;
-#endif // SQL_SINGLE_CONNECTION 
+		int flag = SQLITE_OPEN_READWRITE;
 		std::lock_guard<std::mutex> guard(mLock);
 		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &_db, flag, nullptr), {
 		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(_db));
@@ -104,12 +101,12 @@ public:
 
 	DBResultPtr exec(sqlite3_stmt* stmt){
 		int columnCount = sqlite3_column_count(stmt);
-		std::vector<DataType> dtp;
-		for (auto i = 0; i < columnCount; ++i) {
-			auto type = sqlite3_column_type(stmt, i);
-			dtp.push_back(toBlogType(type));
+		//For insert/delete/udate
+		if(columnCount == 0){
+			sqlite3_step(stmt);
+			return 0;
 		}
-		return std::make_shared<DBResult>(stmt, dtp);
+		return std::make_shared<DBResult>(stmt,columnCount);
 	}
 
 	sqlite3_stmt* prepare(const std::string& sql){
@@ -117,7 +114,7 @@ public:
 		sqlite3_stmt* stmt = 0;
 		const char* unknownSql = 0;
 		SQL_CHECK(sqlite3_prepare_v2(conn, sql.c_str(), sql.size(), &stmt, &unknownSql), {
-			Logger::instance()->log(lvl::err,"SQL error, sql: \"{}\",error part: \"{\"}, reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
+			Logger::instance()->log(lvl::err,"SQL error, sql: \"{}\",error part: \"{}\", reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
 			return 0;
 			});
 		return stmt;
@@ -135,12 +132,7 @@ public:
 			sqlite3_bind_text(stmt, i+1, strs[i].c_str(), -1, SQLITE_STATIC);
 		}
 		int columnCount = sqlite3_column_count(stmt);
-		std::vector<DataType> dtp;
-		for (auto i = 0; i < columnCount; ++i) {
-			auto type = sqlite3_column_type(stmt, i);
-			dtp.push_back(toBlogType(type));
-		}
-		return std::make_shared<DBResult>(stmt, dtp);
+		return std::make_shared<DBResult>(stmt, columnCount);
 	}
 
 	static int getInteger(sqlite3_stmt* stmt, uint32 col, DataType type) {
@@ -229,19 +221,12 @@ void Blog::DatabaseOperation::LoadDB(const std::string& databaseName)
 {
 	//Try to link sqlite and store info.
 	sqlite3* dbConn = 0;
-	int flag = 0;
-#ifdef SQL_MAKE_NEW
-	flag |= SQLITE_OPEN_CREATE;
-#endif
-
-#ifdef SQL_SINGLE_CONNECTION 
-	flag |= SQLITE_OPEN_SHAREDCACHE;
-#endif // SQL_SINGLE_CONNECTION 
+	int flag = SQLITE_OPEN_READWRITE;
 
 	SQL_CHECK(sqlite3_open_v2(databaseName.c_str(), &dbConn, flag, nullptr), {
 		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",databaseName, sqlite3_errmsg(dbConn));
 		});
-
+	dp->dbPath = databaseName;
 	SQL_CHECK(sqlite3_close_v2(dbConn), {
 		Logger::instance()->log(MODULE_NAME,lvl::err,"Try close database failed. reason \"{}\"", sqlite3_errmsg(dbConn));
 	});
@@ -271,25 +256,25 @@ DBResultPtr Blog::DatabaseOperation::Exec(const std::string& sqlFmt, const std::
 const char* Blog::DBResult::getString(uint32_t col) const
 {
 	innerCheck(col);
-	return (const char*)DatabaseOperationPrivate::getString((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+	return (const char*)DatabaseOperationPrivate::getString((sqlite3_stmt*)mData, col, getType(col));
 }
 
 int Blog::DBResult::getInteger(uint32_t col) const
 {
 	innerCheck(col);
-	return DatabaseOperationPrivate::getInteger((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+	return DatabaseOperationPrivate::getInteger((sqlite3_stmt*)mData, col, getType(col));
 }
 
 int64_t Blog::DBResult::getInteger64(uint32_t col) const
 {
 	innerCheck(col);
-	return DatabaseOperationPrivate::getInteger64((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+	return DatabaseOperationPrivate::getInteger64((sqlite3_stmt*)mData, col, getType(col));
 }
 
 double Blog::DBResult::getFloat(uint32_t col) const
 {
 	innerCheck(col);
-	return DatabaseOperationPrivate::getFloat((sqlite3_stmt*)mData, col, this->mResultTypeByCol[col]);
+	return DatabaseOperationPrivate::getFloat((sqlite3_stmt*)mData, col, getType(col));
 }
 
 bool Blog::DBResult::step()
@@ -300,6 +285,9 @@ bool Blog::DBResult::step()
 Blog::DBResult::~DBResult()
 {
 	sqlite3_finalize((sqlite3_stmt*)this->mData);
+}
+DataType Blog::DBResult::getType(int col)const{
+	return toBlogType(sqlite3_column_type((sqlite3_stmt*)mData, col));
 }
 
 void Blog::DBResult::innerCheck(uint32_t col) const

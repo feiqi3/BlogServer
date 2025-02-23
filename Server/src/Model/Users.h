@@ -9,6 +9,7 @@ uint64_t id;
 std::string username;
 std::string email;
 std::string password_hash;
+ENTITY_TABLE(Users)
 };
 
 }

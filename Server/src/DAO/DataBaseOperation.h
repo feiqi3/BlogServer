@@ -56,7 +56,9 @@ concept IsStringLike = std::is_convertible_v<T, std::string>;
 		void bindArgs(void* stmt,Args&&...arg){
 			bind(stmt,1,std::forward(arg)...);
 		};
-
+		void bindArgs(void* stmt){
+			(void)(stmt);
+		};
 		template<typename... Args,typename T>
 		void bind(void* stmt,int i,T&& t,Args&&...arg){
 			bind(stmt,i,t);
@@ -68,13 +70,12 @@ concept IsStringLike = std::is_convertible_v<T, std::string>;
 		void bind(void* stmt,int i,int64_t v);
 		void bind(void* stmt,int i,double v);
 		void bind(void* stmt,int i,const std::string& v);
-
 		DatabaseOperationPrivate* dp = nullptr;
 	};
 
 	class DBResult {
 	public:
-		DBResult(void* data, std::vector<DataType> datatypes):mData(data),mResultTypeByCol(datatypes),cols(datatypes.size()) {}
+		DBResult(void* data,int cols):mData(data),cols(cols) {}
 
 		uint32_t getCols()const { return cols; }
 		//the returned ptr will be invalid after step()
@@ -82,10 +83,6 @@ concept IsStringLike = std::is_convertible_v<T, std::string>;
 		int getInteger(uint32_t col)const;
 		int64_t getInteger64(uint32_t col)const;
 		double getFloat(uint32_t col)const;
-		DataType getType(uint32_t col)const {
-			innerCheck(col);
-			return mResultTypeByCol[col];
-		}
 		bool step();
 		~DBResult();
 
@@ -105,9 +102,9 @@ concept IsStringLike = std::is_convertible_v<T, std::string>;
 			t = getString(col);
 		}
 	private:
+		DataType getType(int col)const;
 		void innerCheck(uint32_t col)const;
 		void* mData;
-		std::vector<DataType> mResultTypeByCol;
 		int cols = 0;
 	};
 

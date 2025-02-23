@@ -15,5 +15,8 @@ public:
   uint64_t created_at;
   uint64_t updated_at;
   uint64_t view_times;
+  
+ ENTITY_TABLE(Posts);
+
 };
 } // namespace Blog::Model

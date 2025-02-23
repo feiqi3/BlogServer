@@ -215,17 +215,27 @@ protected:
 
 template <typename T> class Query {
 public:
-  constexpr Query(const std::string &table)
-      : selectTableName(table), whereStr(""), mskip(0), mlimit(0) {}
+  constexpr Query()
+      : selectTableName(), whereStr(""), mskip(0), mlimit(0) {}
 
   constexpr Query &Select() {
     op = " SELECT * FROM ";
+    selectTableName =std::string( getTableName());
     return *this;
   }
 
   // Use field return type as query type
   template <class FT> constexpr Query(const Field<FT, T> &queryField) {
     op = "SELECT " + queryField.toFieldSelect() + " FROM ";
+  }
+
+  constexpr auto getTableName() {
+    static_assert(!(is_tuple<T>::value || std::is_integral_v<T> ||
+                      std::is_floating_point_v<T> ||
+                      std::is_convertible_v<T, std::string>),
+                  "Only for queries Entity can call this.");
+    
+    return (reflect::type_name<typename T::_ENTITY_TABLE_NAME::type>());
   }
 
   constexpr Query &From(const std::string &table) {
@@ -237,11 +247,11 @@ public:
     return *this;
   }
 
-  constexpr Query &Delete() { op = " DELETE FROM "; }
+  constexpr Query &Delete() { op = " DELETE FROM "; selectTableName = getTableName();}
 
   constexpr Query &Insert(const T &cls) {
     op = " INSERT INTO ";
-    selectTableName = getClsDefineList();
+    selectTableName = std::string(getTableName()) + getClsDefineList();
     insertValues = " VALUES " + getClsValueList(cls);
     return *this;
   }
@@ -274,7 +284,23 @@ public:
     if (!order.empty()) {
       ret += " " + order;
     }
+    ret += ";";
     return ret;
+  }
+
+public:
+  std::vector<T> getVector() const {
+    std::vector<T> ret;
+    while (result->step()) {
+      ret.push_back(ToEntity());
+    }
+    return ret;
+  }
+  DBResultPtr getResult() const { return result; }
+
+  template <typename... Args> Query &exec(Args &&...arg) {
+    result = DatabaseOperation::instance()->Exec(toSql(), std::forward(arg)...);
+    return *this;
   }
 
 private:
@@ -287,12 +313,11 @@ private:
 
   constexpr std::string getClsDefineList() {
     std::string ret = "(";
-    int idx = 0;
     T t;
     reflect::for_each(
-        [&idx, &ret](auto i) {
-          if (idx != 0) {
-            ret = ret + ",";
+        [&ret](auto i) {
+          if (i != 0) {
+            ret = ret + " , ";
           }
           ret = ret + std::string(reflect::member_name<i, T>());
         },
@@ -304,22 +329,17 @@ private:
   constexpr std::string getClsValueList(const T &t) {
     std::string ret = "";
     ret += "(";
-    int idx = 0;
-    reflect::for_each([&idx, &ret, &t](auto i) {
-      if (idx != 0) {
-        ret = ret + ",";
-      }
-      auto val = reflect::get<i>(t);
-      ret += to_string(val);
-    },t);
+    reflect::for_each(
+        [&ret, &t](auto i) {
+          if (i != 0) {
+            ret = ret + ",";
+          }
+          auto val = reflect::get<i>(t);
+          ret += to_string(val);
+        },
+        t);
     ret += ") ";
     return ret;
-  }
-
-  std::vector<T> getVector() const;
-  DBResultPtr getResult() const { return result; }
-  template <typename... Args> Query &exec(Args &&...arg) {
-    result = DatabaseOperation::instance()->Exec(toSql(), std::forward(arg)...);
   }
 
 private:
@@ -333,7 +353,7 @@ private:
   DBResultPtr result;
 
 private:
-  T ToEntity() {
+  T ToEntity() const{
     if constexpr (is_tuple<T>::value) {
       T temp{};
       constexpr auto size = std::tuple_size_v<T>;
@@ -341,8 +361,8 @@ private:
         result->setByCol(std::get<i>(temp), i);
       }
       return temp;
-    } else if (std::is_integral_v<T> || std::is_floating_point_v<T> ||
-               std::is_convertible_v<T, std::string>) {
+    } else if constexpr(std::is_integral_v<T> || std::is_floating_point_v<T> ||
+               std::is_convertible_v<std::remove_cv_t<T>, std::string>) {
       T t;
       result->setByCol(t, 0);
       return t;
@@ -364,5 +384,8 @@ private:
 #define FIELD(CLS, MEMBER)                                                     \
   ::Blog::Field<CLS, decltype(((CLS *)0)->MEMBER)>::GetField(                  \
       offsetof(CLS, MEMBER))
+
+#define ENTITY_TABLE(TB_NAME) struct _ENTITY_TABLE_NAME {struct TB_NAME{}; using type =typename _ENTITY_TABLE_NAME::TB_NAME;};
+
 
 #endif
