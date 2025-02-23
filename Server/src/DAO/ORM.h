@@ -260,7 +260,7 @@ public:
     static_assert(!(is_tuple<T>::value || std::is_integral_v<T> ||
                     std::is_floating_point_v<T> ||
                     std::is_convertible_v<T, std::string>),
-                  "Only for queries Entity can call this.");
+                  "This function can only be called for queries that are for Entity rather than multi cols or specific col.");
 
     return (reflect::type_name<typename T::_ENTITY_TABLE_NAME::type>());
   }
@@ -269,7 +269,7 @@ public:
     static_assert(is_tuple<T>::value || std::is_integral_v<T> ||
                       std::is_floating_point_v<T> ||
                       std::is_convertible_v<T, std::string>,
-                  "Only for queries select specific cols can call this.");
+                  "This function can only be called for queries that select multi cols or specific col. Like \"Select user,id from Users\", not \"Select * from Users\"");
     selectTableName = table;
     return *this;
   }
@@ -294,7 +294,16 @@ public:
     return *this;
   }
 
-  constexpr Query &Where(const Condition<T> &whereCondition) {
+  template<class U>
+  constexpr Query &Where(const Condition<U> &whereCondition) {
+    //if is multi-col select condition, no check here
+    if constexpr(is_tuple<T>::value || std::is_integral_v<T> ||
+      std::is_floating_point_v<T> ||
+      std::is_convertible_v<T, std::string>){
+    }else{
+      //if this is a Entity query, do check Entity type.
+      static_assert(std::is_same_v<T, U>,"Field must from the same table as query.");
+    }
     whereStr = whereCondition.toStr();
     return *this;
   }
