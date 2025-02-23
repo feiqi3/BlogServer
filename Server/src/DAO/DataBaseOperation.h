@@ -1,12 +1,13 @@
 #ifndef DATABASEOPERATION_H
 #define DATABASEOPERATION_H
+#include "FException.h"
+#include "Utils/Singleton.h"
 #include <cstddef>
+#include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-#include <memory>
-#include "FException.h"
-#include "Utils/Singleton.h"
 
 class DatabaseOperationPrivate;
 namespace Blog {
@@ -19,95 +20,91 @@ concept IsFloat = std::is_floating_point_v<T>;
 template <typename T>
 concept IsStringLike = std::is_convertible_v<T, std::string>;
 
-	class DatabaseExcceptionColOutofRange : public ::Fei::FException {
-		public:
-			virtual std::string reason()const override{ return "Column out of range!"; }
-	};
+class DatabaseExcceptionColOutofRange : public ::Fei::FException {
+public:
+  virtual std::string reason() const override { return "Column out of range!"; }
+};
 
-	enum class DataType {
-		_NULL,
-		_INT,
-		_FLOAT,
-		_TEXT,
-		_BLOB,
-	};
-	class DBResult;
-	using DBResultPtr = std::shared_ptr<DBResult>;
-	class DatabaseOperation : public Singleton<DatabaseOperation> {
-	public:
-		DatabaseOperation();
-		~DatabaseOperation();
-		void LoadDB(const std::string& databaseName);
-		DBResultPtr Exec(const std::string& sql)const;
-		DBResultPtr Exec(const std::string& sqlFmt,const std::vector<std::string>& userInParameter)const;
+enum class DataType {
+  _NULL,
+  _INT,
+  _FLOAT,
+  _TEXT,
+  _BLOB,
+};
+class DBResult;
+using DBResultPtr = std::shared_ptr<DBResult>;
+class DatabaseOperation : public Singleton<DatabaseOperation> {
+public:
+  DatabaseOperation();
+  ~DatabaseOperation();
+  void LoadDB(const std::string &databaseName);
+  DBResultPtr Exec(const std::string &sql) const;
+  DBResultPtr Exec(const std::string &sqlFmt,
+                   const std::vector<std::string> &userInParameter) const;
 
-		template<typename... Args>
-		DBResultPtr Exec(const std::string& sqlFmt,Args&&...arg){
-			auto stmt = stmtPrepare(sqlFmt);
-			bindArgs(stmt, std::forward(arg)...);
-			return exec(stmt);
-		};
+  template <typename... Args>
+  DBResultPtr Exec(const std::string &sqlFmt, Args &&...arg) {
+    auto stmt = stmtPrepare(sqlFmt);
+    bindArgs(stmt, std::forward<Args>(arg)...);
+    return exec(stmt);
+  };
 
-	private:
-		void* stmtPrepare(const std::string& sql);
-		DBResultPtr exec(void* stmt);
+private:
+  void *stmtPrepare(const std::string &sql);
+  DBResultPtr exec(void *stmt);
 
-		template<typename... Args>
-		void bindArgs(void* stmt,Args&&...arg){
-			bind(stmt,1,std::forward(arg)...);
-		};
-		void bindArgs(void* stmt){
-			(void)(stmt);
-		};
-		template<typename... Args,typename T>
-		void bind(void* stmt,int i,T&& t,Args&&...arg){
-			bind(stmt,i,t);
-			bind(stmt,i+ 1,std::forward(arg)...);
-		};
-		void bind(void*){}
-		void bind(void* stmt,int i,std::nullptr_t nullable);
-		void bind(void* stmt,int i,int v);
-		void bind(void* stmt,int i,int64_t v);
-		void bind(void* stmt,int i,double v);
-		void bind(void* stmt,int i,const std::string& v);
-		DatabaseOperationPrivate* dp = nullptr;
-	};
+  template <typename... Args> void bindArgs(void *stmt, Args &&...arg) {
+    _bind(stmt, 1, std::forward<Args>(arg)...);
+  };
+  void bindArgs(void *stmt) { (void)(stmt); };
+  template <typename... Args, typename T>
+  void _bind(void *stmt, int i, T &&t, Args &&...arg) {
+    bind(stmt, i, t);
+  
+	_bind(stmt, i + 1, std::forward<Args>(arg)...);
+  };
+  void _bind(void *) { return; }
+  void _bind(void *, int) { return; }
 
-	class DBResult {
-	public:
-		DBResult(void* data,int cols):mData(data),cols(cols) {}
+  void bind(void *stmt, int i, std::nullptr_t nullable);
+  void bind(void *stmt, int i, int v);
+  void bind(void *stmt, int i, int64_t v);
+  void bind(void *stmt, int i, double v);
+  void bind(void *stmt, int i, const std::string &v);
+  void bind(void *stmt, int i, const char*v){
+	bind(stmt,i,std::string(v,strlen(v)));
+  }
+  DatabaseOperationPrivate *dp = nullptr;
+};
 
-		uint32_t getCols()const { return cols; }
-		//the returned ptr will be invalid after step()
-		const char* getString(uint32_t col)const;
-		int getInteger(uint32_t col)const;
-		int64_t getInteger64(uint32_t col)const;
-		double getFloat(uint32_t col)const;
-		bool step();
-		~DBResult();
+class DBResult {
+public:
+  DBResult(void *data, int cols) : mData(data), cols(cols) {}
 
-	public:
-		template<IsInteger T>
-		void setByCol(T& t,int col){
-			t = getInteger(col);
-		}
+  uint32_t getCols() const { return cols; }
+  // the returned ptr will be invalid after step()
+  const char *getString(uint32_t col) const;
+  int getInteger(uint32_t col) const;
+  int64_t getInteger64(uint32_t col) const;
+  double getFloat(uint32_t col) const;
+  bool step();
+  ~DBResult();
 
-		template<IsFloat T>
-		void setByCol(T& t,int col){
-			t = getFloat(col);
-		}
+public:
+  template <IsInteger T> void setByCol(T &t, int col) { t = getInteger(col); }
 
-		template<IsStringLike T>
-		void setByCol(T& t,int col){
-			t = getString(col);
-		}
-	private:
-		DataType getType(int col)const;
-		void innerCheck(uint32_t col)const;
-		void* mData;
-		int cols = 0;
-	};
+  template <IsFloat T> void setByCol(T &t, int col) { t = getFloat(col); }
 
-	std::string safeStr(const std::string& in);
-}
+  template <IsStringLike T> void setByCol(T &t, int col) { t = getString(col); }
+
+private:
+  DataType getType(int col) const;
+  void innerCheck(uint32_t col) const;
+  void *mData;
+  int cols = 0;
+};
+
+std::string safeStr(const std::string &in);
+} // namespace Blog
 #endif

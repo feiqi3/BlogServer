@@ -365,7 +365,7 @@ public:
   DBResultPtr getResult() const { return result; }
 
   template <typename... Args> Query &exec(Args &&...arg) {
-    result = DatabaseOperation::instance()->Exec(toSql(), std::forward(arg)...);
+    result = DatabaseOperation::instance()->Exec(toSql(), std::forward<Args>(arg)...);
     return *this;
   }
 
