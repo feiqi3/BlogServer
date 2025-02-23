@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -22,7 +23,9 @@ concept NotStringLike = !std::is_convertible_v<T, std::string_view>;
 
 template <typename T> class Condition {
 public:
-  template <StringLike U>
+struct WithoutBracket{};
+
+template <StringLike U>
   constexpr Condition(const std::string &field, const std::string &op,
                       U &&val) {
     _expr = field + op + safeStr(std::string(val));
@@ -35,6 +38,10 @@ public:
 
   constexpr Condition(const std::string &field, const std::string &op) {
     _expr = field + op;
+  }
+
+  constexpr Condition(Condition<T> a, Condition<T> b, const std::string &op,WithoutBracket) {
+    _expr =  a.toStr() + op + b.toStr() ;
   }
 
   constexpr Condition(Condition<T> a, Condition<T> b, const std::string &op) {
@@ -52,7 +59,7 @@ public:
   }
 
   Condition<T> operator-(const Condition<T> & rhs) {
-    return Condition(*this, rhs, " , ");
+    return Condition(*this, rhs, " , ",WithoutBracket{});
   }
 
   Condition<T> operator||(Condition<T> rhs) {
@@ -65,6 +72,17 @@ private:
 };
 
 struct FieldParameter {};
+
+template <typename Tuple, typename Func, std::size_t... Indices>
+void for_each_with_index_impl(Tuple& t, Func&& f, std::index_sequence<Indices...>) {
+    // 使用折叠表达式，将每个元素的索引传递给lambda
+    (std::forward<Func>(f)(std::get<Indices>(t), Indices), ...);
+}
+
+template <typename... Ts, typename Func>
+void for_each_with_index(std::tuple<Ts...>& t, Func&& f) {
+    for_each_with_index_impl(t, std::forward<Func>(f), std::index_sequence_for<Ts...>{});
+}
 
 // 判断类型T是否为tuple
 template <typename T> struct is_tuple : std::false_type {};
@@ -387,19 +405,19 @@ private:
   std::string whereStr;
   std::string order;
   std::string set;
-  int mskip;
-  int mlimit;
+  int mskip = 0;
+  int mlimit = 0;
   std::string op;
   DBResultPtr result;
 
 private:
   T ToEntity() const {
     if constexpr (is_tuple<T>::value) {
-      T temp{};
-      constexpr auto size = std::tuple_size_v<T>;
-      for (int i = 0; i < size; ++i) {
-        result->setByCol(std::get<i>(temp), i);
-      }
+      T temp;
+      for_each_with_index(temp,[this](auto& element,auto idx){
+        result->setByCol(element, idx);
+      });
+      
       return temp;
     } else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T> ||
                          std::is_convertible_v<std::remove_cv_t<T>,
