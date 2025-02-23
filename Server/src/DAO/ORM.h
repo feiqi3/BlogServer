@@ -51,10 +51,14 @@ public:
     return Condition(*this, rhs, " AND ");
   }
 
+  Condition<T> operator-(const Condition<T> & rhs) {
+    return Condition(*this, rhs, " , ");
+  }
+
   Condition<T> operator||(Condition<T> rhs) {
     return Condition(*this, rhs, " OR ");
   }
-  std::string toStr() { return _expr; }
+  std::string toStr()const { return _expr; }
 
 private:
   std::string _expr;
@@ -130,6 +134,12 @@ public:
   }
 
   constexpr std::string toFieldSelect() const { return fieldSV; }
+
+  constexpr Condition<T> operator=(U &&val) { return (*this) == std::forward<U>(val); }
+
+  constexpr Condition<T> operator=(std::nullptr_t) {
+    return (*this) == nullptr;
+  }
 
   constexpr Condition<T> operator==(std::nullptr_t) {
     conditionStaticAssert();
@@ -215,12 +225,11 @@ protected:
 
 template <typename T> class Query {
 public:
-  constexpr Query()
-      : selectTableName(), whereStr(""), mskip(0), mlimit(0) {}
+  constexpr Query() : selectTableName(), whereStr(""), mskip(0), mlimit(0) {}
 
   constexpr Query &Select() {
     op = " SELECT * FROM ";
-    selectTableName =std::string( getTableName());
+    selectTableName = std::string(getTableName());
     return *this;
   }
 
@@ -231,10 +240,10 @@ public:
 
   constexpr auto getTableName() {
     static_assert(!(is_tuple<T>::value || std::is_integral_v<T> ||
-                      std::is_floating_point_v<T> ||
-                      std::is_convertible_v<T, std::string>),
+                    std::is_floating_point_v<T> ||
+                    std::is_convertible_v<T, std::string>),
                   "Only for queries Entity can call this.");
-    
+
     return (reflect::type_name<typename T::_ENTITY_TABLE_NAME::type>());
   }
 
@@ -247,7 +256,11 @@ public:
     return *this;
   }
 
-  constexpr Query &Delete() { op = " DELETE FROM "; selectTableName = getTableName();}
+  constexpr Query &Delete() {
+    op = " DELETE FROM ";
+    selectTableName = std::string(getTableName());
+    return*this;
+  }
 
   constexpr Query &Insert(const T &cls) {
     op = " INSERT INTO ";
@@ -256,25 +269,44 @@ public:
     return *this;
   }
 
-  constexpr Query &Where(Condition<T> whereCondition) {
+  constexpr Query &update(const Condition<T> &setVal) {
+    op = "  UPDATE ";
+    selectTableName = std::string(getTableName());
+    set = " SET " + setVal.toStr();
+    return *this;
+  }
+
+  constexpr Query &Where(const Condition<T> &whereCondition) {
     whereStr = whereCondition.toStr();
     return *this;
   }
   template <class U> constexpr Query &OrderBy(Field<T, U> field) {
     order = "ORDER BY " + field.getFieldName();
+    return *this;
   }
 
   template <class U> constexpr Query &OrderByDesc(Field<T, U> field) {
     order = "ORDER BY " + field.getFieldName() + " DESC ";
+    return *this;
   }
 
-  constexpr Query &skip(int s) { mskip = s; }
+  constexpr Query &skip(int s) {
+    mskip = s;
+    return *this;
+  }
 
-  constexpr Query &limit(int s) { mlimit = s; }
+  constexpr Query &limit(int s) {
+    mlimit = s;
+    return *this;
+  }
 
   constexpr std::string toSql() const {
     std::string ret = op;
     ret += selectTableName;
+    if (!set.empty()) {
+      ret += set;
+    }
+
     if (!insertValues.empty()) {
       ret += insertValues;
     }
@@ -283,6 +315,13 @@ public:
     }
     if (!order.empty()) {
       ret += " " + order;
+    }
+    if (mlimit > 0) {
+      ret += " LIMIT " + std::to_string(mlimit);
+    }
+
+    if (mskip  > 0) {
+      ret += " OFFSET " + std::to_string(mskip);
     }
     ret += ";";
     return ret;
@@ -347,13 +386,14 @@ private:
   std::string insertValues;
   std::string whereStr;
   std::string order;
+  std::string set;
   int mskip;
   int mlimit;
   std::string op;
   DBResultPtr result;
 
 private:
-  T ToEntity() const{
+  T ToEntity() const {
     if constexpr (is_tuple<T>::value) {
       T temp{};
       constexpr auto size = std::tuple_size_v<T>;
@@ -361,8 +401,9 @@ private:
         result->setByCol(std::get<i>(temp), i);
       }
       return temp;
-    } else if constexpr(std::is_integral_v<T> || std::is_floating_point_v<T> ||
-               std::is_convertible_v<std::remove_cv_t<T>, std::string>) {
+    } else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T> ||
+                         std::is_convertible_v<std::remove_cv_t<T>,
+                                               std::string>) {
       T t;
       result->setByCol(t, 0);
       return t;
@@ -385,7 +426,10 @@ private:
   ::Blog::Field<CLS, decltype(((CLS *)0)->MEMBER)>::GetField(                  \
       offsetof(CLS, MEMBER))
 
-#define ENTITY_TABLE(TB_NAME) struct _ENTITY_TABLE_NAME {struct TB_NAME{}; using type =typename _ENTITY_TABLE_NAME::TB_NAME;};
-
+#define ENTITY_TABLE(TB_NAME)                                                  \
+  struct _ENTITY_TABLE_NAME {                                                  \
+    struct TB_NAME {};                                                         \
+    using type = typename _ENTITY_TABLE_NAME::TB_NAME;                         \
+  };
 
 #endif
