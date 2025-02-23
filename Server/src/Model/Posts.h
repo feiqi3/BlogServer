@@ -1,13 +1,19 @@
 #pragma once
 #include "ModelDef.h"
+#include <cstdint>
 
-class Posts{
+namespace Blog::Model {
+class Post {
 public:
-	uint64_t postId;
-	std::string PostTitle;
-	std::string PostContent;
-	uint64_t createdAt;
-	uint64_t updatedAt;
-	uint64_t authorId;
-	int status;
+  uint64_t id;
+  uint64_t user_id;
+  std::string title;
+  std::string content;
+  std::string profile;
+  uint64_t category_id;
+  int status;
+  uint64_t created_at;
+  uint64_t updated_at;
+  uint64_t view_times;
 };
+} // namespace Blog::Model
