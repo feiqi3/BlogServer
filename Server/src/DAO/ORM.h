@@ -290,11 +290,11 @@ private:
     int idx = 0;
     T t;
     reflect::for_each(
-        [&idx, &ret](int i) {
+        [&idx, &ret](auto i) {
           if (idx != 0) {
             ret = ret + ",";
           }
-          ret = ret + reflect::member_name<i, T>();
+          ret = ret + std::string(reflect::member_name<i, T>());
         },
         t);
     ret += ") ";
@@ -305,13 +305,13 @@ private:
     std::string ret = "";
     ret += "(";
     int idx = 0;
-    reflect::for_each([&idx, &ret, &t](int i) {
+    reflect::for_each([&idx, &ret, &t](auto i) {
       if (idx != 0) {
         ret = ret + ",";
       }
       auto val = reflect::get<i>(t);
       ret += to_string(val);
-    });
+    },t);
     ret += ") ";
     return ret;
   }
