@@ -80,7 +80,7 @@ private:
 
 class DBResult {
 public:
-  DBResult(void *data, int cols) : mData(data), cols(cols) {}
+  DBResult(void *data, int cols);
 
   uint32_t getCols() const { return cols; }
   // the returned ptr will be invalid after step()
@@ -89,6 +89,7 @@ public:
   int64_t getInteger64(uint32_t col) const;
   double getFloat(uint32_t col) const;
   bool step();
+  bool excute();
   ~DBResult();
 
 public:
@@ -103,6 +104,7 @@ private:
   void innerCheck(uint32_t col) const;
   void *mData;
   int cols = 0;
+  char* errReason = 0;
 };
 
 std::string safeStr(const std::string &in);

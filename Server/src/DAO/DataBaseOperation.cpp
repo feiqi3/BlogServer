@@ -102,10 +102,6 @@ public:
 	DBResultPtr exec(sqlite3_stmt* stmt){
 		int columnCount = sqlite3_column_count(stmt);
 		//For insert/delete/udate
-		if(columnCount == 0){
-			sqlite3_step(stmt);
-			return 0;
-		}
 		return std::make_shared<DBResult>(stmt,columnCount);
 	}
 
@@ -251,6 +247,7 @@ DBResultPtr Blog::DatabaseOperation::Exec(const std::string& sqlFmt, const std::
 	return dp->execWithResult(sqlFmt, userInParameter.data(), userInParameter.size());
 }
 
+Blog::DBResult::DBResult(void *data, int cols) : mData(data), cols(cols) {}
 
 
 const char* Blog::DBResult::getString(uint32_t col) const
@@ -280,6 +277,15 @@ double Blog::DBResult::getFloat(uint32_t col) const
 bool Blog::DBResult::step()
 {
 	return sqlite3_step((sqlite3_stmt*)mData) == SQLITE_ROW;
+}
+
+bool Blog::DBResult::excute(){
+	auto ret = sqlite3_step((sqlite3_stmt*)mData);
+	if(ret == SQLITE_DONE){
+		return true;
+	}else{
+		return false;
+	}
 }
 
 Blog::DBResult::~DBResult()
