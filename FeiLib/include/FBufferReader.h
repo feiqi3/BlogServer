@@ -17,10 +17,7 @@ public:
   const Byte &operator[](uint32 pos) const;
   uint32 size() const { return end - beg; }
   bool isEOF()const;
-  void resetSize(uint32 size){
-    size = std::min(this->size(),size);
-    end = beg + size;
-  }
+  void resetSize(uint32 size);
 private:
   FBuffer *buffer;
   uint32 beg, end;

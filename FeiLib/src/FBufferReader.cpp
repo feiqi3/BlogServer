@@ -82,6 +82,12 @@ FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
       end(_end + buffer->readIdx) {}
 bool FBufferView::isEOF() const { return buffer->Get(beg) == '\0'; }
 
+void FBufferView::resetSize(uint32 size)
+{
+  size = std::min(this->size(), size);
+  end = beg + size;
+}
+
 const Byte &FBufferView::operator[](uint32 pos) const {
   assert(pos + beg < end);
   return buffer->GetDirect(beg + pos);
