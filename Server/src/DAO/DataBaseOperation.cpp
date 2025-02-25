@@ -199,6 +199,10 @@ void Blog::DatabaseOperation::bind(void* stmt,int i,const std::string& v){
 	auto _s = (sqlite3_stmt*) stmt;
 	sqlite3_bind_text(_s, i, v.c_str(),v.size(),SQLITE_TRANSIENT);
 }
+void Blog::DatabaseOperation::bind(void *stmt, int i, const char *v) {
+	auto _s = (sqlite3_stmt*) stmt;
+	sqlite3_bind_text(_s, i, v,-1,SQLITE_TRANSIENT);
+}
 
 Blog::DatabaseOperation::DatabaseOperation():dp(new DatabaseOperationPrivate)
 {

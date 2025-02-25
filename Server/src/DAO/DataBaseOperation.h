@@ -61,8 +61,8 @@ private:
   template <typename... Args, typename T>
   void _bind(void *stmt, int i, T &&t, Args &&...arg) {
     bind(stmt, i, t);
-  
-	_bind(stmt, i + 1, std::forward<Args>(arg)...);
+
+    _bind(stmt, i + 1, std::forward<Args>(arg)...);
   };
   void _bind(void *) { return; }
   void _bind(void *, int) { return; }
@@ -72,9 +72,10 @@ private:
   void bind(void *stmt, int i, int64_t v);
   void bind(void *stmt, int i, double v);
   void bind(void *stmt, int i, const std::string &v);
-  void bind(void *stmt, int i, const char*v){
-	bind(stmt,i,std::string(v,strlen(v)));
-  }
+  void bind(void *stmt, int i, const char *v);
+  void bind(void *stmt, int i, uint v) { bind(stmt, i, (int)v); }
+  void bind(void *stmt, int i, uint64_t v) { bind(stmt, i, (int64_t)v); }
+
   DatabaseOperationPrivate *dp = nullptr;
 };
 
@@ -104,7 +105,7 @@ private:
   void innerCheck(uint32_t col) const;
   void *mData;
   int cols = 0;
-  char* errReason = 0;
+  char *errReason = 0;
 };
 
 std::string safeStr(const std::string &in);

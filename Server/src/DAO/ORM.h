@@ -99,17 +99,22 @@ struct merge_tuples<std::tuple<Ts1...>, std::tuple<Ts2...>> {
   using type = std::tuple<Ts1..., Ts2...>;
 };
 
+// 当TA和TB都是非tuple类型
+template <typename T1, typename T2> struct merge_tuples {
+  using type = std::tuple<std::enable_if_t<!is_tuple<T1>::value,T1>, std::enable_if_t<!is_tuple<T2>::value,T2>>;
+};
+
 // 当TA是非tuple类型，TB是tuple时
 template <typename T, typename... Ts>
 struct merge_tuples<T, std::tuple<Ts...>> {
-  using type = std::tuple<T, Ts...>;
+  using type = std::tuple<std::enable_if_t<!is_tuple<T>::value,T>, Ts...>;
 };
 
-// 当TA和TB都是非tuple类型
-template <typename T1, typename T2> struct merge_tuples {
-  using type = std::tuple<T1, T2>;
+// 当TA是tuple类型，TB是非tuple时
+template <typename... Ts, typename T>
+struct merge_tuples<std::tuple<Ts...>,T> {
+  using type = std::tuple<Ts...,std::enable_if_t<!is_tuple<T>::value,T>>;
 };
-
 template <typename T, typename U> class Field {
 private:
   constexpr void conditionStaticAssert() {
@@ -335,12 +340,12 @@ public:
     whereStr = whereCondition.toStr();
     return *this;
   }
-  template <class U> constexpr Query &OrderBy(Field<T, U> field) {
+  template <class TU,class U> constexpr Query &OrderBy(Field<TU, U> field) {
     order = "ORDER BY " + field.getFieldName();
     return *this;
   }
 
-  template <class U> constexpr Query &OrderByDesc(Field<T, U> field) {
+  template <class TU,class U> constexpr Query &OrderByDesc(Field<TU, U> field) {
     order = "ORDER BY " + field.getFieldName() + " DESC ";
     return *this;
   }
