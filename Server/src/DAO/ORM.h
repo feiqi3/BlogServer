@@ -241,9 +241,37 @@ protected:
   const uint64_t offset;
 };
 
+class SelectCount {
+  public:
+    constexpr SelectCount(){}
+
+    template<class T, class U>
+    constexpr SelectCount(const Field<T,U>& field){
+      str = field.toFieldSelect();
+    }
+
+    template<class T, class U>
+    constexpr SelectCount(const Condition<T>& cond){
+      str = cond.toStr();
+    }
+
+    constexpr const std::string& toStr()const{
+      return str;
+    }
+    private:
+    std::string str = "*";
+  };
+
 template <typename T> class Query {
 public:
+
   constexpr Query() : selectTableName(), whereStr(""), mskip(0), mlimit(0) {}
+
+  constexpr Query &Select(const SelectCount& count) {
+      static_assert(std::is_integral_v<T>, "T must be int when query.");
+      op = " SELECT COUNT("+count.toStr()+ ") FROM ";
+      return *this;
+  }
 
   constexpr Query &Select() {
     op = " SELECT * FROM ";
