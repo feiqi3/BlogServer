@@ -370,6 +370,16 @@ public:
     return *this;
   }
 
+  constexpr Query& skip(FieldParameter) {
+      mskip = -1;
+      return *this;
+  }
+
+  constexpr Query& limit(FieldParameter) {
+      mlimit = -1;
+      return *this;
+  }
+
   constexpr std::string toSql() const {
     std::string ret = op;
     ret += selectTableName;
@@ -390,8 +400,15 @@ public:
       ret += " LIMIT " + std::to_string(mlimit);
     }
 
+    if (mlimit < 0) {
+        ret += " LIMIT ? ";
+    }
+
     if (mskip  > 0) {
       ret += " OFFSET " + std::to_string(mskip);
+    }
+    if (mskip < 0) {
+        ret += " OFFSET ? ";
     }
     ret += ";";
     return ret;
