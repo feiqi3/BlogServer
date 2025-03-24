@@ -34,6 +34,37 @@ enum class DataType {
 };
 class DBResult;
 using DBResultPtr = std::shared_ptr<DBResult>;
+
+class DBResult {
+public:
+    DBResult(void* data, int cols);
+
+    uint32_t getCols() const { return cols; }
+    // the returned ptr will be invalid after step()
+    const char* getString(uint32_t col) const;
+    int getInteger(uint32_t col) const;
+    int64_t getInteger64(uint32_t col) const;
+    double getFloat(uint32_t col) const;
+    bool step();
+    bool excute();
+    ~DBResult();
+
+public:
+    template <IsInteger T> void setByCol(T& t, int col) { t = getInteger(col); }
+
+    template <IsFloat T> void setByCol(T& t, int col) { t = getFloat(col); }
+
+    template <IsStringLike T> void setByCol(T& t, int col) { t = getString(col); }
+
+    friend class DatabaseOperation;
+private:
+    DataType getType(int col) const;
+    void innerCheck(uint32_t col) const;
+    void* mData;
+    int cols = 0;
+    char* errReason = 0;
+};
+
 class DatabaseOperation : public Singleton<DatabaseOperation> {
 public:
   DatabaseOperation();
@@ -92,36 +123,6 @@ private:
   void bind(void *stmt, int i, uint64_t v) { bind(stmt, i, (int64_t)v); }
 
   DatabaseOperationPrivate *dp = nullptr;
-};
-
-class DBResult {
-public:
-  DBResult(void *data, int cols);
-
-  uint32_t getCols() const { return cols; }
-  // the returned ptr will be invalid after step()
-  const char *getString(uint32_t col) const;
-  int getInteger(uint32_t col) const;
-  int64_t getInteger64(uint32_t col) const;
-  double getFloat(uint32_t col) const;
-  bool step();
-  bool excute();
-  ~DBResult();
-
-public:
-  template <IsInteger T> void setByCol(T &t, int col) { t = getInteger(col); }
-
-  template <IsFloat T> void setByCol(T &t, int col) { t = getFloat(col); }
-
-  template <IsStringLike T> void setByCol(T &t, int col) { t = getString(col); }
-
-  friend class DatabaseOperation;
-private:
-  DataType getType(int col) const;
-  void innerCheck(uint32_t col) const;
-  void *mData;
-  int cols = 0;
-  char *errReason = 0;
 };
 
 std::string safeStr(const std::string &in);
