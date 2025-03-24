@@ -237,6 +237,13 @@ DBResultPtr Blog::DatabaseOperation::exec(void* stmt){
 	return dp->exec(_s);
 }
 
+void Blog::DatabaseOperation::resetStmt(void* stmt)
+{
+	auto _s = (sqlite3_stmt*)stmt;
+	sqlite3_clear_bindings(_s);
+	sqlite3_reset(_s);
+}
+
 void* Blog::DatabaseOperation::stmtPrepare(const std::string& sql){
 	return dp->prepare(sql);
 }

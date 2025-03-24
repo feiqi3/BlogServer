@@ -50,13 +50,28 @@ public:
     return exec(stmt);
   };
 
+  DBResultPtr Prepare(const std::string& sqlFmt) {
+      auto stmt = stmtPrepare(sqlFmt);
+      return exec(stmt);
+  }
+
+  template <typename... Args>
+  void ReExec(const DBResultPtr& ptr, Args &&...arg) {
+      auto stmt = ptr->mData;
+      resetStmt(stmt);
+      bindArgs(stmt, std::forward<Args>(arg)...);
+  }
+
 private:
+
   void *stmtPrepare(const std::string &sql);
   DBResultPtr exec(void *stmt);
 
   template <typename... Args> void bindArgs(void *stmt, Args &&...arg) {
     _bind(stmt, 1, std::forward<Args>(arg)...);
   };
+
+  void resetStmt(void* stmt);
   void bindArgs(void *stmt) { (void)(stmt); };
   template <typename... Args, typename T>
   void _bind(void *stmt, int i, T &&t, Args &&...arg) {
@@ -73,7 +88,7 @@ private:
   void bind(void *stmt, int i, double v);
   void bind(void *stmt, int i, const std::string &v);
   void bind(void *stmt, int i, const char *v);
-  void bind(void *stmt, int i, uint v) { bind(stmt, i, (int)v); }
+  void bind(void *stmt, int i, uint32_t v) { bind(stmt, i, (int)v); }
   void bind(void *stmt, int i, uint64_t v) { bind(stmt, i, (int64_t)v); }
 
   DatabaseOperationPrivate *dp = nullptr;
@@ -100,6 +115,7 @@ public:
 
   template <IsStringLike T> void setByCol(T &t, int col) { t = getString(col); }
 
+  friend class DatabaseOperation;
 private:
   DataType getType(int col) const;
   void innerCheck(uint32_t col) const;

@@ -204,6 +204,11 @@ public:
     return Condition<T>(fieldSV, " >= ", std::forward<U>(val));
   }
 
+  constexpr Condition<T> Like(U&& val) {
+      conditionStaticAssert();
+      return Condition<T>(fieldSV, " LIKE ", std::forward<U>(val));
+  }
+
   constexpr Condition<T> operator==(FieldParameter) {
     conditionStaticAssert();
     return Condition<T>(fieldSV, " = ? ");
@@ -232,6 +237,11 @@ public:
   constexpr Condition<T> operator>=(FieldParameter) {
     conditionStaticAssert();
     return Condition<T>(fieldSV, " >= ? ");
+  }
+
+  constexpr Condition<T> Like(FieldParameter) {
+      conditionStaticAssert();
+      return Condition<T>(fieldSV, " LIKE ? ");
   }
 
   constexpr const std::string &getFieldName() const { return fieldSV; }
@@ -388,6 +398,11 @@ public:
   }
 
 public:
+    Query& prepare() {
+        result = DatabaseOperation::instance()->Prepare(toSql());
+        return *this;
+    }
+
   std::vector<T> getVector() const {
     std::vector<T> ret;
     while (result->step()) {
@@ -398,8 +413,13 @@ public:
   DBResultPtr getResult() const { return result; }
 
   template <typename... Args> Query &exec(Args &&...arg) {
-    result = DatabaseOperation::instance()->Exec(toSql(), std::forward<Args>(arg)...);
-    return *this;
+      if (result) {
+          DatabaseOperation::instance()->ReExec(result, std::forward<Args>(arg)...);
+      }
+      else {
+          result = DatabaseOperation::instance()->Exec(toSql(), std::forward<Args>(arg)...);
+      }
+      return *this;
   }
 
 private:
