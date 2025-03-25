@@ -2,7 +2,7 @@
 #include "ORM.h"
 #include "Model/Status.h"
 
-std::string Blog::BlogStatusQuery::queryBlogStatus(const std::string& propertyName)
+std::string Blog::DAO::BlogStatusQuery::queryBlogStatus(const std::string& propertyName)
 {
     auto getQuery = []()->auto {
         auto ret = Query(FIELD(Model::Status, data));

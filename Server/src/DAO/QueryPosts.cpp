@@ -3,13 +3,13 @@
 #include "ORM.h"
 
 namespace Blog::DAO {
-std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t, uint64_t>>
+std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t, uint64_t, std::string>>
 PostQuery::QueryPostsDataProfileSinceLastByPageDesc(uint64_t lastId,
                                            int perPageNum) {
   auto getQuery = []() {
     Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
             FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
-            FIELD(Model::Post, updated_at));
+            FIELD(Model::Post, updated_at) - FIELD(Model::Post,tags));
     q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id));
     return q;
   };
@@ -47,6 +47,19 @@ std::optional<Model::Post> PostQuery::QueryPostByTitle(const char* postName)
         return vec[0];
     }
     return {};
+}
+
+auto PostQuery::QueryPostsDataWithCategoryProfileSinceLastByPageDesc(uint64_t lastId, uint64_t categoryId, int perPageNum) -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t, uint64_t, std::string>>
+{
+    auto getQuery = []() {
+        Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
+            FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
+            FIELD(Model::Post, updated_at) - FIELD(Model::Post, tags));
+        q.From("Posts").Where(FIELD(Model::Post, id) > PARAM && FIELD(Model::Post, category_id) == PARAM ).limit(PARAM).OrderByDesc(FIELD(Model::Post, id));
+        return q;
+        };
+    static auto query = getQuery();
+    return query.exec(lastId,categoryId, perPageNum).getVector();
 }
 
 } // namespace Blog::DAO
