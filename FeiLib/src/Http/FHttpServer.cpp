@@ -67,6 +67,7 @@ namespace Fei::Http {
 		mTcpServer->setOnMessageCallback(std::bind(&FHttpServer::handleTcpIn, this, std::placeholders::_1, std::placeholders::_2));
 		mTcpServer->setOnCloseCallback(std::bind( & FHttpServer::handleTcpConnClosed,this,std::placeholders::_1 ));
 		mRouteCacheCleanEventId = mTcpServer->addTickEvent(std::bind(&FRouter::checkRouteCache,FRouter::instance(),std::placeholders::_1));
+		FRouter::instance()->lateInit();
 	}
 
 	FHttpServer::~FHttpServer() {

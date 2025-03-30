@@ -90,7 +90,8 @@ namespace Fei::Http {
 
 		std::atomic_bool isHandleRoute = false;
 		std::atomic_bool isHandleUnreg = false;
-	
+		std::atomic_bool hasLateInit = false;
+
 	public:
 		void clearCache() {
 			FAUTO_LOCK(m_routeCacheEraseLock);
@@ -160,6 +161,12 @@ namespace Fei::Http {
 		if(FRouter::valid())
 			FRouter::instance()->unregController(controllerName);
 	}
+	void FRouter::lateInit(){
+		for(auto&& i : _dp->mControllerMap){
+			i.second->lateInit();
+		}
+		this->_dp->hasLateInit = true;
+	}
 
 	FRouter::FRouter():_dp(new __FRouterInner)
 	{
@@ -210,7 +217,10 @@ namespace Fei::Http {
 		_dp->mControllerMap.insert({ controllerName ,controller });
 		if (Logger::valid())
 			Logger::instance()->log("FRouter", lvl::trace, "Register Controller {}", controllerName);
-
+		
+			if(_dp->hasLateInit){
+			controller->lateInit();
+		}
 	}
 
 	void FRouter::regControllerFunc(const std::string& pathPattern, Method mapMethod, const std::string& controllerName, FControllerFunc& func)

@@ -9,6 +9,7 @@
 #include <string>
 
 #include "Core/ApiChangeDataDef.h"
+#include "Core/Session.h"
 #include "Service/AdminLogin.h"
 #include "Service/QuickRedirect.h"
 #include "nlohmann/json_fwd.hpp"
@@ -20,8 +21,9 @@ const int sMaxErrorTime = 5;
 
 namespace Blog {
 
-AdminLoginController::AdminLoginController()
-    : Fei::Http::FControllerBase("AdminLogin") {
+AdminController::AdminController() : Fei::Http::FControllerBase("AdminLogin") {}
+
+void AdminController::lateInit() {
   auto cfg = Fei::FConfigReader::instance();
   auto user = cfg->getCfg("AdminUser");
   this->mUserName = user.value_or("admin");
@@ -34,11 +36,21 @@ AdminLoginController::AdminLoginController()
 }
 
 Fei::Http::FHttpResponse
-AdminLoginController::Login(const Fei::Http::FHttpRequest &req,
-                            const Fei::Http::FPathVar &var) {
+AdminController::Login(const Fei::Http::FHttpRequest &req,
+                       const Fei::Http::FPathVar &var) {
+  auto admin = AdminLogin::instance();
   bool isLogin = true;
   Fei::Http::FHttpResponse res;
-  auto json = JsonTool::ToJson(req.getRequestBody());
+
+  if (admin->isOnLock()) {
+    isLogin = false;
+  }
+
+  nlohmann::json json;
+  if (isLogin) {
+    json = JsonTool::ToJson(req.getRequestBody());
+  }
+
   if (json.is_null()) {
     isLogin = false;
   }
@@ -48,7 +60,6 @@ AdminLoginController::Login(const Fei::Http::FHttpRequest &req,
     std::string username, userpswd;
     username = json["username"].template get<std::string>();
     userpswd = json["userpassword"].template get<std::string>();
-    auto admin = AdminLogin::instance();
     isLogin = admin->Login(username, userpswd, sessionId);
   }
   nlohmann::json j;
@@ -57,6 +68,9 @@ AdminLoginController::Login(const Fei::Http::FHttpRequest &req,
     Fei::Http::FCookie cookie;
     cookie.addValue("sessionId", sessionId);
     cookie.addValue("SameSite", "Strict");
+    cookie.addValue(
+        "Max-Age",
+        std::to_string(SessionManager::instance()->getSessionExpireTimeMins()));
     cookie.addAttribute("HttpOnly");
     cookie.addAttribute("Secure");
     res.addCookie(cookie);

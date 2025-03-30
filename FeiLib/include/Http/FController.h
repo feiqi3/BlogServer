@@ -22,6 +22,7 @@ namespace Fei::Http{
         public:
         virtual void registerMapping() = 0;
         virtual ~FControllerBase();
+        virtual void lateInit(){};
 
         public:
             //add controller's mapping path, like / will match /* in this class
@@ -29,7 +30,6 @@ namespace Fei::Http{
              mControllerMappingPaths.push_back(path);
         }
         const std::string& getControllerName()const { return mControllerName; }
- 
         //Register Method and mapping in this function implementation
         void registerMappingFunction(const std::string& pathPattern, Method mapMethod, FControllerFunc func);
     private:

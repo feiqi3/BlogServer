@@ -21,8 +21,8 @@ class F_API FRouter : public FSingleton<FRouter>,public FNoCopyable{
 public:
   static void RegisterController(const std::string& controllerName, FControllerPtr controller);
   static void RegisterControllerFuncs(const std::string& pathPattern,Method mapMethod,const std::string& controllerName, FControllerFunc func);
-  static void UnRegisterController(const std::string& controllerName);
-
+  static void UnRegisterController(const std::string& controllerName);	
+  void lateInit();
   struct RouteResult {
 	  FPathVar pathVariable;
 	  FControllerFunc controllerFunc;
