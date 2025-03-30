@@ -14,6 +14,7 @@
 #include "FLogger.h"
 #include "FSSLHelper.h"
 #include "FTCPConnection.h"
+#include "openssl/rand.h"
 
 #define MODULE_NAME "SSLHelper"
 
@@ -219,6 +220,10 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   
   dp->outBuffer.Append(temp.get(), readSize);
   return dp->outBuffer;
+}
+
+void FSSLUtils::randomBytes(unsigned char* data,uint32 num){
+  RAND_bytes(data,(int)num);
 }
 
 } // namespace Fei

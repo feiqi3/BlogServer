@@ -38,6 +38,12 @@ private:
 
   std::unique_ptr<_FSSLHelperPrivate> dp;
 };
+
+class F_API FSSLUtils{
+  public:
+  static void randomBytes(unsigned char* data,uint32 num);
+};
+
 } // namespace Fei::Http
 
 #endif
