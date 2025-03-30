@@ -4,7 +4,7 @@
 
 namespace Fei {
 
-F_API void FeiLibInit();
+F_API void FeiLibInit(const std::string& configDir = "fei.cfg");
 F_API void FeiLibUnInit();
 
 }; // namespace Fei
