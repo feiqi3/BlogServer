@@ -6,7 +6,7 @@
 #include <map>
 #include <optional>
 namespace Fei {
-	class FConfigReader : public FSingleton<FConfigReader> {
+	class F_API FConfigReader : public FSingleton<FConfigReader> {
 	public:
 		enum class Env
 		{
