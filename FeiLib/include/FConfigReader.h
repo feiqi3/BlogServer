@@ -21,7 +21,7 @@ namespace Fei {
 		}
 		std::optional<std::string> getCfg(const std::string& term)const {
 			auto itor = mCfgMap.find(term);
-			if (itor == mCfgMap.end())return nullptr;
+			if (itor == mCfgMap.end())return std::nullopt;
 			return itor->second;
 		}
 	private:
