@@ -1,13 +1,14 @@
 #ifndef FCOOKIE_H
 #define FCOOKIE_H
 
+#include "FDef.h"
 #include <map>
 #include <string>
 
 namespace Fei::Http {
 using CookiesMap = std::map<std::string, std::string>;
 
-class FCookie {
+class F_API FCookie {
 public:
   FCookie() {}
 
