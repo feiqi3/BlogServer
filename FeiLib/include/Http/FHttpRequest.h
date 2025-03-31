@@ -1,5 +1,6 @@
 #pragma once
 #include "FDef.h"
+#include "Http/FCookie.h"
 #ifndef FHTTPREQUEST_H
 #define FHTTPREQUEST_H
 #include <memory>
@@ -28,7 +29,8 @@ public:
   void setAddrHost(const FSocketAddr& addr) {
 	  mAddrHost = addr;
   }
-
+  int getCookieSize()const;
+  const FCookie& getCookie(int i)const;
   const FSocketAddr& getAddrIn()const { return mAddrIn; }
   const FSocketAddr& getAddrHost()const { return mAddrHost; }
 private:

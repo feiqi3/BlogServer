@@ -20,9 +20,9 @@ namespace Fei::Http{
 
     ss << "Content-Length: " << mBody.size() << LINE_BREAKER;
     ss << LINE_BREAKER;
-    ss << mBody;
-
-    return ss.str();
+    ss << mBody<< LINE_BREAKER;
+    auto&& retRes = ss.str();
+    return retRes;
   }
     
 }

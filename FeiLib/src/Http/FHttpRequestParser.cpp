@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 
+#include <algorithm>
+
 namespace Fei::Http {
 namespace {
 const std::string MethodsName[] = {
@@ -23,9 +25,9 @@ const std::map<std::string, Method> MethodsMap = {
 uint32 findFirstNotSpace(FBufferView &view, uint32 begin = 0) {
   uint32 cnt = begin;
   for (; cnt < view.size(); ++cnt) {
-      if (view[cnt] == '\0')
-          break;
-      if (view[cnt] != ' ' && view[cnt] != '\r' && view[cnt] != '\n') {
+    if (view[cnt] == '\0')
+      break;
+    if (view[cnt] != ' ' && view[cnt] != '\r' && view[cnt] != '\n') {
       break;
     }
   }
@@ -121,68 +123,82 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
   HeaderMap map;
   FBufferView lineView(oldView);
   while (1) {
-      lineView = newLine(&oldView);
-      oldView = lineView;
-      uint32 cursor = 0;
-      cursor = findFirstNotSpace(lineView);
-      // Blank line 
-      if (lineView.size() == 0 || lineView.size() == cursor)
-          break;
-      // To long?
-      if (lineView.size() > HttpMaxRequestPathLen) {
-          Logger::instance()->log("HttpParser", lvl::warn,
-              "Too long http header {} out of limit {}",
-              lineView.size(), HttpMaxRequestPathLen);
-          continue;
+    lineView = newLine(&oldView);
+    std::string lineview_content((char *)lineView.get(), lineView.size());
+    oldView = lineView;
+    uint32 cursor = 0;
+    cursor = findFirstNotSpace(lineView);
+    // Blank line
+    if (lineView.size() == 0 || lineView.size() == cursor)
+      break;
+    // To long?
+    if (lineView.size() > HttpMaxRequestPathLen) {
+      Logger::instance()->log("HttpParser", lvl::warn,
+                              "Too long http header {} out of limit {}",
+                              lineView.size(), HttpMaxRequestPathLen);
+      continue;
+    }
+
+    // Find colon
+    int findColon = -1;
+    for (int i = 0; i < (int)lineView.size(); ++i) {
+      if (lineView[i] == ':') {
+        findColon = i;
+        break;
+      }
+    }
+    if (findColon == -1) {
+      continue;
+    }
+    std::string header =
+        std::string((char *)&lineView[cursor], findColon - cursor);
+    cursor = findColon + 1;
+    cursor = findFirstNotSpace(lineView, cursor);
+    if (cursor == lineView.size()) {
+      // end of line --> only header.
+      map.insert({header, ""});
+    } else {
+
+      uint32 _crlfOffset = 0;
+      if (lineView.size() - cursor >= 2) {
+        if (lineView[lineView.size() - 2] == '\r' &&
+            lineView[lineView.size() - 1] == '\n') {
+          _crlfOffset = 2;
+        }
       }
 
-      // Find colon
-      int findColon = -1;
-      for (int i = 0; i < (int)lineView.size(); ++i) {
-          if (lineView[i] == ':') {
-              findColon = i;
-              break;
-          }
-      }
-      if (findColon == -1) {
-          continue;
-      }
-      std::string header =
-          std::string((char*)&lineView[cursor], findColon - cursor);
-      cursor = findColon + 1;
-      cursor = findFirstNotSpace(lineView, cursor);
-      if (cursor == lineView.size()) {
-          //end of line --> only header.
-          map.insert({ header, "" });
-      }
-      else {
-
-          uint32 _crlfOffset = 0;
-          if (lineView.size() - cursor >= 2) {
-              if (lineView[lineView.size() - 2] == '\r' &&
-                  lineView[lineView.size() - 1] == '\n') {
-                  _crlfOffset = 2;
-              }
-          }
-
-          std::string content = std::string((char *)&lineView[cursor],
-              lineView.size() - cursor - _crlfOffset);
-          map.insert({header, content});
-      }
+      std::string content = std::string((char *)&lineView[cursor],
+                                        lineView.size() - cursor - _crlfOffset);
+      map.insert({header, content});
+    }
   }
 
-  lineView = newLine(&lineView);
-
-  if (lineView.isEOF()) {
-    return map;
+  // Check if have body
+  while (findFirstNotSpace(lineView) == lineView.size()) {
+    if (lineView.isEOF()) {
+      return map;
+    }
+    lineView = newLine(&lineView);
   }
-
+  // Get buffer size
   uint32 bufferSize = mBuffer.readTo(0, 0);
+  int len = 0;
+  if (map.find("Content-Length") != map.end()) {
+    len = std::stoi(map.find("Content-Length")->second);
+  }
   std::string body;
-  body.reserve(bufferSize + 1);
-  mBuffer.readTo(body.data(), bufferSize + 1);
+  if (len != 0) {
+    if (bufferSize != len && bufferSize != len + 2) {
+      Logger::instance()->log("HttpParser", lvl::warn,
+                              "Content-Length not match, {} != {}", bufferSize,
+                              len);
+    }
+  }
+  body.resize(bufferSize);
+  mBuffer.readTo(body.data(), bufferSize);
   map.insert({"__body", std::move(body)});
-
+  // Pop all
+  mBuffer.expireView(mBuffer.peekAll());
   return map;
 }
 
@@ -208,13 +224,13 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 
   Version ver;
   if (!parseVersion(lineView, ver, cursor)) {
-    //Assume version is http1.1
+    // Assume version is http1.1
     ver = Version::Http11;
-    //TODO:
+    // TODO:
     /* if(config.forceHTTP11)return false; */
 
-    //return false;
-    // Do something?
+    // return false;
+    //  Do something?
   }
 
   ctx.mHttpVersion = ver;
@@ -222,12 +238,13 @@ bool FHttpParser::parse(FHttpContext &ctx) {
   auto headerMap = parseHeader(lineView);
 
   auto cookieEqualRange = headerMap.equal_range("Cookie");
-  for(auto itor = cookieEqualRange.first;itor != cookieEqualRange.second;itor++){
+  for (auto itor = cookieEqualRange.first; itor != cookieEqualRange.second;
+       itor++) {
     FCookie cookie;
     parseCookie(cookie, itor->second);
     ctx.cookies.emplace_back(cookie);
   }
-  headerMap.erase(cookieEqualRange.first,cookieEqualRange.second);
+  headerMap.erase(cookieEqualRange.first, cookieEqualRange.second);
   ctx.mHeaders = std::move(headerMap);
 
   return true;
@@ -236,9 +253,10 @@ bool FHttpParser::parse(FHttpContext &ctx) {
 bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
                                uint32 &cursor) {
   int64_t beg = findFirstNotSpace(view, cursor);
-  //blank line?
+  // blank line?
   int64_t end = findFirstSpace(view, beg);
-  if (end - beg <= 0)return false;
+  if (end - beg <= 0)
+    return false;
   cursor = end + 1;
   outVersion = Version::Unknown;
   if (end - beg < 8) {
@@ -259,7 +277,8 @@ bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
                             HttpQueryMap &outmap, uint32 &cursor) {
   int64_t beg = findFirstNotSpace(view, cursor);
   int64_t end = findFirstSpace(view, cursor);
-  if (end - beg <= 0)return false;
+  if (end - beg <= 0)
+    return false;
 
   if (end - beg > HttpMaxRequestPathLen) {
     Logger::instance()->log("HttpParser", lvl::warn,
@@ -322,7 +341,7 @@ Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
   cursor = findTokenBeg;
   int64 findTokenEnd = findFirstSpace(inView, findTokenBeg);
   if (findTokenEnd - findTokenBeg <= 0) {
-      return Http::Method::Invalid;
+    return Http::Method::Invalid;
   }
   std::string method((char *)&inView[cursor], findTokenEnd - cursor);
   // next
@@ -355,37 +374,30 @@ FBufferView FHttpParser::newLine(FBufferView *lastView) {
   return ret;
 }
 
+static auto trim(const std::string &str) {
+  auto start = std::find_if_not(str.begin(), str.end(), [](unsigned char ch) {
+    return std::isspace(ch);
+  });
+  auto end = std::find_if_not(str.rbegin(), str.rend(), [](unsigned char ch) {
+               return std::isspace(ch);
+             }).base();
+  struct {
+    int beg;
+    int end;
+  } pospair;
+  pospair.beg = start - str.begin();
+  pospair.end = end - str.begin();
+  return pospair;
+}
+
 void FHttpParser::parseCookie(FCookie &inCookie,
                               const std::string &cookieData) const {
-  auto i = 0u;
-  for (i = 0u; i < cookieData.size(); ++i) {
-    if (cookieData[i] != ' ') {
-      break;
-    }
-  }
-  bool findKey = false;
-  std::string key, val;
-  uint32 saveMarker = i;
-  for (; i < cookieData.size(); ++i) {
-    if (cookieData[i] == ';') {
-      if (findKey) {
-        findKey = false;
-        val = std::string(&cookieData[saveMarker], i - saveMarker);
-        inCookie.addValue(key, val);
-        val = "";
-      } else {
-        inCookie.addAttribute(key);
-      }
-      key = "";
-      i++;
-      saveMarker = i;
-    } else if (cookieData[i] == '=') {
-      findKey = true;
-      key = std::string(&cookieData[saveMarker], i - saveMarker);
-      i++;
-      saveMarker = i;
-    }
-  }
+  auto pospair = trim(cookieData);
+  auto cookieDataTrim =
+      cookieData.substr(pospair.beg, pospair.end - pospair.beg + 1);
+  std::string_view sv(cookieDataTrim.data() + pospair.beg,
+                      pospair.end - pospair.beg + 1);
+  // parse cookie
 }
 
 } // namespace Fei::Http

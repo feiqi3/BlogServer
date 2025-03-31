@@ -36,7 +36,7 @@ public:
   const std::string& getRequestPath()const { return mRequestPath; }
   std::string_view getRequestBody() const;
   
-
+  const auto& getCookies()const{return cookies;}
 private:
   Method mMethod;
   std::string mRequestPath;
