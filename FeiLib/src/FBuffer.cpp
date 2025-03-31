@@ -47,8 +47,9 @@ int FBuffer::Write(Socket fd, int size, Errno_t &errSaved) {
 }
 
 int FBuffer::Peek(int wantLen, char *ret) {
+  char * d = (char*)m_buffer.data() + readIdx;
   uint32 realLen = std::min((uint32)wantLen, writeIdx - readIdx);
-  memcpy(ret, m_buffer.data(), realLen);
+  memcpy(ret,d , realLen);
   return realLen;
 }
 
