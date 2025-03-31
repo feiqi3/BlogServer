@@ -23,6 +23,8 @@ namespace Blog{
 
         void deleteSession(const std::string& sessionId);
         
+        uint32_t getSessionExpireTimeMins()const ;
+
         private:
 
         SessionManagerPrivate* mDp = 0;

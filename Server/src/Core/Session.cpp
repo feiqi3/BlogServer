@@ -2,9 +2,11 @@
 #include "FConfigReader.h"
 #include "FDef.h"
 #include "tbb/concurrent_map.h"
+#include <array>
 #include <chrono>
 #include <mutex>
 #include <string>
+#include <vector>
 #include "FSSLHelper.h"
 namespace Blog {
 struct SessionData {
@@ -14,10 +16,13 @@ struct SessionData {
 
 namespace {
 std::string generateSessionId(int length = 32) {
-  std::string sessionId;
-  sessionId.resize(length);
-  Fei::FSSLUtils::randomBytes((unsigned char *)sessionId.data(), length);
-  return sessionId;
+  std::vector<char> buffer(length);
+  Fei::FSSLUtils::randomBytes((unsigned char *)buffer.data(), length);
+  std::ostringstream oss;
+  for (auto byte : buffer) {
+      oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+  }
+  return oss.str();
 }
 } // namespace
 
@@ -26,7 +31,7 @@ public:
   // <session id,session data>
   tbb::concurrent_map<std::string, SessionData> mSessionMap;
   std::mutex mEraseMutex;
-  int64_t sessionHoldTime = 1000 * 60 * 60 * 24 * 7;
+  int64_t sessionHoldTime = 1000 * 60 * 60;
 };
 
 SessionManager::SessionManager() {
@@ -89,6 +94,10 @@ void SessionManager::deleteSession(const std::string &sessionId) {
   auto &mutex = mDp->mEraseMutex;
   FAUTO_LOCK(mutex);
   mDp->mSessionMap.unsafe_erase(itor);
+}
+
+uint32_t SessionManager::getSessionExpireTimeMins()const{
+  return (Fei::uint32)(mDp->sessionHoldTime / 1000);;
 }
 
 void SessionManager::checkOverdue(uint64_t time_ms) {

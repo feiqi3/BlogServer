@@ -1,10 +1,11 @@
 #include "FileController.h"
+#include "Http/FHttpDef.h"
 #include "Service/QuickRedirect.h"
 #include "Utils/FileReader.h"
 #include <algorithm>
 #include <sstream>
 #include <string>
-const std::string ServerWebImagePath = SERVER_RESOURCE_DIR "web/img/";
+const std::string ServerWebAssetsPath = SERVER_RESOURCE_DIR "web/assets/";
 
 namespace {
 
@@ -56,7 +57,7 @@ bool sendByRange(const Fei::Http::FHttpRequest &req,
     parseInt(receiveRange.c_str(), 0, hyphenPos, begPos);
     std::clamp(begPos, 0, (int)file.size());
     endPos = file.size();
-    
+
     // Want it small =v=
   } else {
 
@@ -84,11 +85,16 @@ Blog::FileController::getFile(const Fei::Http::FHttpRequest &req,
                               const Fei::Http::FPathVar &var) {
   auto str = var.get("name");
   if (str.empty()) {
-    return Redirector::RedirectTo("/404");
+    auto ret = Redirector::RedirectTo("/404");
+    ret.setStatusCode(Fei::Http::StatusCode::_404);
+    return ret;
   }
-  MemoryMappedFile file(ServerWebImagePath + str, Mode::ReadOnly, 0);
-  if (!file.data())
-    return Redirector::RedirectTo("/404");
+  MemoryMappedFile file(ServerWebAssetsPath + str, Mode::ReadOnly, 0);
+  if (!file.data()) {
+    auto ret = Redirector::RedirectTo("/404");
+    ret.setStatusCode(Fei::Http::StatusCode::_404);
+    return ret;
+  }
 
   Fei::Http::FHttpResponse res;
 

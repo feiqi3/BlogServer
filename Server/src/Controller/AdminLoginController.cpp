@@ -67,13 +67,18 @@ AdminController::Login(const Fei::Http::FHttpRequest &req,
   if (isLogin) {
     Fei::Http::FCookie cookie;
     cookie.addValue("sessionId", sessionId);
-    cookie.addValue("SameSite", "Strict");
-    cookie.addValue(
+    cookie.addAttribute("Path", "/");
+
+    cookie.addAttribute(
         "Max-Age",
-        std::to_string(SessionManager::instance()->getSessionExpireTimeMins()));
+    std::to_string(SessionManager::instance()->getSessionExpireTimeMins()));
     cookie.addAttribute("HttpOnly");
+    #ifndef FEI_DEBUG
+    cookie.addAttribute("SameSite", "Strict");
     cookie.addAttribute("Secure");
+#endif
     res.addCookie(cookie);
+    res.addHeader("Access-Control-Allow-Credentials", "true" );
     j["result"] = ApiOk;
   } else {
     j["result"] = ApiError;

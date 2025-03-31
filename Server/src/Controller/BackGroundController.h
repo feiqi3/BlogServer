@@ -8,9 +8,9 @@
 #include <chrono>
 
 namespace Blog{
-    class AdminController : public Fei::Http::FControllerBase {
+    class BackGroundController : public Fei::Http::FControllerBase {
         public:
-		AdminController();
+		BackGroundController();
 
 /*
         inRequest:
@@ -27,16 +27,13 @@ namespace Blog{
         msg: //error reason
 */
 
-		Fei::Http::FHttpResponse Login(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse LoginPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 
-		REGISTER_MAPPING_BEGIN("/api")
-			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/login", AdminController, Login);
-		REGISTER_MAPPING_END
+		REGISTER_MAPPING_BEGIN("/background")
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "", BackGroundController, LoginPage);
+        REGISTER_MAPPING_END
 
         private:
-        
-        void lateInit()override;
-        
         std::string mUserName;
         std::string mPassword;
         bool mIsLocked = false;
@@ -44,5 +41,6 @@ namespace Blog{
         std::chrono::system_clock::time_point mLockTime;
         std::chrono::system_clock::time_point mLastLoginTime;
     };
-    REGISTER_CONTROLLER_CLASS(AdminController)
+
+    REGISTER_CONTROLLER_CLASS(BackGroundController)
 }

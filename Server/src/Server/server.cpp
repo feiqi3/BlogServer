@@ -38,7 +38,7 @@ void Blog::Server::run()
 void Blog::Server::init()
 {
 	server->addAppTickEvent(std::bind(&SessionManager::checkOverdue,SessionManager::instance(),std::placeholders::_1));
-	server->setConnFilterCB(&filterAll);
+	//server->setConnFilterCB(&filterAll);
 }
 
 Blog::Server::~Server()
