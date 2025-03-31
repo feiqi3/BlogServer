@@ -14,25 +14,34 @@ public:
 
   FCookie &operator=(const FCookie &rhs) {
     mMap = rhs.mMap;
+    mValueMap = rhs.mValueMap;
     return *this;
   }
 
   FCookie &operator=(FCookie &&rhs) {
     mMap = std::move(rhs.mMap);
+    mValueMap = std::move(rhs.mValueMap);
     return *this;
   }
-  FCookie(FCookie &&rhs) { mMap = std::move(rhs.mMap); }
+  FCookie(FCookie &&rhs) {
+    mMap = std::move(rhs.mMap);
+    mValueMap = std::move(rhs.mValueMap);
+  }
 
-  FCookie(const FCookie &rhs) { mMap = (rhs.mMap); }
+  FCookie(const FCookie &rhs) {
+    mMap = (rhs.mMap);
+    mValueMap = rhs.mValueMap;
+  }
   bool getValue(const std::string &key, std::string &outVal) const;
-  void addValue(const std::string key, const std::string val);
+  void addValue(const std::string &key, const std::string &val);
 
   // void setExpires();//TODO:
   // void getExpires();//TODO:
 
   void addAttribute(const std::string &attr);
-
+  void addAttribute(const std::string &attr, const std::string &val);
   bool hasAttribute(const std::string &attr) const;
+  bool hasAttribute(const std::string &attr, std::string &val) const;
 
   std::string outSetCookieNoHeader() const;
   std::string outSetCookie() const;
@@ -40,6 +49,7 @@ public:
   bool empty() const { return mMap.empty(); }
 
 private:
+  CookiesMap mValueMap;
   CookiesMap mMap;
 };
 
