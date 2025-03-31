@@ -10,6 +10,14 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # Generate compile_commands.json for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    add_compile_definitions(FEI_DEBUG)
+elseif(CMAKE_BUILD_TYPE MATCHES "Release")
+    add_compile_definitions(FEI_RELEASE)
+else()
+    message(FATAL_ERROR "Invalid build type. Use Debug or Release.")
+endif(CMAKE_BUILD_TYPE MATCHES "Debug")
+
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/debug)
