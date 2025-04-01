@@ -32,6 +32,12 @@ FileCache::FileCache(uint64_t maxCacheTime):dp(new FileCacheInner),cacheOutDateT
 
 }
 
+FileCache::~FileCache(){
+  delete dp;
+  dp = 0;
+}
+
+
 void FileCache::invalid(const std::string &path) {
   auto &l = dp->mlock;
   FAUTO_LOCK(l);
@@ -54,10 +60,9 @@ MemMapedFilePtr FileCache::getOrGen(const std::string &path) const {
 }
 uint32_t FileCache::size() const { return dp->mmap.size(); }
 
-void FileCache::checkOverdue() {
-  auto time = getTime();
+void FileCache::checkOverdue(uint64_t time_ms) {
   for (auto itor = dp->mmap.begin(); itor != dp->mmap.end();) {
-    if (itor->second.cacheTime - time > this->cacheOutDateTime) {
+    if (time_ms - itor->second.cacheTime > this->cacheOutDateTime) {
       auto &l = dp->mlock;
       FAUTO_LOCK(l);
       itor = dp->mmap.unsafe_erase(itor);

@@ -7,12 +7,13 @@ namespace Blog{
     class FileCache{
         public:
             FileCache(uint64_t maxCacheTimeInMs);
+            ~FileCache();
             MemMapedFilePtr getOrGen(const std::string& path)const;
             void invalid(const std::string& path);
             uint32_t size()const;
-            void checkOverdue();
+            void checkOverdue(uint64_t time_ms);
         private:
-            std::unique_ptr<class FileCacheInner> dp= 0;
+            class FileCacheInner* dp= 0;
             uint64_t cacheOutDateTime;
     };    
 };
