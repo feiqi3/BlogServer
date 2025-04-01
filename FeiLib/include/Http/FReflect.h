@@ -14,7 +14,7 @@ class FReflect{
     static nlohmann::json fromClass(T&& cls){
         using namespace nlohmann;
         json ret_json;
-        ret_json["__cls"] = reflect::type_name(cls);
+        //ret_json["__cls"] = reflect::type_name(cls);
         reflect::for_each([&ret_json,&cls](auto i){
             //only POD and string
             ret_json[reflect::member_name(i)] = reflect::get<i>(cls);
