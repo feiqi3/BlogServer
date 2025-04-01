@@ -37,7 +37,25 @@ namespace Blog{
 
     };
 
-    bool AdminLogin::isLogin(const std::string& sessionId){
+    bool AdminLogin::isLogin(const Fei::Http::FHttpRequest& req)const{
+        auto cookieNum = req.getCookieSize();
+        std::string sessionId;
+        for(auto i = 0; i < cookieNum; i++){
+            auto& cookie = req.getCookie(i);
+            if(cookie.getValue("sessionId", sessionId))
+            {
+                break;
+            }
+        }
+        if(!sessionId.empty()){
+            bool islogin = this->isLogin(sessionId);
+            return islogin;
+        } 
+        return false;
+    }
+
+
+    bool AdminLogin::isLogin(const std::string& sessionId)const{
         if(SessionManager::instance()->hasSession(sessionId)){
             return true;
         }

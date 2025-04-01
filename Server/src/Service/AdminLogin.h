@@ -1,5 +1,6 @@
 #pragma once
 #include "Utils/Singleton.h"
+#include "Http/FHttpRequest.h"
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -9,7 +10,8 @@ namespace Blog{
         public:
         AdminLogin();
         bool Login(const std::string& userName,const std::string& password,std::string& sessionId);
-        bool isLogin(const std::string& sessionId);
+        bool isLogin(const Fei::Http::FHttpRequest& req)const;
+        bool isLogin(const std::string& sessionId)const;
         bool isOnLock();
         
         private:

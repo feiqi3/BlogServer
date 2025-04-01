@@ -10,23 +10,10 @@ namespace Blog{
     }
     Fei::Http::FHttpResponse BackGroundController::LoginPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
 
-        auto cookieNum = req.getCookieSize();
-        std::string sessionId;
-        for(auto i = 0; i < cookieNum; i++){
-            auto& cookie = req.getCookie(i);
-            if(cookie.getValue("sessionId", sessionId))
-            {
-                break;
-            }
+        bool isLogin = AdminLogin::instance()->isLogin(req);
+        if(isLogin){
+            return Redirector::RedirectTo("/background/articles");
         }
-        if(!sessionId.empty()){
-            auto admin = AdminLogin::instance();
-            bool islogin = admin->isLogin(sessionId);
-            if(islogin){
-                return Redirector::RedirectTo("/404");
-            }
-        }
-
 
         Fei::Http::FHttpResponse ret;
         MemoryMappedFile file(SERVER_RESOURCE_DIR "web/page/backyard-login.html", Mode::ReadOnly, 0);
@@ -34,5 +21,15 @@ namespace Blog{
         ret.setBody(std::string((char*)d, file.size()));
         return ret;
     }   
+
+
+    Fei::Http::FHttpResponse BackGroundController::ArticleListPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+        bool isLogin = AdminLogin::instance()->isLogin(req);
+        if(!isLogin){
+            return Redirector::RedirectTo("/background");
+        }
+
+        //
+    }
 
 }
