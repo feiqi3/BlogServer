@@ -37,6 +37,13 @@ namespace Blog{
 
     };
 
+    bool AdminLogin::isLogin(const std::string& sessionId){
+        if(SessionManager::instance()->hasSession(sessionId)){
+            return true;
+        }
+        return false;
+    }
+
 
     bool AdminLogin::Login(const std::string& userName,const std::string& password,std::string& sessionId){
         //some more complicated condition?
