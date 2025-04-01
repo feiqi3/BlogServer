@@ -240,8 +240,7 @@ bool FHttpParser::parse(FHttpContext &ctx) {
   auto cookieEqualRange = headerMap.equal_range("Cookie");
   for (auto itor = cookieEqualRange.first; itor != cookieEqualRange.second;
        itor++) {
-    FCookie cookie;
-    parseCookie(cookie, itor->second);
+      FCookie cookie(itor->second);
     ctx.cookies.emplace_back(cookie);
   }
   headerMap.erase(cookieEqualRange.first, cookieEqualRange.second);
@@ -388,16 +387,6 @@ static auto trim(const std::string &str) {
   pospair.beg = start - str.begin();
   pospair.end = end - str.begin();
   return pospair;
-}
-
-void FHttpParser::parseCookie(FCookie &inCookie,
-                              const std::string &cookieData) const {
-  auto pospair = trim(cookieData);
-  auto cookieDataTrim =
-      cookieData.substr(pospair.beg, pospair.end - pospair.beg + 1);
-  std::string_view sv(cookieDataTrim.data() + pospair.beg,
-                      pospair.end - pospair.beg + 1);
-  // parse cookie
 }
 
 } // namespace Fei::Http

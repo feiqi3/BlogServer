@@ -12,6 +12,8 @@ class F_API FCookie {
 public:
   FCookie() {}
 
+  FCookie(const std::string_view&sv);
+
   FCookie &operator=(const FCookie &rhs) {
     mMap = rhs.mMap;
     mValueMap = rhs.mValueMap;

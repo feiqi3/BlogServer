@@ -67,7 +67,6 @@ private:
                  HttpQueryMap &outmap, uint32 &cursor);
   HeaderMap parseHeader(FBufferView &oldView);
   FBufferView newLine(FBufferView *lastView);
-  void parseCookie(FCookie &inCookie, const std::string &cookieData) const;
 private:
   struct {
     uint32 line = 0;
