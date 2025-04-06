@@ -1,3 +1,4 @@
+#include "FConfigReader.h"
 #include "FeiLibIniter.h"
 #include "server.h"
 #include "Http/FHttpServer.h"
@@ -9,8 +10,10 @@
 #include <functional>
 #include <string>
 #include <thread>
+#include "Core/ServerBasicDef.h"
+#include "DAO/DataBaseOperation.h"
+
 const std::string ResourceDir =  SERVER_RESOURCE_DIR;
-const std::string ConfigDir = ResourceDir + "config/serverConfig";
 const std::string WebDir = ResourceDir + "web/";
 const std::string SSLFileDir = ResourceDir + "SSL/";
 
@@ -18,6 +21,19 @@ Blog::Server::Server()
 {
 	Fei::FeiLibInit();
 	Fei::Http::FHttpServer::initSSLenv(SSLFileDir + "cert.pem", SSLFileDir + "private.pem");
+
+	//init database
+	std::string database;
+	
+	auto dataBasePathOpt = Fei::FConfigReader::instance()->getCfg("Database");
+	if(dataBasePathOpt.has_value()){
+		database = dataBasePathOpt.value();
+	}else{
+		database = BlogDataBasePath;
+	}
+	new DatabaseOperation();
+	DatabaseOperation::instance()->LoadDB(database);
+
 	new SessionManager();
 	new AdminLogin();
 	server = new Fei::Http::FHttpServer(10);
@@ -44,6 +60,7 @@ void Blog::Server::init()
 Blog::Server::~Server()
 {
 	delete server;
+	delete DatabaseOperation::instance();
 	delete AdminLogin::instance();
 	delete SessionManager::instance();
 	
