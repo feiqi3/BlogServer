@@ -36,12 +36,6 @@ namespace Blog{
         REGISTER_MAPPING_END
 
         private:
-        std::string mUserName;
-        std::string mPassword;
-        bool mIsLocked = false;
-        uint32_t mFailedCount = 0;
-        std::chrono::system_clock::time_point mLockTime;
-        std::chrono::system_clock::time_point mLastLoginTime;
     };
 
     REGISTER_CONTROLLER_CLASS(BackGroundController)

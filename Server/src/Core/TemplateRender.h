@@ -50,12 +50,12 @@ namespace Blog{
     template<class T,class U>
     T fromTuple(U& in){
         constexpr std::size_t tupleSize = std::tuple_size<U>::value;
-        constexpr std::size_t classMemSize = reflect::size_of<T>();
+        constexpr std::size_t classMemSize = reflect::size<T>();
         static_assert(tupleSize == classMemSize, "Not Match Reflect");
         T ret;
-        reflect::for_each([&](auto I){
+        reflect::for_each([&ret,&in](const auto I){
             reflect::get<I>(ret) = std::move(std::get<I>(in));
-        },in);
+        },ret);
         return ret;
     }
 }

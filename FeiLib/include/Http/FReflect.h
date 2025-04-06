@@ -17,7 +17,7 @@ class FReflect{
         //ret_json["__cls"] = reflect::type_name(cls);
         reflect::for_each([&ret_json,&cls](auto i){
             //only POD and string
-            ret_json[reflect::member_name(i)] = reflect::get<i>(cls);
+            ret_json[reflect::member_name<i>(cls)] = reflect::get<i>(cls);
         },cls);
         return ret_json;
     }

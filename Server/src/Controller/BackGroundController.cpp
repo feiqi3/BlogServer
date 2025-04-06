@@ -45,8 +45,6 @@ namespace Blog{
 
         auto posts = DAO::PostQuery::QueryPostsBasicStatusByPage(lastId,25);
         TemplateRenderData renderData;
-        renderData.setData("posts",posts);
-        //
         struct BasicBlogProfile{
             uint64_t id;
             std::string title;
@@ -58,6 +56,7 @@ namespace Blog{
         for(auto&& i : posts){
             model.push_back(fromTuple<BasicBlogProfile>(i));
         }
+        renderData.setData("posts",model);
         TemplateRender render;
         std::string renderRes;
         render.render(BlogWebPagePath + "backyard-articles.html",renderData,renderRes);
