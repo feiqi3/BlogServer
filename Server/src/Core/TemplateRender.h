@@ -4,11 +4,14 @@
 #include "Utils/Singleton.h"
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <vector>
 #include "Http/FReflect.h"
+#include "reflect"
 
 
 namespace Blog{
+
     class TemplateRenderData{
         public:
         void setData(const std::string& key,const std::string& value){
@@ -43,6 +46,18 @@ namespace Blog{
         class TemplateRenderPrivate* mDp = 0;
 
     };
+
+    template<class T,class U>
+    T fromTuple(U& in){
+        constexpr std::size_t tupleSize = std::tuple_size<U>::value;
+        constexpr std::size_t classMemSize = reflect::size_of<T>();
+        static_assert(tupleSize == classMemSize, "Not Match Reflect");
+        T ret;
+        reflect::for_each([&](auto I){
+            reflect::get<I>(ret) = std::move(std::get<I>(in));
+        },in);
+        return ret;
+    }
 }
 
 #endif
