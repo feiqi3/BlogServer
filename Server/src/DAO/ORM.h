@@ -330,6 +330,13 @@ public:
     return *this;
   }
 
+  constexpr Query &Insert(const T &cls,FieldParameter) {
+    op = " INSERT INTO ";
+    selectTableName = std::string(getTableName()) + getClsDefineList();
+    insertValues = " VALUES " + getClsValueList(cls);
+    return *this;
+  }
+
   constexpr Query &update(const Condition<T> &setVal) {
     op = "  UPDATE ";
     selectTableName = std::string(getTableName());
@@ -477,6 +484,24 @@ private:
     ret += ") ";
     return ret;
   }
+
+  constexpr std::string getClsValueList(const T &t,FieldParameter param) {
+    (void)param;
+    std::string ret = "";
+    ret += "(";
+    reflect::for_each(
+        [&ret, &t](auto i) {
+          if (i != 0) {
+            ret = ret + ",";
+          }
+          auto val = reflect::get<i>(t);
+          ret += " ? ";
+        },
+        t);
+    ret += ") ";
+    return ret;
+  }
+
 
 private:
   std::string selectTableName;

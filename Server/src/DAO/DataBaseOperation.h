@@ -2,6 +2,7 @@
 #define DATABASEOPERATION_H
 #include "FException.h"
 #include "Utils/Singleton.h"
+#include "reflect"
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -38,7 +39,7 @@ using DBResultPtr = std::shared_ptr<DBResult>;
 class DBResult {
 public:
     DBResult(void* data, int cols);
-
+    const char* getErrMsg() const { return errReason; }
     uint32_t getCols() const { return cols; }
     // the returned ptr will be invalid after step()
     const char* getString(uint32_t col) const;
@@ -62,7 +63,7 @@ private:
     void innerCheck(uint32_t col) const;
     void* mData;
     int cols = 0;
-    char* errReason = 0;
+    const char* errReason = 0;
 };
 
 class DatabaseOperation : public Singleton<DatabaseOperation> {
@@ -73,7 +74,7 @@ public:
   DBResultPtr Exec(const std::string &sql) const;
   DBResultPtr Exec(const std::string &sqlFmt,
                    const std::vector<std::string> &userInParameter) const;
-
+  const char* getErrMsg() const ;
   template <typename... Args>
   DBResultPtr Exec(const std::string &sqlFmt, Args &&...arg) {
     auto stmt = stmtPrepare(sqlFmt);
@@ -122,6 +123,17 @@ private:
   void bind(void *stmt, int i, uint32_t v) { bind(stmt, i, (int)v); }
   void bind(void *stmt, int i, uint64_t v) { bind(stmt, i, (int64_t)v); }
 
+  //Return bind parameter count;
+  template <typename T>
+  int bind(void* stmt, int offset, const T& cls ){
+    reflect::for_each(
+        [&](auto j) {
+          auto val = reflect::get<j>(cls);
+          bind(stmt, offset + j, val);
+        },
+        cls);
+        return reflect::size(cls);
+  }
   DatabaseOperationPrivate *dp = nullptr;
 };
 

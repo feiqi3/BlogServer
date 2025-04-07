@@ -65,6 +65,12 @@ public:
 	std::vector<sqlite3**> dbConnPerThread;
 	std::mutex mLock;
 public:
+	const char* getErrMsg()const {
+		if(_db != 0)
+			return sqlite3_errmsg(_db);
+		return 0;
+	};
+
 	bool exec(const std::string& sql) {
 		auto conn = getDbConn();
 		assert(conn != 0);
@@ -260,6 +266,10 @@ DBResultPtr Blog::DatabaseOperation::Exec(const std::string& sqlFmt, const std::
 
 Blog::DBResult::DBResult(void *data, int cols) : mData(data), cols(cols) {}
 
+const char* Blog::DatabaseOperation::getErrMsg() const
+{
+	return dp->getErrMsg();
+}
 
 const char* Blog::DBResult::getString(uint32_t col) const
 {
@@ -287,7 +297,15 @@ double Blog::DBResult::getFloat(uint32_t col) const
 
 bool Blog::DBResult::step()
 {
-	return sqlite3_step((sqlite3_stmt*)mData) == SQLITE_ROW;
+	auto res = sqlite3_step((sqlite3_stmt*)mData);
+	if(res == SQLITE_ROW || res == SQLITE_DONE){
+		return res == SQLITE_ROW;
+	}
+	this->errReason = DatabaseOperation::instance()->getErrMsg();
+	if(errReason != 0){
+		Logger::instance()->log(MODULE_NAME,lvl::err,"SQL error, reason \"{}\"",this->errReason);
+	}
+	return false;
 }
 
 bool Blog::DBResult::excute(){
@@ -295,6 +313,7 @@ bool Blog::DBResult::excute(){
 	if(ret == SQLITE_DONE){
 		return true;
 	}else{
+		this->errReason = DatabaseOperation::instance()->getErrMsg();
 		return false;
 	}
 }
