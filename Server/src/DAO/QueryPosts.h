@@ -24,4 +24,6 @@ static std::optional<Model::Post> QueryPostByTitle(const char* postName);
       -> std::vector<
       std::tuple<uint64_t, std::string, std::string, uint64_t, uint64_t,std::string>>;
 };
+
+static std::optional<std::string> InsertPost(const Model::Post& post);
 } // namespace Blog::DAO

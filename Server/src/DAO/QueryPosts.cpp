@@ -76,4 +76,18 @@ auto PostQuery::QueryPostsDataWithCategoryProfileSinceLastByPageDesc(uint64_t la
     return query.exec(lastId,categoryId, perPageNum).getVector();
 }
 
+std::optional<std::string> PostQuery::InsertPost(const Model::Post& post){
+    auto getQuery = [&post](){
+        Query<Model::Post> q;
+        q.Insert(post,PARAM);
+        return q;
+    };
+    static auto query = getQuery();
+    auto ptr = query.exec(post).getResult();
+    bool res = ptr->excute();
+    if(res)return std::nullopt_t;
+    return ptr->getErrMsg();
+}
+
+
 } // namespace Blog::DAO

@@ -28,10 +28,11 @@ namespace Blog{
 */
 
 		Fei::Http::FHttpResponse Login(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse PostBlog(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 
 		REGISTER_MAPPING_BEGIN("/api")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/login", AdminController, Login);
-		REGISTER_MAPPING_END
+            REGISTER_MAPPING_END
 
         private:
         

@@ -35,6 +35,11 @@ void AdminController::lateInit() {
   }
 }
 
+Fei::Http::FHttpResponse AdminController::PostBlog(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+  
+}
+
+
 Fei::Http::FHttpResponse
 AdminController::Login(const Fei::Http::FHttpRequest &req,
                        const Fei::Http::FPathVar &var) {
