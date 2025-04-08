@@ -4,7 +4,9 @@
 #include <string>
 namespace Blog{
     class TimeHelper{
+        public:
         static std::string toFormatTime(uint64_t timeFromEpochMills, const std::string& fmt = "%Y-%m-%d %H:%M");
+        static uint64_t getCurrentTimeFromEpochMills();
     };
 }
 #endif
