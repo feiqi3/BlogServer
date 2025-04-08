@@ -21,6 +21,14 @@ concept StringLike = std::is_convertible_v<T, std::string_view>;
 template <class T>
 concept NotStringLike = !std::is_convertible_v<T, std::string_view>;
 
+template<typename, typename = std::void_t<>>
+struct has_nested_type_PK : std::false_type {};
+
+template<typename T>
+struct has_nested_type_PK<T, std::void_t<typename T::_AUTO_INC_PK_NAME>> : std::true_type {};
+
+
+
 template <typename T> class Condition {
 public:
 struct WithoutBracket{};
@@ -299,6 +307,15 @@ public:
     op = "SELECT " + queryField.toFieldSelect() + " FROM ";
   }
 
+  constexpr auto getPkName() {
+    static_assert(!(is_tuple<T>::value || std::is_integral_v<T> ||
+                    std::is_floating_point_v<T> ||
+                    std::is_convertible_v<T, std::string>),
+                  "This function can only be called for queries that are for Entity rather than multi cols or specific col.");
+
+    return (reflect::type_name<typename T::_AUTO_INC_PK_NAME::type>());
+  }
+
   constexpr auto getTableName() {
     static_assert(!(is_tuple<T>::value || std::is_integral_v<T> ||
                     std::is_floating_point_v<T> ||
@@ -322,6 +339,13 @@ public:
     selectTableName = std::string(getTableName());
     return*this;
   }
+
+constexpr Query& InsertWithAutoIncPk(const T &cls){
+  op = " INSERT INTO ";
+  selectTableName = std::string(getTableName()) + getInsertList();
+  insertValues = " VALUES " + getInsertValueList(cls);
+  return *this;
+}
 
   constexpr Query &Insert(const T &cls) {
     op = " INSERT INTO ";
@@ -454,6 +478,54 @@ private:
     return std::to_string(v);
   }
 
+  constexpr std::string getInsertList() {
+    std::string ret = "(";
+    T t;
+    constexpr auto hasPK = has_nested_type_PK<T>::value;
+    if constexpr(hasPK){
+      int j = 0;
+      reflect::for_each(
+          [&](auto i) {
+            if(reflect::member_name<i, T>() != getPkName()){
+              if (j != 0) {
+                ret = ret + " , ";
+              }
+              j++;
+              ret = ret + std::string(reflect::member_name<i, T>());
+            }
+          },
+          t);
+      ret += ") ";
+      return ret;
+    }else{
+      return getClsDefineList();
+    }
+  }
+
+  constexpr auto getInsertValueList(const T &t){
+    constexpr auto hasPK = has_nested_type_PK<T>::value;
+    if constexpr(hasPK){
+      int j = 0;
+      std::string ret = "(";
+      reflect::for_each(
+        [&](auto i) {
+          if(reflect::member_name<i, T>() != getPkName()){
+            if (j != 0) {
+              ret = ret + " , ";
+            }
+            j++;
+            auto val = reflect::get<i>(t);
+            ret += to_string(val);
+          }
+        },
+        t);
+      ret += ") ";
+      return ret;
+    }else{
+      return getClsValueList(t);
+    }
+  }
+
   constexpr std::string getClsDefineList() {
     std::string ret = "(";
     T t;
@@ -552,6 +624,12 @@ private:
   struct _ENTITY_TABLE_NAME {                                                  \
     struct TB_NAME {};                                                         \
     using type = typename _ENTITY_TABLE_NAME::TB_NAME;                         \
+  };
+
+  #define AUTO_INC_PK(KEY_NAME)                                                \
+  struct _AUTO_INC_PK_NAME {                                                   \
+    struct KEY_NAME {};                                                        \
+    using type = typename _AUTO_INC_PK_NAME::KEY_NAME;                         \
   };
 
 #endif
