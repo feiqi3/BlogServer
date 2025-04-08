@@ -17,6 +17,18 @@
 #define MODULE_NAME "[AdminLoginController]"
 namespace {
 const int sMaxErrorTime = 5;
+nlohmann::json getErrorJson(const std::string &msg) {
+  nlohmann::json j;
+  j["result"] = Blog::ApiError;
+  j["msg"] = msg;
+  return j;
+}
+nlohmann::json getSucc() {
+  nlohmann::json j;
+  j["result"] = Blog::ApiOk;
+  return j;
+}
+
 }
 
 namespace Blog {
@@ -33,10 +45,6 @@ void AdminController::lateInit() {
         Fei::lvl::warn,
         MODULE_NAME "Admin user or password not set. Check config file.");
   }
-}
-
-Fei::Http::FHttpResponse AdminController::PostBlog(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
-  
 }
 
 
@@ -92,5 +100,29 @@ AdminController::Login(const Fei::Http::FHttpRequest &req,
   res.setBody(JsonTool::ToString(j));
   return res;
 }
+
+Fei::Http::FHttpResponse
+AdminController::Post(const Fei::Http::FHttpRequest &req,
+                      const Fei::Http::FPathVar &var) {
+  Fei::Http::FHttpResponse res;
+  nlohmann::json json = JsonTool::ToJson(req.getRequestBody());
+  if (!AdminLogin::instance()->isLogin(req)) {
+    nlohmann::json j=  getErrorJson("Not login");
+    res.setBody(JsonTool::ToString(j));
+    return res;
+  }
+  std::string outErr;
+  bool result = AdminLogin::instance()->postOrModifyBlog(json, outErr);
+  if(!result){
+    Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Post error: {}", outErr);
+    res.setBody(JsonTool::ToString(getErrorJson(outErr)));
+    return res; 
+  }else{
+    res.setBody(JsonTool::ToString(getSucc()));
+    return res;
+  }
+
+}
+
 
 } // namespace Blog

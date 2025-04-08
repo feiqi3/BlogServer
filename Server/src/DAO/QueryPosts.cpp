@@ -2,6 +2,7 @@
 #include "Model/Posts.h"
 #include "ORM.h"
 #include <optional>
+#include "Utils/TimeHelper.h"
 
 namespace Blog::DAO {
 std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t, uint64_t, std::string,uint64_t>>
@@ -77,17 +78,34 @@ auto PostQuery::QueryPostsDataWithCategoryProfileSinceLastByPageDesc(uint64_t la
 }
 
 std::optional<std::string> PostQuery::InsertPost(const Model::Post& post){
-    auto getQuery = [&post](){
-        Query<Model::Post> q;
-        q.Insert(post,PARAM);
-        return q;
-    };
-    static auto query = getQuery();
+    Query<Model::Post> query;
+    query.InsertWithAutoIncPk(post);
     auto ptr = query.exec(post).getResult();
     bool res = ptr->excute();
-    if(res)return std::nullopt_t;
+    if(res)return std::nullopt;
     return ptr->getErrMsg();
 }
 
+std::optional<std::string> PostQuery::UpdatePostById(uint64_t postId,
+    const Model::Post &post){
+    auto getQuery = []() {
+        Query<Model::Post> query;
+        query.Where(FIELD(Model::Post, id) == PARAM);
+        query.update(
+            FIELD(Model::Post, title) == PARAM &&
+            FIELD(Model::Post,category_id) == PARAM &&
+            FIELD(Model::Post, profile) == PARAM &&
+            FIELD(Model::Post, titlepic) == PARAM &&
+            FIELD(Model::Post, content) == PARAM &&
+            FIELD(Model::Post,updated_at) ==PARAM);
+        return query;
+        };
+    static auto query = getQuery();
+    auto updateTime = TimeHelper::getCurrentTimeFromEpochMills();
+    auto ptr = query.exec(postId, post.title, post.category_id, post.profile, post.titlepic, post.content,updateTime).getResult();
+    bool res = ptr->excute();
+    if(res)return std::nullopt;
+    return ptr->getErrMsg();
+}
 
 } // namespace Blog::DAO

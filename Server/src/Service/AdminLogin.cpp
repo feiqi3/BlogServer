@@ -3,6 +3,9 @@
 #include "FLogger.h"
 #include "FConfigReader.h"
 #include "Core/Session.h"
+#include "Core/JsonTool.h"
+#include "DAO/QueryPosts.h"
+#include "Model/Posts.h"
 #define MODULE_NAME "[AdminLogin]"
 
 namespace {
@@ -62,6 +65,89 @@ namespace Blog{
         return false;
     }
 
+    bool AdminLogin::postOrModifyBlog(const nlohmann::json& json,std::string& out){
+        auto titleJson = json["title"];
+        if(titleJson.is_null()){
+            out = "title is null";
+            return false;
+        }
+        std::string title = titleJson.get<std::string>();
+        if(title.empty()){
+            out = "title is empty";
+            return false;
+        }
+
+        auto profileJson = json["profile"];
+        if(profileJson.is_null()){
+            out = "profile is null";
+            return false;
+        }
+        std::string profile = profileJson.get<std::string>();
+        if(profile.empty()){
+            out = "profile is empty";
+            return false;
+        }
+
+        auto contentJson = json["content"];
+        if(contentJson.is_null()){
+            out = "content is null";
+            return false;
+        }
+        std::string content = contentJson.get<std::string>();
+        if(content.empty()){
+            out = "content is empty";
+            return false;
+        }
+
+        auto titlepicJson = json["titlepic"];
+        if(contentJson.is_null()){
+            out = "titlepic is null";
+            return false;
+        }
+        std::string titlepic = titlepicJson.get<std::string>();
+        if(titlepic.empty()){
+            out = "titlepic is empty";
+            return false;
+        }
+        Model::Post post;
+        //modyify  
+        auto idItor = json.find("id");
+        if(idItor != json.end()){
+            uint64_t id = idItor->get<uint64_t>();
+            auto postopt = DAO::PostQuery::QueryPostById(id);
+            if(!postopt.has_value()){
+                out = "post not exist";
+                return false;
+            }
+            post.id = id;
+            post.title = title;
+            post.profile = profile;
+            post.content = content;
+            post.titlepic = titlepic;
+            post.category_id = 0;
+            auto out = DAO::PostQuery::UpdatePostById(id, post);
+            if(out.has_value()){
+                out = out.value();
+                return false;
+            }
+            return true;
+        }
+        else{
+            //insert
+            Model::Post post;
+            post.title = title;
+            post.profile = profile;
+            post.content = content;
+            post.titlepic = titlepic;
+            auto res = DAO::PostQuery::InsertPost(post);
+            if(res.has_value()){
+                out = res.value();
+                return false;
+            }
+            return true;
+        }
+
+    }
 
     bool AdminLogin::Login(const std::string& userName,const std::string& password,std::string& sessionId){
         //some more complicated condition?

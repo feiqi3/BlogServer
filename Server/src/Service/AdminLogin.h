@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <string>
+#include "Core/JsonTool.h"
 
 namespace Blog{
     class AdminLogin : public Singleton<AdminLogin>{
@@ -14,7 +15,9 @@ namespace Blog{
         bool isLogin(const std::string& sessionId)const;
         bool isOnLock();
         
+        bool postOrModifyBlog(const nlohmann::json& json,std::string& out);
         private:
+
         std::string mUserName;
         std::string mPassword;
         std::atomic<bool> mIsLocked = false;
