@@ -29,6 +29,8 @@ public:
                                 uint64_t, std::string>>;
 
   static std::optional<std::string> InsertPost(const Model::Post &post);
+
+  static std::optional<std::string> DeletePostById(uint64_t postId);
 };
 
 } // namespace Blog::DAO

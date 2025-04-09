@@ -16,6 +16,7 @@ namespace Blog{
         bool isOnLock();
         
         bool postOrModifyBlog(const nlohmann::json& json,std::string& out);
+        bool deleteBlog(uint64_t id,std::string& out);
         private:
 
         std::string mUserName;

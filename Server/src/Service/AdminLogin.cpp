@@ -1,5 +1,6 @@
 #pragma once
 #include "AdminLogin.h"
+#include "DAO/ORM.h"
 #include "FLogger.h"
 #include "FConfigReader.h"
 #include "Core/Session.h"
@@ -66,6 +67,8 @@ namespace Blog{
     }
 
     bool AdminLogin::postOrModifyBlog(const nlohmann::json& json,std::string& out){
+        bool isModify = false;
+        
         auto titleJson = json["title"];
         if(titleJson.is_null()){
             out = "title is null";
@@ -124,6 +127,7 @@ namespace Blog{
             post.profile = profile;
             post.content = content;
             post.titlepic = titlepic;
+            //TODO: modify this
             post.category_id = 0;
             auto out = DAO::PostQuery::UpdatePostById(id, post);
             if(out.has_value()){
@@ -139,6 +143,8 @@ namespace Blog{
             post.profile = profile;
             post.content = content;
             post.titlepic = titlepic;
+            //TODO: modify this
+            post.category_id = 0;
             auto res = DAO::PostQuery::InsertPost(post);
             if(res.has_value()){
                 out = res.value();
@@ -176,5 +182,15 @@ namespace Blog{
 
         return isLoginSuccess;
     }
+
+    bool AdminLogin::deleteBlog(uint64_t id,std::string& out){
+        auto res = DAO::PostQuery::DeletePostById(id);
+        if(res.has_value()){
+            out = res.value();
+            return false;
+        }
+        return true;
+    }
+
 
 };

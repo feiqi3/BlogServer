@@ -24,6 +24,7 @@ namespace Blog{
             for(auto& v : val){
                 renderData[key].push_back(Fei::Http::FReflect::fromClass(v));
             }
+            auto str = renderData.dump();
         }
 
         template<typename Tp>

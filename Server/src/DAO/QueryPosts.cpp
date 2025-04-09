@@ -108,4 +108,17 @@ std::optional<std::string> PostQuery::UpdatePostById(uint64_t postId,
     return ptr->getErrMsg();
 }
 
+std::optional<std::string> PostQuery::DeletePostById(uint64_t postId){
+    auto getQuery = []() {
+        Query<Model::Post> query;
+        query.Delete().Where(FIELD(Model::Post, id) == PARAM);
+        return query;
+        };
+    static auto q = getQuery();
+    auto ptr = q.exec(postId).getResult();
+    bool res = ptr->excute();
+    if(res)return std::nullopt;
+    return ptr->getErrMsg();
+}
+
 } // namespace Blog::DAO

@@ -29,7 +29,7 @@ nlohmann::json getSucc() {
   return j;
 }
 
-}
+} // namespace
 
 namespace Blog {
 
@@ -46,7 +46,6 @@ void AdminController::lateInit() {
         MODULE_NAME "Admin user or password not set. Check config file.");
   }
 }
-
 
 Fei::Http::FHttpResponse
 AdminController::Login(const Fei::Http::FHttpRequest &req,
@@ -84,14 +83,14 @@ AdminController::Login(const Fei::Http::FHttpRequest &req,
 
     cookie.addAttribute(
         "Max-Age",
-    std::to_string(SessionManager::instance()->getSessionExpireTimeMins()));
+        std::to_string(SessionManager::instance()->getSessionExpireTimeMins()));
     cookie.addAttribute("HttpOnly");
-    #ifndef FEI_DEBUG
+#ifndef FEI_DEBUG
     cookie.addAttribute("SameSite", "Strict");
     cookie.addAttribute("Secure");
 #endif
     res.addCookie(cookie);
-    res.addHeader("Access-Control-Allow-Credentials", "true" );
+    res.addHeader("Access-Control-Allow-Credentials", "true");
     j["result"] = ApiOk;
   } else {
     j["result"] = ApiError;
@@ -107,22 +106,51 @@ AdminController::Post(const Fei::Http::FHttpRequest &req,
   Fei::Http::FHttpResponse res;
   nlohmann::json json = JsonTool::ToJson(req.getRequestBody());
   if (!AdminLogin::instance()->isLogin(req)) {
-    nlohmann::json j=  getErrorJson("Not login");
+    nlohmann::json j = getErrorJson("Not login");
     res.setBody(JsonTool::ToString(j));
     return res;
   }
   std::string outErr;
   bool result = AdminLogin::instance()->postOrModifyBlog(json, outErr);
-  if(!result){
-    Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Post error: {}", outErr);
+  if (!result) {
+    Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Post error: {}",
+                                 outErr);
     res.setBody(JsonTool::ToString(getErrorJson(outErr)));
-    return res; 
-  }else{
+    return res;
+  } else {
     res.setBody(JsonTool::ToString(getSucc()));
     return res;
   }
-
 }
 
+Fei::Http::FHttpResponse
+AdminController::Delete(const Fei::Http::FHttpRequest &req,
+                        const Fei::Http::FPathVar &var) {
+  Fei::Http::FHttpResponse res;
+  nlohmann::json json = JsonTool::ToJson(req.getRequestBody());
+  if (!AdminLogin::instance()->isLogin(req)) {
+    nlohmann::json j = getErrorJson("Not login");
+    res.setBody(JsonTool::ToString(j));
+    return res;
+  }
+
+  auto itorId = json.find("id");
+  if (itorId == json.end()) {
+    res.setBody(JsonTool::ToString(getErrorJson("json msg error!")));
+    return res;
+  }
+  uint64_t id = itorId->get<uint64_t>();
+  std::string outErr;
+  bool result = AdminLogin::instance()->deleteBlog(id, outErr);
+  if (!result) {
+    Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Post Delete error: {}",
+                                 outErr);
+    res.setBody(JsonTool::ToString(getErrorJson(outErr)));
+    return res;
+  } else {
+    res.setBody(JsonTool::ToString(getSucc()));
+    return res;
+  }
+}
 
 } // namespace Blog
