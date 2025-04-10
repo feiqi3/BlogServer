@@ -47,9 +47,7 @@ jobs:
     steps:
 
     - name: Setup CMake
-      uses: lukka/get-cmake@v3
-      with:
-        version: '3.24.0'  # 这里可以指定你需要的高版本CMake
+      uses: lukka/get-cmake@latest  
 
     - name: Install OpenSSL
       if: runner.os == 'Linux'
