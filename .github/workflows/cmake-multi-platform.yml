@@ -46,6 +46,11 @@ jobs:
 
     steps:
 
+    - name: Setup CMake
+      uses: lukka/get-cmake@v3
+      with:
+        version: '3.24.0'  # 这里可以指定你需要的高版本CMake
+
     - name: Install OpenSSL
       if: runner.os == 'Linux'
       run: |
@@ -85,7 +90,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -S ${{ github.workspace }}
+        -S ${{ github.workspace }} || true
 
     - name: Configure CMake Again
       run: >
