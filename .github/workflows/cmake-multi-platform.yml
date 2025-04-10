@@ -45,6 +45,26 @@ jobs:
             c_compiler: cl
 
     steps:
+
+    - name: Install OpenSSL
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openssl libssl-dev
+
+    - name: Install OpenSSL (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew update
+        brew install openssl
+
+    - name: Install OpenSSL (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        choco install openssl.light -y
+
+
     - uses: actions/checkout@v4
     
     - name: Checkout submodules
