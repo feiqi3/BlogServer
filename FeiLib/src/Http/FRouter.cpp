@@ -1,4 +1,5 @@
 #include "Http/FRouter.h"
+#include "FConfigReader.h"
 #include "FDef.h"
 #include "Http/FPathMatcher.h"
 #include "FLogger.h"
@@ -166,6 +167,18 @@ namespace Fei::Http {
 			i.second->lateInit();
 		}
 		this->_dp->hasLateInit = true;
+		if(FConfigReader::instance()->getCurrentEnv() == FConfigReader::Env::Test){
+				Logger::instance()->log("FRouter", lvl::trace, "Registered Controller Functions:");
+				int queueMEthod = 0;
+			for(auto && queue :this->_dp->mControllerOrderQueue){
+				Logger::instance()->log("FRouter", lvl::trace, "Queue Method: {}",queueMEthod);
+				for(auto && controllerFunc : queue){
+					auto controllerAndPattern = controllerFunc.second;
+					Logger::instance()->log("FRouter", lvl::trace, "Controller: {}, Pattern: {}, Priority: {}",controllerAndPattern->ControllerBase->getControllerName(),controllerAndPattern->PathMatcher->getOriginPattern(),controllerAndPattern->priority);
+				}
+				queueMEthod++;
+			}
+		}
 	}
 
 	FRouter::FRouter():_dp(new __FRouterInner)
@@ -242,13 +255,17 @@ namespace Fei::Http {
 		_temp->priority = priority;
 		_temp->requestMethod = mapMethod;
 		_temp->PathMatcher = matcher;
-		_temp->ControllerFunc = std::move(func);
+		_temp->ControllerFunc = (func);
 		_temp->ControllerBase = controller;
 
 		assert(mapMethod < Method::MAX_SIZE);
 		{
 			auto& orderQueue = _dp->mControllerOrderQueue[(uint32)mapMethod];
-			orderQueue.insert({priority ,std::move(_temp) });
+			while(orderQueue.find(priority) != orderQueue.end()){
+				++priority;
+			}
+			_temp->priority = priority;
+			orderQueue.insert({priority ,(_temp) });
 		}
 		if(Logger::valid() )
 			Logger::instance()->log("FRouter", lvl::trace, "Register {} Mehtod path pattern: {}", methodToStr(mapMethod), pathPattern);
