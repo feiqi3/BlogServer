@@ -51,9 +51,18 @@ public:
     ~DBResult();
 
 public:
-    template <IsInteger T> void setByCol(T& t, int col) { t = getInteger(col); }
+    template <IsInteger T> void setByCol(T& t, int col) { 
+      if constexpr(sizeof(T) <= 4)
+      {
+        t = getInteger(col);
+      }else{
+        t = getInteger64(col);
+      }
+      }
 
-    template <IsFloat T> void setByCol(T& t, int col) { t = getFloat(col); }
+    template <IsFloat T> void setByCol(T& t, int col) {
+       t = getFloat(col); 
+      }
 
     template <IsStringLike T> void setByCol(T& t, int col) { t = getString(col); }
 
