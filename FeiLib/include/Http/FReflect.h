@@ -24,7 +24,7 @@ class FReflect{
 
     template<typename T>
     static std::string toString(T&& cls){
-        return fromClass(std::forward(cls)).dump();
+        return fromClass(std::forward<T>(cls)).dump();
     }
 };
 
