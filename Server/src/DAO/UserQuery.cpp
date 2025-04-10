@@ -8,7 +8,7 @@ namespace Blog::DAO{
         ret.Where(FIELD(Model::User,username) == PARAM && FIELD(Model::User,password_hash) == PARAM);
         return ret;
     };
-    static auto query = getQuery();
+    thread_local auto query = getQuery();
     auto res = query.exec(userName,hash).getVector().size();
     return res == 1;
 }

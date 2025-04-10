@@ -5,7 +5,7 @@ std::vector<std::string> Blog::DAO::CategoriesQuery::queryAllCategroyNames()
         auto ret = Query(FIELD(Model::Category, name));
         return ret;
         };
-    static auto query = getQuery();
+    thread_local auto query = getQuery();
     return query.exec().getVector();
 }
 
@@ -15,6 +15,6 @@ std::vector<Blog::Model::Category> Blog::DAO::CategoriesQuery::queryAllCategrori
         auto ret = Query<Blog::Model::Category>();
         return ret;
         };
-    static auto query = getQuery();
+    thread_local auto query = getQuery();
     return query.exec().getVector();
 }
