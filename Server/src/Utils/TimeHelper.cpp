@@ -20,7 +20,7 @@ namespace Blog{
     uint64_t TimeHelper::getCurrentTimeFromEpochMills(){
         auto now = std::chrono::system_clock::now();
         auto duration = now.time_since_epoch();
-        auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+        uint64_t millis = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
         return millis;
     }
 

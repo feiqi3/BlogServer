@@ -29,11 +29,11 @@ namespace Blog{
 
 		Fei::Http::FHttpResponse Login(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse Post(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
-        Fei::Http::FHttpResponse Delete(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+        Fei::Http::FHttpResponse DeletePost(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		REGISTER_MAPPING_BEGIN("/api")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/login", AdminController, Login);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/blog", AdminController, Post);
-			REGISTER_MAPPING_FUNC(Fei::Http::Method::DELETE, "/blog", AdminController, Delete);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::DELETE, "/blog/d-{id}", AdminController, DeletePost);
             REGISTER_MAPPING_END
 
         private:

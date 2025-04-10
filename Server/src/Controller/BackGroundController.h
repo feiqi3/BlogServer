@@ -29,7 +29,6 @@ namespace Blog{
 
 		Fei::Http::FHttpResponse LoginPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
         Fei::Http::FHttpResponse ArticleListPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
-
 		REGISTER_MAPPING_BEGIN("/background")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "", BackGroundController, LoginPage);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/articles", BackGroundController, ArticleListPage);

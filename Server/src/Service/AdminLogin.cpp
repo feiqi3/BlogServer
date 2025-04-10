@@ -4,9 +4,13 @@
 #include "FLogger.h"
 #include "FConfigReader.h"
 #include "Core/Session.h"
+#include "Utils/Digital.h"
+#include "Utils/TimeHelper.h"
 #include "Core/JsonTool.h"
 #include "DAO/QueryPosts.h"
 #include "Model/Posts.h"
+#include <cstdint>
+#include <string>
 #define MODULE_NAME "[AdminLogin]"
 
 namespace {
@@ -116,7 +120,12 @@ namespace Blog{
         //modyify  
         auto idItor = json.find("id");
         if(idItor != json.end()){
-            uint64_t id = idItor->get<uint64_t>();
+            auto idstr = idItor->get<std::string>();
+            if(!Digital::isNumber(idstr)){
+                out = "id is wrong";
+                return false;
+            }
+            uint64_t id  = std::stoull(idstr);
             auto postopt = DAO::PostQuery::QueryPostById(id);
             if(!postopt.has_value()){
                 out = "post not exist";
@@ -127,6 +136,7 @@ namespace Blog{
             post.profile = profile;
             post.content = content;
             post.titlepic = titlepic;
+            post.updated_at = TimeHelper::getCurrentTimeFromEpochMills();
             //TODO: modify this
             post.category_id = 0;
             auto out = DAO::PostQuery::UpdatePostById(id, post);
@@ -143,6 +153,8 @@ namespace Blog{
             post.profile = profile;
             post.content = content;
             post.titlepic = titlepic;
+            post.created_at = TimeHelper::getCurrentTimeFromEpochMills();
+            post.updated_at = 0;
             //TODO: modify this
             post.category_id = 0;
             auto res = DAO::PostQuery::InsertPost(post);

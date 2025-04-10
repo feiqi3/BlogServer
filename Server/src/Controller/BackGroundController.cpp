@@ -4,13 +4,14 @@
 #include "Utils/FileReader.h"
 #include "BackGroundController.h"
 #include "Core/Session.h"
+#include "Core/ApiChangeDataDef.h"
 #include "Service/QuickRedirect.h"
 #include <cstdint>
 #include <string>
 #include <vector>
 #include "DAO/QueryPosts.h"
 #include "Core/ServerBasicDef.h"
-
+#include "Utils/Digital.h"
 namespace Blog{
     BackGroundController::BackGroundController():Fei::Http::FControllerBase("BackGroundController"){
     }
@@ -40,6 +41,11 @@ namespace Blog{
         if(beginPost.empty()){
             lastId = 0;
         }else{
+            if(!Digital::isNumber(beginPost)){
+                Fei::Http::FHttpResponse res;
+                res.setBody(JsonTool::ToString(getErrorJson("Id Error!")));
+                return res;
+              }
             lastId = std::stoull(beginPost);
         }
 

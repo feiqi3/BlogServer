@@ -5,7 +5,8 @@
 #include "Http/FController.h"
 #include "Http/FCookie.h"
 #include "Http/FHttpResponse.h"
-#include <chrono>
+#include <cctype>
+
 #include <string>
 
 #include "Core/ApiChangeDataDef.h"
@@ -13,22 +14,10 @@
 #include "Service/AdminLogin.h"
 #include "Service/QuickRedirect.h"
 #include "nlohmann/json_fwd.hpp"
-
+#include "Utils/Digital.h"
 #define MODULE_NAME "[AdminLoginController]"
 namespace {
 const int sMaxErrorTime = 5;
-nlohmann::json getErrorJson(const std::string &msg) {
-  nlohmann::json j;
-  j["result"] = Blog::ApiError;
-  j["msg"] = msg;
-  return j;
-}
-nlohmann::json getSucc() {
-  nlohmann::json j;
-  j["result"] = Blog::ApiOk;
-  return j;
-}
-
 } // namespace
 
 namespace Blog {
@@ -124,7 +113,7 @@ AdminController::Post(const Fei::Http::FHttpRequest &req,
 }
 
 Fei::Http::FHttpResponse
-AdminController::Delete(const Fei::Http::FHttpRequest &req,
+AdminController::DeletePost(const Fei::Http::FHttpRequest &req,
                         const Fei::Http::FPathVar &var) {
   Fei::Http::FHttpResponse res;
   nlohmann::json json = JsonTool::ToJson(req.getRequestBody());
@@ -133,13 +122,17 @@ AdminController::Delete(const Fei::Http::FHttpRequest &req,
     res.setBody(JsonTool::ToString(j));
     return res;
   }
-
-  auto itorId = json.find("id");
-  if (itorId == json.end()) {
-    res.setBody(JsonTool::ToString(getErrorJson("json msg error!")));
+  auto idStr = var.get("id");
+  if(idStr.empty()){
+    res.setBody(JsonTool::ToString(getErrorJson("No id error!")));
     return res;
   }
-  uint64_t id = itorId->get<uint64_t>();
+  if(!Digital::isNumber(idStr)){
+    res.setBody(JsonTool::ToString(getErrorJson("Id Error!")));
+    return res;
+  }
+  
+  uint64_t id = std::stoul(idStr);
   std::string outErr;
   bool result = AdminLogin::instance()->deleteBlog(id, outErr);
   if (!result) {
