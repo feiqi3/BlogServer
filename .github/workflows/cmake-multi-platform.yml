@@ -55,18 +55,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y openssl libssl-dev
 
-    - name: Install OpenSSL (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        brew update
-        brew install openssl
-
     - name: Install OpenSSL (Windows)
       if: runner.os == 'Windows'
       shell: powershell
       run: |
-        choco install openssl.light -y
-
+        choco install openssl.light -y 
 
     - uses: actions/checkout@v4
     
@@ -98,6 +91,17 @@ jobs:
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -S ${{ github.workspace }}
 
+    - name: Configure CMake With OpenSSL
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL"
+        -S ${{ github.workspace }}
+        
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
