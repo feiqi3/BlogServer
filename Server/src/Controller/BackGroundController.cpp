@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include "DAO/QueryPosts.h"
+#include "DAO/CategoryQuery.h"
 #include "Core/ServerBasicDef.h"
 #include "Utils/Digital.h"
 namespace Blog{
@@ -71,4 +72,42 @@ namespace Blog{
         return response;
     }
 
+    Fei::Http::FHttpResponse BackGroundController::CategoryPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+        bool isLogin = AdminLogin::instance()->isLogin(req);
+        if(!isLogin){
+            return Redirector::RedirectTo("/background");
+        }
+        auto beginPost = var.get("id-begin");
+
+        uint64_t lastId = 0;
+        if(beginPost.empty()){
+            lastId = 0;
+        }else{
+            if(!Digital::isNumber(beginPost)){
+                Fei::Http::FHttpResponse res;
+                res.setBody(JsonTool::ToString(getErrorJson("Id Error!")));
+                return res;
+              }
+            lastId = std::stoull(beginPost);
+        }
+
+        auto categorys = DAO::CategoryQuery::QueryAllCategoryBasicInfo();
+        TemplateRenderData renderData;
+        struct CategoryProfile{
+            uint64_t id;
+            std::string name;
+        };
+
+        std::vector<CategoryProfile> model;
+        for(auto&& i : categorys){
+            model.push_back(fromTuple<CategoryProfile>(i));
+        }
+        renderData.setData("categories",model);
+        TemplateRender render;
+        std::string renderRes;
+        render.render(BlogWebPagePath + "backyard-categories.html",renderData,renderRes);
+        Fei::Http::FHttpResponse response;
+        response.setBody(renderRes);
+        return response;
+    }
 }

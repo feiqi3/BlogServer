@@ -146,4 +146,50 @@ AdminController::DeletePost(const Fei::Http::FHttpRequest &req,
   }
 }
 
+Fei::Http::FHttpResponse AdminController::Category(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+  Fei::Http::FHttpResponse res;
+  nlohmann::json json = JsonTool::ToJson(req.getRequestBody());
+  if (!AdminLogin::instance()->isLogin(req)) {
+    nlohmann::json j = getErrorJson("Not login");
+    res.setBody(JsonTool::ToString(j));
+    return res;
+  }
+  std::string outErr;
+  bool result = AdminLogin::instance()->postOrModifyCategory(json, outErr);
+  if (!result) {
+    Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Category error: {}",
+                                 outErr);
+    res.setBody(JsonTool::ToString(getErrorJson(outErr)));
+    return res;
+  } else {
+    res.setBody(JsonTool::ToString(getSucc()));
+    return res;
+  }
+}
+
+Fei::Http::FHttpResponse AdminController::DeleteCategroy(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+  Fei::Http::FHttpResponse res;
+  auto idStr = var.get("id");
+  if(idStr.empty()){
+    res.setBody(JsonTool::ToString(getErrorJson("No id error!")));
+    return res;
+  }
+  if(!Digital::isNumber(idStr)){
+    res.setBody(JsonTool::ToString(getErrorJson("Id Error!")));
+    return res;
+  }
+  
+  uint64_t id = std::stoul(idStr);
+  std::string outErr;
+  bool result = AdminLogin::instance()->deleteCategory(id, outErr);
+  if (!result) {
+    Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Category Delete error: {}",
+                                 outErr);
+    res.setBody(JsonTool::ToString(getErrorJson(outErr)));
+    return res;
+  } else {
+    res.setBody(JsonTool::ToString(getSucc()));
+    return res;
+  }
+}
 } // namespace Blog

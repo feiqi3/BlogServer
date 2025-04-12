@@ -17,6 +17,8 @@ namespace Blog{
         
         bool postOrModifyBlog(const nlohmann::json& json,std::string& out);
         bool deleteBlog(uint64_t id,std::string& out);
+        bool postOrModifyCategory(const nlohmann::json& json,std::string& out);
+        bool deleteCategory(uint64_t id,std::string& out);
         private:
 
         std::string mUserName;
