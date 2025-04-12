@@ -7,7 +7,7 @@
 #include "absl/debugging/stacktrace.h"
 #include "absl/debugging/symbolize.h"
 
-#define MAX_STACK_DEPTH 64
+#define MAX_STACK_DEPTH 128
 
 std::vector<std::string> F_API Fei::getStackTrace(uint32 skip)
 {
