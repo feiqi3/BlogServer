@@ -116,7 +116,6 @@ Fei::Http::FHttpResponse
 AdminController::DeletePost(const Fei::Http::FHttpRequest &req,
                         const Fei::Http::FPathVar &var) {
   Fei::Http::FHttpResponse res;
-  nlohmann::json json = JsonTool::ToJson(req.getRequestBody());
   if (!AdminLogin::instance()->isLogin(req)) {
     nlohmann::json j = getErrorJson("Not login");
     res.setBody(JsonTool::ToString(j));
