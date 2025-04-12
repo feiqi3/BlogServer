@@ -87,11 +87,14 @@ public:
 
 	void makeConThreadLocal() {
 		if (_db != nullptr)return;
-		int flag = SQLITE_OPEN_READWRITE;
+		int flag = SQLITE_OPEN_READWRITE | SQLITE_OPEN_SHAREDCACHE;
 		std::lock_guard<std::mutex> guard(mLock);
 		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &_db, flag, nullptr), {
 		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(_db));
 			});
+		sqlite3_busy_timeout(_db,5000);
+		sqlite3_exec(_db, "PRAGMA foreign_keys = ON;", 0, 0, 0);
+		sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", 0, 0, 0);
 		dbConnPerThread.push_back(&_db);
 	}
 
@@ -116,9 +119,12 @@ public:
 		sqlite3_stmt* stmt = 0;
 		const char* unknownSql = 0;
 		SQL_CHECK(sqlite3_prepare_v2(conn, sql.c_str(), sql.size(), &stmt, &unknownSql), {
-			Logger::instance()->log(lvl::err,"SQL error, sql: \"{}\",error part: \"{}\", reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
+			Logger::instance()->log(lvl::critical,"SQL error, sql: \"{}\",error part: \"{}\", reason \"{}\"",sql,unknownSql == 0 ? "" : unknownSql,sqlite3_errmsg(conn));
 			return 0;
 			});
+		if(stmt == 0){
+			Fei::Logger::instance()->log(Fei::lvl::critical,"SQL error");
+		}
 		return stmt;
 	}
 
@@ -310,9 +316,17 @@ bool Blog::DBResult::step()
 
 bool Blog::DBResult::excute(){
 	auto ret = sqlite3_step((sqlite3_stmt*)mData);
+	while(ret!=SQLITE_DONE){
+		auto t = sqlite3_step((sqlite3_stmt*)mData);;
+		if(t!= SQLITE_ROW){
+			ret = t;
+			break;
+		}
+	}
 	if(ret == SQLITE_DONE){
 		return true;
-	}else{
+	}
+	else{
 		this->errReason = DatabaseOperation::instance()->getErrMsg();
 		return false;
 	}

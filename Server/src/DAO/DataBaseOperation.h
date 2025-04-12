@@ -1,6 +1,7 @@
 #ifndef DATABASEOPERATION_H
 #define DATABASEOPERATION_H
 #include "FException.h"
+#include "FLogger.h"
 #include "Utils/Singleton.h"
 #include "reflect"
 #include <cstddef>
@@ -99,6 +100,9 @@ public:
   template <typename... Args>
   void ReExec(const DBResultPtr& ptr, Args &&...arg) {
       auto stmt = ptr->mData;
+      if(stmt == 0){
+			Fei::Logger::instance()->log(Fei::lvl::critical,"SQL reexec error");
+      }
       resetStmt(stmt);
       bindArgs(stmt, std::forward<Args>(arg)...);
   }
