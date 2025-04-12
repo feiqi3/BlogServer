@@ -52,7 +52,7 @@ DatabaseTestPageController::GetMessageByPage(const Fei::Http::FHttpRequest &,
     tarPageNum = 0;
   }
   const int perpageNum = 10;
-  int pageNum = (DAO::TestMessageQuery::QueryMessagePageNum() + 1) / perpageNum;
+  int pageNum = DAO::TestMessageQuery::QueryMessagePageNum() / (perpageNum + 1);
   tarPageNum = std::min(pageNum, tarPageNum);
 
   auto messages =
