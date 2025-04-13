@@ -45,7 +45,7 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   if (!SSLContext) {
     auto errCode = ERR_get_error();
     auto reason = ERR_GET_REASON(errCode);
-    Logger::instance()->log(MODULE_NAME, lvl::critical,
+    Logger::instance()->log(MODULE_NAME, lvl::err,
                             "Unable to create SSL context, reason: \"{}\"",
                             reason);
   }
@@ -56,7 +56,7 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
     auto errCode = ERR_get_error();
     auto reason = ERR_GET_REASON(errCode);
     Logger::instance()->log(
-        MODULE_NAME, lvl::critical,
+        MODULE_NAME, lvl::err,
         "Unable to load SSL certificate file, reason: \"{}\"", reason);
   }
 
@@ -65,7 +65,7 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
     auto errCode = ERR_get_error();
     auto reason = ERR_GET_REASON(errCode);
     Logger::instance()->log(
-        MODULE_NAME, lvl::critical,
+        MODULE_NAME, lvl::err,
         "Unable to load SSL private key file, reason: \"{}\"", reason);
   }
 }

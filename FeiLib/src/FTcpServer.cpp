@@ -10,6 +10,7 @@
 #include "FDef.h"
 #include "FEPollListener.h"
 #include "FEventLoop.h"
+#include "FLogger.h"
 #include "FSSLHelper.h"
 #include "FSocket.h"
 #include "FTCPConnection.h"
@@ -33,8 +34,12 @@ void FTcpServer::deinitGlobalSSLEnv() {
 
 void FTcpServer::initGlobalSSLEnv(const std::string& certificateFile,const std::string& privateKeyFile) {
   if (!FSSLEnv::valid())
-    new FSSLEnv(certificateFile,privateKeyFile);
-  else
+    {
+      new FSSLEnv(certificateFile,privateKeyFile);
+      if(!FSSLEnv::instance()->isEnvSetup()){
+        delete FSSLEnv::instance();
+      }
+    }else
     throw std::runtime_error("Double init SSL Environment");
 }
 
@@ -92,6 +97,10 @@ void FTcpServer::stop(bool forceClose) {
 }
 
 void FTcpServer::addSslListenPort(uint32 port, bool reuseport) {
+  if(!FSSLEnv::valid() || !FSSLEnv::instance()->isEnvSetup()){
+    Logger::instance()->log(lvl::err,"[FTcpServer]SSL Environment not setup");
+    return;
+  }
   addListenPort(port, reuseport);
   m_sslPort.push_back(port);
 }

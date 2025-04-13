@@ -17,6 +17,10 @@ public:
   FSSLEnv(const std::string &certificateFile,const std::string &privateKeyFile);
   // Destroy SSL Context
   ~FSSLEnv();
+  bool isEnvSetup()const{
+    return SSLContext != 0;
+  }
+  
   void* getSSLContext()const{
     return SSLContext;
   }

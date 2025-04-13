@@ -15,7 +15,7 @@ if(CMAKE_BUILD_TYPE MATCHES "Debug")
 elseif(CMAKE_BUILD_TYPE MATCHES "Release")
     add_compile_definitions(FEI_RELEASE)
 else()
-    message(FATAL_ERROR "Invalid build type. Use Debug or Release.")
+    add_compile_definitions(FEI_RELEASE)
 endif(CMAKE_BUILD_TYPE MATCHES "Debug")
 
 
