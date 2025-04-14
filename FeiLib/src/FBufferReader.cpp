@@ -43,7 +43,10 @@ FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
   while (true) {
     char nxt;
     if ((nxt = mBuffer.Get(end)) == '\0')
-      break;
+      {
+        end =std::max(0,end - 1); // end + readIdx >= writeIdx ===> end = end - 1
+        break;
+      }
     end++;
 
     // LF
