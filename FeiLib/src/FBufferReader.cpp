@@ -44,7 +44,7 @@ FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
     char nxt;
     if ((nxt = mBuffer.Get(end)) == '\0')
       {
-        end =std::max(0,end - 1); // end + readIdx >= writeIdx ===> end = end - 1
+        end =std::max(0,end); // end + readIdx >= writeIdx ===> end = end - 1
         break;
       }
     end++;
@@ -82,7 +82,9 @@ char FBufferReader::readNext() {
 
 FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
     : buffer(&inBuffer), beg(_beg + buffer->readIdx),
-      end(_end + buffer->readIdx) {}
+      end(_end + buffer->readIdx) {
+        assert(end < buffer->getReadableSize() - 1);
+      }
 bool FBufferView::isEOF() const { return buffer->Get(0) == '\0'; }
 
 void FBufferView::resetSize(uint32 size)

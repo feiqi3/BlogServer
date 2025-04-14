@@ -124,6 +124,9 @@ HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
   FBufferView lineView(oldView);
   while (1) {
     lineView = newLine(&oldView);
+    if(lineView.size() == 0){
+      break;
+    }
     std::string lineview_content((char *)lineView.get(), lineView.size());
     oldView = lineView;
     uint32 cursor = 0;
