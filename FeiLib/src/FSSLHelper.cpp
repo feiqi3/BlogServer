@@ -4,7 +4,6 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <openssl/types.h>
 #include <string>
 #include <utility>
 
@@ -136,8 +135,12 @@ bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
     std::string dataToSend;
     dataToSend.resize(pending);
     pending = BIO_read(out_bio, dataToSend.data(), dataToSend.size());
-    assert(pending >= 0);
     ptr->send(std::move(dataToSend));
+  }else{
+    SSL_read(ssl, 0, 0);
+    if(SSL_pending(ssl) > 0){
+      return true;
+    }
   }
 
   return false;
@@ -195,15 +198,16 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
     throw SSLNotPreparedException();
   }
   BIO *ioIn = dp->rbio;
-  BIO *ioOut = dp->wbio;
+  //BIO *ioOut = dp->wbio;
 
   auto view = reader.peekAll();
+  int size = view.size();
   // write encrypted data into bio
-
-  auto size = BIO_write(ioIn, (unsigned char *)view.get(), view.size());
-  view.resetSize(size);
-  reader.expireView(view);
-
+  if(view.size() > 0){
+    auto size = BIO_write(ioIn, (unsigned char *)view.get(), view.size());
+    view.resetSize(size);
+    reader.expireView(view);
+  }
   // read decrypted data out of ssl
   int toReadSize = SSL_pending(dp->sslHandler) + size;
 
