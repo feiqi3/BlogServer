@@ -3,10 +3,14 @@
 #include "FDef.h"
 #include "Http/FPathMatcher.h"
 #include "FLogger.h"
-#include "tbb/concurrent_priority_queue.h"
 #include "tbb/concurrent_map.h"
 #include "FException.h"
+#include <cassert>
 #include <chrono>
+#include <memory>
+#include <string>
+#include <vector>
+#include "FConcurrentMap.h"
 
 #define CACHE_CLEAR_CACHE_UNUSED_TIME 1000 * 60 * 60 * 1 //ms --> 1h
 
@@ -70,21 +74,21 @@ namespace Fei::Http {
 
 		__FRouterInner() {
 			mControllerOrderQueue.resize((uint32)Method::MAX_SIZE);
-			mRouteCaches.resize((uint32)Method::MAX_SIZE);
+			mRouteCaches = std::make_unique<RouteCacheMap[]>
+			 ((uint32)Method::MAX_SIZE);
 			mControllerOrderQueueEraseLocks.reset(new std::mutex[(uint32)Method::MAX_SIZE]);
 		}
 		
 
 		std::mutex m_eraseLock;
 		std::mutex m_routeCacheEraseLock;
-		tbb::concurrent_map<std::string, FControllerPtr> mControllerMap;
-		
+		FConcurrentHashMap<std::string, FControllerPtr> mControllerMap;
 		struct RouteCahce {
 			uint64 cacheTime;
 			FRouter::RouteResult result;
 		};
-		using RouteCacheMap = tbb::concurrent_map<std::string, RouteCahce>;
-		std::vector<RouteCacheMap> mRouteCaches;
+		using RouteCacheMap = FConcurrentHashMap<std::string, RouteCahce>;
+		std::unique_ptr<RouteCacheMap[]> mRouteCaches;
 
 		using PathOrderQueue = tbb::concurrent_map<uint64, ControllerAndPatternPtr, __ControllerAndPatternCompare>;
 		std::vector<PathOrderQueue> mControllerOrderQueue;
@@ -96,48 +100,59 @@ namespace Fei::Http {
 
 	public:
 		void clearCache() {
-			FAUTO_LOCK(m_routeCacheEraseLock);
-			for (auto&& i : mRouteCaches) {
-				i.clear();
+			for(int i = 0; i < (int)Method::MAX_SIZE; ++i){
+				auto& caches = mRouteCaches[i];
+				caches.clear();
 			}
 		}
 		
 		void putCache(const std::string& str,Method method, const FRouter::RouteResult& in) {
 			uint64 timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-			mRouteCaches.at((uint32)method).insert({str, RouteCahce{.cacheTime = timeNow, .result = in}});
+			assert( (method < Method::MAX_SIZE));
+			mRouteCaches[(uint32)method].insert(str, RouteCahce{.cacheTime = timeNow, .result = in});
 		}
 
 		void invalidCache(const std::string& str,Method method) {
-			auto& caches = mRouteCaches.at((int)method);
-			auto itor = caches.find(str);
-			if (itor == caches.end()) {
+			assert( (method < Method::MAX_SIZE));
+			auto& caches = mRouteCaches[(uint32)method];
+
+			if(caches.find(str) == false){
 				return;
 			}
-			Logger::instance()->log(lvl::info, "Try erase invalid cache {} with method, but it isn't implemented yet.", str,methodToStr(method));
-			//TODO: erase.
+
+			Logger::instance()->log(lvl::info, "Try erase invalid cache {} with method.", str,methodToStr(method));
+			caches.erase(str);
 		}
 
 		void checkCacheOverdue(uint64 msDue) {
 			uint64 timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			for (int i = 0; i < (int)Method::MAX_SIZE; ++i) {
 				auto& caches = mRouteCaches[i];
-				for (auto itor = caches.begin(); itor != caches.end();) {
-					if (timeNow - itor->second.cacheTime > msDue) {
-						//TODO: erase.
+				std::vector<std::string> toErase;
+				caches.traversal([this, timeNow, msDue, &toErase](const std::string& key, const RouteCahce& cache) {
+					if (timeNow - cache.cacheTime > msDue) {
+						toErase.push_back(key);
 					}
+				});
+
+				for (auto&& i : toErase) {
+					caches.erase(i);
 				}
 			}
 		}
 
 		bool getRouteInCache(const std::string& str, Method method, FRouter::RouteResult& out) {
-			auto& caches = mRouteCaches.at((int)method);
-			auto itor = caches.find(str);
-			if (itor == caches.end()) {
+			assert( (method < Method::MAX_SIZE));
+			auto& caches = mRouteCaches[(int)method];
+			if(caches.find(str) == false){
 				return false;
 			}
+
 			uint64 timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-			itor->second.cacheTime = timeNow;
-			out = itor->second.result;
+			caches.findAndModifyLocked(str, [&](auto& in){
+				in.cacheTime = timeNow;
+				out = in.result;
+			});
 			return true;
 		}
 	};
@@ -163,9 +178,10 @@ namespace Fei::Http {
 			FRouter::instance()->unregController(controllerName);
 	}
 	void FRouter::lateInit(){
-		for(auto&& i : _dp->mControllerMap){
-			i.second->lateInit();
-		}
+		_dp->mControllerMap.traversal([this](const std::string& key, FControllerPtr controller) {
+			controller->lateInit();
+		});
+
 		this->_dp->hasLateInit = true;
 		if(FConfigReader::instance()->getCurrentEnv() == FConfigReader::Env::Test){
 				Logger::instance()->log("FRouter", lvl::trace, "Registered Controller Functions:");
@@ -228,10 +244,10 @@ namespace Fei::Http {
 	void FRouter::regController(const std::string& controllerName, FControllerPtr controller)
 	{
 		assert(controller != nullptr);
-		if (_dp->mControllerMap.find(controllerName) != _dp->mControllerMap.end()) {
+		if (_dp->mControllerMap.find(controllerName)) {
 			throw RouterDuplicateRegisterException(controllerName);
 		}
-		_dp->mControllerMap.insert({ controllerName ,controller });
+		_dp->mControllerMap.insert( controllerName ,controller );
 		if (Logger::valid())
 			Logger::instance()->log("FRouter", lvl::trace, "Register Controller {}", controllerName);
 		
@@ -246,13 +262,12 @@ namespace Fei::Http {
 		uint64 priority = calcPathPatternPriority(matcher);
 		FControllerPtr controller = nullptr;
 		{
-			auto itor = _dp->mControllerMap.find(controllerName);
-			if (itor == _dp->mControllerMap.end()) {
+			bool hasFind = _dp->mControllerMap.find(controllerName,controller);
+			if (!hasFind) {
 				Logger::instance()->log("FRouter", lvl::err, "Unknown Controller Name");
 				throw RouterInvalidControllerNameException(controllerName);
 			}
-
-			controller = itor->second;
+			assert(controller != nullptr);
 		}
 		ControllerAndPatternPtr _temp = std::make_shared<__ControllerAndPattern>();
 		
@@ -300,15 +315,15 @@ namespace Fei::Http {
 
 		FControllerPtr controllerPtr = 0;
 		{
-			auto itor = _dp->mControllerMap.find(controllerName);
-			if (itor == _dp->mControllerMap.end()) {
+			bool hasFind = _dp->mControllerMap.find(controllerName, controllerPtr);
+			if (!hasFind) {
 				return;
 			}
-			controllerPtr = itor->second;
+			assert(controllerPtr != nullptr);
 			Logger::instance()->log("FRouter", lvl::trace, "Remove Controller {}", controllerName);
 			{
-				Logger::instance()->log("FRouter", lvl::trace, "Remove {}, but now it is not implemented yet", controllerPtr->getControllerName());
-				//TODO: erase
+				Logger::instance()->log("FRouter", lvl::trace, "Remove {}", controllerPtr->getControllerName());
+				_dp->mControllerMap.erase(controllerName);
 			}
 		}
 
