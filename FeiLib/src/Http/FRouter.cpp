@@ -104,11 +104,11 @@ namespace Fei::Http {
 		
 		void putCache(const std::string& str,Method method, const FRouter::RouteResult& in) {
 			uint64 timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-			mRouteCaches[(uint32)method].insert({str, RouteCahce{.cacheTime = timeNow, .result = in}});
+			mRouteCaches.at((uint32)method).insert({str, RouteCahce{.cacheTime = timeNow, .result = in}});
 		}
 
 		void invalidCache(const std::string& str,Method method) {
-			auto& caches = mRouteCaches[(int)method];
+			auto& caches = mRouteCaches.at((int)method);
 			auto itor = caches.find(str);
 			if (itor == caches.end()) {
 				return;
@@ -130,7 +130,7 @@ namespace Fei::Http {
 		}
 
 		bool getRouteInCache(const std::string& str, Method method, FRouter::RouteResult& out) {
-			auto& caches = mRouteCaches[(int)method];
+			auto& caches = mRouteCaches.at((int)method);
 			auto itor = caches.find(str);
 			if (itor == caches.end()) {
 				return false;
@@ -197,6 +197,10 @@ namespace Fei::Http {
 	FRouter::RouteResult FRouter::route(Method method, const std::string& path)
 	{
 		RouteResult res{};
+		if(method >= Method::MAX_SIZE){
+			Logger::instance()->log("FRouter", lvl::err, "Invalid method: {}", methodToStr(method));
+			return res;
+		}
 		//Spin wait.
 		while (_dp->isHandleUnreg);
 		//----------//
