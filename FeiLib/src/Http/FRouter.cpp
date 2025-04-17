@@ -113,8 +113,8 @@ namespace Fei::Http {
 			if (itor == caches.end()) {
 				return;
 			}
-			FAUTO_LOCK(m_routeCacheEraseLock);
-			caches.unsafe_erase(itor);
+			Logger::instance()->log(lvl::info, "Try erase invalid cache {} with method, but it isn't implemented yet.", str,methodToStr(method));
+			//TODO: erase.
 		}
 
 		void checkCacheOverdue(uint64 msDue) {
@@ -123,8 +123,7 @@ namespace Fei::Http {
 				auto& caches = mRouteCaches[i];
 				for (auto itor = caches.begin(); itor != caches.end();) {
 					if (timeNow - itor->second.cacheTime > msDue) {
-						FAUTO_LOCK(m_routeCacheEraseLock);
-						itor = caches.unsafe_erase(itor);
+						//TODO: erase.
 					}
 				}
 			}
@@ -303,10 +302,9 @@ namespace Fei::Http {
 			}
 			controllerPtr = itor->second;
 			Logger::instance()->log("FRouter", lvl::trace, "Remove Controller {}", controllerName);
-			auto& eraseLock = _dp->m_eraseLock;
 			{
-				FAUTO_LOCK(eraseLock);
-				_dp->mControllerMap.unsafe_erase(itor);
+				Logger::instance()->log("FRouter", lvl::trace, "Remove {}, but now it is not implemented yet", controllerPtr->getControllerName());
+				//TODO: erase
 			}
 		}
 
@@ -316,9 +314,8 @@ namespace Fei::Http {
 				for (auto i = queue.begin(); i != queue.end();) {
 					auto controllerAndPatternPtr = i->second;
 					if (controllerAndPatternPtr->ControllerBase == controllerPtr) {
-						FAUTO_LOCK(eraselock);
-						Logger::instance()->log("FRouter", lvl::trace, "Remove {} Mehtod path pattern: {}", methodToStr(i->second->requestMethod), i->second->PathMatcher->getOriginPattern());
-						i = queue.unsafe_erase(i);
+						//TODO: erase
+						Logger::instance()->log("FRouter", lvl::trace, "Remove {} Mehtod path pattern: {}, but now it is not implemented yet", methodToStr(i->second->requestMethod), i->second->PathMatcher->getOriginPattern());
 					}
 					else {
 						i++;

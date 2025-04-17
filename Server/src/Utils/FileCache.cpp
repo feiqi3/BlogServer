@@ -39,9 +39,8 @@ FileCache::~FileCache(){
 
 
 void FileCache::invalid(const std::string &path) {
-  auto &l = dp->mlock;
-  FAUTO_LOCK(l);
-  dp->mmap.unsafe_erase(path);
+    //TODO: erase
+    Fei::Logger::instance()->log(Fei::lvl::info, "Try erase invalid file cache {}, but it isn't implemented yet.", path);
 }
 
 MemMapedFilePtr FileCache::getOrGen(const std::string &path) const {
@@ -63,9 +62,8 @@ uint32_t FileCache::size() const { return dp->mmap.size(); }
 void FileCache::checkOverdue(uint64_t time_ms) {
   for (auto itor = dp->mmap.begin(); itor != dp->mmap.end();) {
     if (time_ms - itor->second.cacheTime > this->cacheOutDateTime) {
-      auto &l = dp->mlock;
-      FAUTO_LOCK(l);
-      itor = dp->mmap.unsafe_erase(itor);
+      Fei::Logger::instance()->log(Fei::lvl::info, "Try erase invalid file cache {}, but it isn't implemented yet.", itor->first);
+      itor++;
     } else {
       itor++;
     }

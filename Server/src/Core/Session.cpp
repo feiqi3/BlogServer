@@ -90,10 +90,7 @@ bool SessionManager::getDataFromSession(const std::string &sessionId,
 }
 
 void SessionManager::deleteSession(const std::string &sessionId) {
-  auto itor = mDp->mSessionMap.find(sessionId);
-  auto &mutex = mDp->mEraseMutex;
-  FAUTO_LOCK(mutex);
-  mDp->mSessionMap.unsafe_erase(itor);
+  //TODO: erase
 }
 
 uint32_t SessionManager::getSessionExpireTimeMins()const{
@@ -105,10 +102,7 @@ void SessionManager::checkOverdue(uint64_t time_ms) {
     auto timeLast = std::chrono::duration_cast<std::chrono::milliseconds>(
         itor->second.lastTime.time_since_epoch());
     if (time_ms - (uint64_t)timeLast.count() > (uint64_t)mDp->sessionHoldTime) {
-      auto &mutex = mDp->mEraseMutex;
-      FAUTO_LOCK(mutex);
-      itor = mDp->mSessionMap.unsafe_erase(itor);
-    } else {
+       //TODO: erase
       itor++;
     }
   }
