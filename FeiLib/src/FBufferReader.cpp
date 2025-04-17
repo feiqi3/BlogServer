@@ -83,7 +83,7 @@ char FBufferReader::readNext() {
 FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
     : buffer(&inBuffer), beg(_beg + buffer->readIdx),
       end(_end + buffer->readIdx) {
-        assert(end < buffer->getReadableSize() - 1);
+        assert(end <=buffer->readIdx + buffer->getReadableSize());
       }
 bool FBufferView::isEOF() const { return buffer->Get(0) == '\0'; }
 
