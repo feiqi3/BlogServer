@@ -57,30 +57,36 @@ public:
     return isFind;
   }
 
-  void traversal(std::function<void(const Key &, Value &)> func) {
+  void traversal(std::function<bool(const Key &, Value &)> func) {
     tryLockRead();
     for (auto it = mMap.begin(); it != mMap.end(); ++it) {
       typename tbb::concurrent_hash_map<Key, Value>::accessor acc;
       {
         if (mMap.find(acc, it->first)) {
           // Write lock
-          func(it->first, it->second);
+          bool shouldTraversal = func(it->first, it->second);
           acc.release();
+          if(!shouldTraversal){
+            break;
+          }
         }
       }
     }
     tryUnlockRead();
   }
 
-  void traversal(std::function<void(const Key &, const Value &)> func) const {
+  void traversal(std::function<bool(const Key &, const Value &)> func) const {
     tryLockRead();
     for (auto it = mMap.cbegin(); it != mMap.cend(); ++it) {
       typename tbb::concurrent_hash_map<Key, Value>::const_accessor acc;
       {
         if (mMap.find(acc, it->first)) {
           // Write lock
-          func(it->first, it->second);
+          bool shouldtraversal = func(it->first, it->second);
           acc.release();
+          if(!shouldtraversal){
+            break;
+          }
         }
       }
     }
@@ -198,11 +204,14 @@ public:
     return isFind;
   }
 
-  void traversal(std::function<void(const Key &, Value &)> func) {
+  void traversal(std::function<bool(const Key &,const Value &)> func) {
     tryLockRead();
     for (auto it = mMap.begin(); it != mMap.end(); ++it) {
       {
-        func(it->first, it->second);
+        bool shouldTraversal = func(it->first, it->second);
+        if(!shouldTraversal){
+          break;
+        }
       }
     }
     tryUnlockRead();
