@@ -297,7 +297,7 @@ namespace Fei::Http {
 
 		priority = priority + matcher->getUndecidedCharNums() * 100ull;
 
-		priority = priority + matcher->getWildCardsNums() * 10000ull;
+		priority = priority + (matcher->getWildCardsNums() + matcher->getVariableNums()) * 10000ull;
 
 		return priority;
 	}
