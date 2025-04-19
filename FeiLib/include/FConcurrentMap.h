@@ -5,6 +5,7 @@
 #include "tbb/concurrent_map.h"
 #include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <functional>
 #include <mutex>
 
@@ -17,6 +18,10 @@ public:
   FConcurrentHashMap() = default;
   FConcurrentHashMap(const FConcurrentHashMap &) = delete;
   FConcurrentHashMap &operator=(const FConcurrentHashMap &) = delete;
+
+  size_t size()const{
+    return mMap.size();
+  }
 
   bool findAndModifyLocked(const Key &key, std::function<void(Value &)> func) {
     tryLockRead();
@@ -163,11 +168,15 @@ private:
 
 // According to oneTbb specification, concurrent_map's iterator is "thread safe"
 // member funciton.
-template <typename Key, typename Value, typename Comp> class FConcurrentMap {
+template <typename Key, typename Value, typename Comp = std::less<Key>> class FConcurrentMap {
 public:
   FConcurrentMap() = default;
   FConcurrentMap(const FConcurrentMap &) = delete;
   FConcurrentMap &operator=(const FConcurrentMap &) = delete;
+
+  size_t size()const{
+    return mMap.size();
+  }
 
   bool findAndModifyLocked(const Key &key, std::function<void(Value &)> func) {
     tryLockWrite();
