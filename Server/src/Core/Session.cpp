@@ -1,7 +1,9 @@
 #include "Session.h"
 #include "FConfigReader.h"
 #include "FDef.h"
-#include "tbb/concurrent_map.h"
+
+#include "FConcurrentMap.h"
+
 #include <array>
 #include <chrono>
 #include <mutex>
@@ -29,7 +31,7 @@ std::string generateSessionId(int length = 32) {
 class SessionManagerPrivate {
 public:
   // <session id,session data>
-  tbb::concurrent_map<std::string, SessionData> mSessionMap;
+  Fei::FConcurrentHashMap<std::string, SessionData> mSessionMap;
   std::mutex mEraseMutex;
   int64_t sessionHoldTime = 1000 * 60 * 60;
 };
@@ -55,38 +57,41 @@ std::string SessionManager::addSession() {
   };
 
   mDp->mSessionMap.insert(
-      {sessionId,
-       SessionData{.lastTime = std::chrono::system_clock::now(), .data = {}}});
+      sessionId,
+       SessionData{.lastTime = std::chrono::system_clock::now(), .data = {}});
   return sessionId;
 }
 
 bool SessionManager::hasSession(const std::string &sessionId) {
-  if (mDp->mSessionMap.find(sessionId) != mDp->mSessionMap.end()) {
-    return true;
-  }
-  return false;
+  return mDp->mSessionMap.find(sessionId);
 }
 
 bool SessionManager::addDataToSession(const std::string &sessionId,
                                       const std::string &key,
                                       const std::string &data) {
-  auto itor = mDp->mSessionMap.find(sessionId);
-  // Not Found.
-  if (itor == mDp->mSessionMap.end())
-    return false;
-  itor->second.data[key] = data;
-  return true;
+
+  bool isExist = mDp->mSessionMap.findAndModifyLocked(sessionId, [&data,&key](auto &in) {
+    in.data[key] = data;
+  });
+
+  return isExist;
 }
 
 bool SessionManager::getDataFromSession(const std::string &sessionId,
                                         const std::string &key,
                                         std::string &out) {
-  auto itor = mDp->mSessionMap.find(sessionId);
-  // Not Found.
-  if (itor == mDp->mSessionMap.end())
-    return false;
-  out = itor->second.data[key];
-  return true;
+  bool hasData = false;                                         
+  bool isExist = mDp->mSessionMap.findAndModifyLocked(sessionId, [&](auto &in) {
+    auto itor = in.data.find(key);
+    if (itor != in.data.end()) {
+      out = itor->second;
+      hasData = true;
+    }else{
+      hasData = false;
+    }
+  });
+
+  return hasData && isExist;
 }
 
 void SessionManager::deleteSession(const std::string &sessionId) {
@@ -98,13 +103,20 @@ uint32_t SessionManager::getSessionExpireTimeMins()const{
 }
 
 void SessionManager::checkOverdue(uint64_t time_ms) {
-  for (auto itor = mDp->mSessionMap.begin(); itor != mDp->mSessionMap.end();) {
+  std::vector<std::string> toerase;
+ 
+  mDp->mSessionMap.traversal([this, time_ms, &toerase](const auto &key,
+                                                        const auto &val) {
     auto timeLast = std::chrono::duration_cast<std::chrono::milliseconds>(
-        itor->second.lastTime.time_since_epoch());
+        val.lastTime.time_since_epoch());
     if (time_ms - (uint64_t)timeLast.count() > (uint64_t)mDp->sessionHoldTime) {
-       //TODO: erase
-      itor++;
+      toerase.push_back(key);
     }
+    return true;
+  });
+
+  for(auto&& i :  toerase){
+    mDp->mSessionMap.erase(i);
   }
 }
 
