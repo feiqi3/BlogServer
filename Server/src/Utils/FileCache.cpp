@@ -1,12 +1,12 @@
 #include "FileCache.h"
 #include "FDef.h"
 #include "Utils/FileReader.h"
-#include "oneapi/tbb/concurrent_map.h"
-#include "tbb/concurrent_map.h"
+#include "FConcurrentMap.h"
 #include <memory>
 #include <mutex>
 #include <string>
 #include <chrono>
+#include <vector>
 
 namespace {
 uint64_t getTime() {
@@ -22,7 +22,7 @@ struct FileCacheLine {
   MemMapedFilePtr file;
   uint64_t cacheTime;
 };
-using CacheMap = tbb::concurrent_map<std::string, FileCacheLine>;
+using CacheMap = Fei::FConcurrentHashMap<std::string, FileCacheLine>;
 class FileCacheInner {
 public:
   CacheMap mmap;
@@ -40,34 +40,41 @@ FileCache::~FileCache(){
 
 
 void FileCache::invalid(const std::string &path) {
-    //TODO: erase
-    Fei::Logger::instance()->log(Fei::lvl::info, "Try erase invalid file cache {}, but it isn't implemented yet.", path);
+    dp->mmap.erase(path);
+    Fei::Logger::instance()->log(Fei::lvl::info, "Try erase invalid file cache {}.", path);
 }
 
 MemMapedFilePtr FileCache::getOrGen(const std::string &path) const {
   {
-    auto itor = dp->mmap.find(path);
-    if (itor != dp->mmap.end()) {
-      itor->second.cacheTime = getTime();
-      return itor->second.file;
+    MemMapedFilePtr ret = 0;
+    auto isFind = dp->mmap.findAndModifyLocked(path, [&](FileCacheLine &line) {
+      line.cacheTime = getTime();
+      ret = line.file;
+    });
+    if(isFind){
+      return ret;
     }
   }
   FileCacheLine line{
       .file = std::make_shared<MemoryMappedFile>(path, Mode::ReadOnly, 0),
       .cacheTime = getTime()};
-  dp->mmap.insert({path, line});
+  dp->mmap.insert(path, line);
   return line.file;
 }
 uint32_t FileCache::size() const { return dp->mmap.size(); }
 
 void FileCache::checkOverdue(uint64_t time_ms) {
-  for (auto itor = dp->mmap.begin(); itor != dp->mmap.end();) {
-    if (time_ms - itor->second.cacheTime > this->cacheOutDateTime) {
-      Fei::Logger::instance()->log(Fei::lvl::info, "Try erase invalid file cache {}, but it isn't implemented yet.", itor->first);
-      itor++;
-    } else {
-      itor++;
+  std::vector<std::string> toErase;
+  dp->mmap.traversal([&](const std::string &key,const FileCacheLine &line) {
+    if (time_ms - line.cacheTime > this->cacheOutDateTime) {
+      toErase.push_back(key);
     }
+    return true;
+  });
+
+  for (const auto &key : toErase) {
+      Fei::Logger::instance()->log(Fei::lvl::info, "Try erase invalid file cache {}.", key);
+      dp->mmap.erase(key);
   }
 }
 } // namespace Blog
