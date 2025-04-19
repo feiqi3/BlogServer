@@ -1,12 +1,15 @@
 #include "Http/FRouter.h"
 #include "FConfigReader.h"
 #include "FDef.h"
+#include "Http/FController.h"
+#include "Http/FHttpDef.h"
 #include "Http/FPathMatcher.h"
 #include "FLogger.h"
 #include "tbb/concurrent_map.h"
 #include "FException.h"
 #include <cassert>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -73,7 +76,8 @@ namespace Fei::Http {
 	public:
 
 		__FRouterInner() {
-			mControllerOrderQueue.resize((uint32)Method::MAX_SIZE);
+			mControllerOrderQueue = std::make_unique<PathOrderQueue[]>
+			((uint32)Method::MAX_SIZE);
 			mRouteCaches = std::make_unique<RouteCacheMap[]>
 			 ((uint32)Method::MAX_SIZE);
 			mControllerOrderQueueEraseLocks.reset(new std::mutex[(uint32)Method::MAX_SIZE]);
@@ -90,8 +94,8 @@ namespace Fei::Http {
 		using RouteCacheMap = FConcurrentHashMap<std::string, RouteCahce>;
 		std::unique_ptr<RouteCacheMap[]> mRouteCaches;
 
-		using PathOrderQueue = tbb::concurrent_map<uint64, ControllerAndPatternPtr, __ControllerAndPatternCompare>;
-		std::vector<PathOrderQueue> mControllerOrderQueue;
+		using PathOrderQueue = FConcurrentMap<uint64, ControllerAndPatternPtr, __ControllerAndPatternCompare>;
+		std::unique_ptr<PathOrderQueue[]>  mControllerOrderQueue;
 		std::unique_ptr<std::mutex[]> mControllerOrderQueueEraseLocks;
 
 		std::atomic_bool isHandleRoute = false;
@@ -133,6 +137,7 @@ namespace Fei::Http {
 					if (timeNow - cache.cacheTime > msDue) {
 						toErase.push_back(key);
 					}
+					return true;
 				});
 
 				for (auto&& i : toErase) {
@@ -180,19 +185,21 @@ namespace Fei::Http {
 	void FRouter::lateInit(){
 		_dp->mControllerMap.traversal([this](const std::string& key, FControllerPtr controller) {
 			controller->lateInit();
+			return true;
 		});
 
 		this->_dp->hasLateInit = true;
 		if(FConfigReader::instance()->getCurrentEnv() == FConfigReader::Env::Test){
 				Logger::instance()->log("FRouter", lvl::trace, "Registered Controller Functions:");
 				int queueMEthod = 0;
-			for(auto && queue :this->_dp->mControllerOrderQueue){
-				Logger::instance()->log("FRouter", lvl::trace, "Queue Method: {}",queueMEthod);
-				for(auto && controllerFunc : queue){
-					auto controllerAndPattern = controllerFunc.second;
-					Logger::instance()->log("FRouter", lvl::trace, "Controller: {}, Pattern: {}, Priority: {}",controllerAndPattern->ControllerBase->getControllerName(),controllerAndPattern->PathMatcher->getOriginPattern(),controllerAndPattern->priority);
-				}
-				queueMEthod++;
+			for(int i = 0;i < (int)Method::MAX_SIZE;++i){
+				auto&& queue = (this->_dp->mControllerOrderQueue.get())[i];
+				Logger::instance()->log("FRouter", lvl::trace, "Queue Method: {}",methodToStr((Method)queueMEthod++));
+				queue.traversal([&](const auto& k, const auto& val) {
+				auto controllerAndPatternPtr = val;
+					Logger::instance()->log("FRouter", lvl::trace, "Path: {} with priority: {}", controllerAndPatternPtr->PathMatcher->getOriginPattern(), controllerAndPatternPtr->priority);
+					return true;
+				});
 			}
 		}
 	}
@@ -229,15 +236,17 @@ namespace Fei::Http {
 			}
 
 			auto& controllers = _dp->mControllerOrderQueue[(uint32)method];
-			for (auto&& [key,val] : controllers) {
+			auto function =[&](const auto& key,const auto& val) {
 				if (val->PathMatcher->isMatch(path, res.pathVariable)) {
 					Logger::instance()->log("FRouter", lvl::trace, "{} match path pattern {}",path, val->PathMatcher->getOriginPattern());
 					res.controllerFunc = val->ControllerFunc;
 					res.controllerSave = val->ControllerBase;
 					_dp->putCache(path, method, res);
-					return res;
+					return false;
 				}
-			}
+				return true;
+			};
+			controllers.traversal(function);
 		}
 		return res;
 	}
@@ -280,11 +289,11 @@ namespace Fei::Http {
 		assert(mapMethod < Method::MAX_SIZE);
 		{
 			auto& orderQueue = _dp->mControllerOrderQueue[(uint32)mapMethod];
-			while(orderQueue.find(priority) != orderQueue.end()){
+			while(orderQueue.find(priority)){
 				++priority;
 			}
 			_temp->priority = priority;
-			orderQueue.insert({priority ,(_temp) });
+			orderQueue.insert(priority ,(_temp) );
 		}
 		if(Logger::valid() )
 			Logger::instance()->log("FRouter", lvl::trace, "Register {} Mehtod path pattern: {}", methodToStr(mapMethod), pathPattern);
@@ -327,19 +336,21 @@ namespace Fei::Http {
 			}
 		}
 
-		for (auto queueIdx = 0; queueIdx < _dp->mControllerOrderQueue.size(); ++queueIdx) {
+		for (auto queueIdx = 0; queueIdx < (int)Method::MAX_SIZE; ++queueIdx) {
 			auto& queue = _dp->mControllerOrderQueue[queueIdx];
-			auto& eraselock = _dp->mControllerOrderQueueEraseLocks[queueIdx];
-				for (auto i = queue.begin(); i != queue.end();) {
-					auto controllerAndPatternPtr = i->second;
-					if (controllerAndPatternPtr->ControllerBase == controllerPtr) {
-						//TODO: erase
-						Logger::instance()->log("FRouter", lvl::trace, "Remove {} Mehtod path pattern: {}, but now it is not implemented yet", methodToStr(i->second->requestMethod), i->second->PathMatcher->getOriginPattern());
-					}
-					else {
-						i++;
-					}
+			std::vector<uint64_t> toErase;
+			queue.traversal([&](const auto& k, const auto& val) {
+				auto controllerAndPatternPtr = val;
+				if (controllerAndPatternPtr->ControllerBase == controllerPtr) {
+					toErase.push_back(k);
+					Logger::instance()->log("FRouter", lvl::trace, "Remove {} Mehtod path pattern: {}", methodToStr(controllerAndPatternPtr->requestMethod), controllerAndPatternPtr->PathMatcher->getOriginPattern());
 				}
+				return true;
+			});
+
+			for(auto&& k : toErase){
+				queue.erase(k);
+			}
 
 		}
 	}
