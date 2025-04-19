@@ -109,10 +109,10 @@ public:
   }
 
 private:
-  inline void ReadCheck() { assert(mReadingCounts >= 0); }
-  inline void WriteCheck() { assert(mWriteLock >= 0); }
+  inline void ReadCheck()const { assert(mReadingCounts >= 0); }
+  inline void WriteCheck()const { assert(mWriteLock >= 0); }
 
-  void tryLockRead() {
+  void tryLockRead()const {
     while (1) {
       std::lock_guard<std::mutex> lock(mWriteMutex);
       if (mWriteLock == 0) {
@@ -122,14 +122,14 @@ private:
     }
   }
 
-  void tryUnlockRead() {
+  void tryUnlockRead()const {
     {
       mReadingCounts--;
     }
     ReadCheck();
   }
 
-  void tryLockWrite() {
+  void tryLockWrite()const {
     {
       std::lock_guard<std::mutex> lock(mWriteMutex);
       mWriteLock++;
@@ -138,7 +138,7 @@ private:
     mModifyMutex.lock();
   }
 
-  void tryUnlockWrite() {
+  void tryUnlockWrite()const {
     mModifyMutex.unlock();
     {
       std::lock_guard<std::mutex> lock(mWriteMutex);
@@ -146,13 +146,13 @@ private:
     }
     WriteCheck();
   }
-  std::mutex mWriteMutex;
-  std::mutex mModifyMutex;
+  mutable std::mutex mWriteMutex;
+  mutable std::mutex mModifyMutex;
 
   tbb::concurrent_hash_map<Key, Value> mMap;
 
   mutable std::atomic_int mReadingCounts = 0;
-  std::atomic_int mWriteLock = 0;
+  mutable std::atomic_int mWriteLock = 0;
 };
 
 // According to oneTbb specification, concurrent_map's iterator is "thread safe"
@@ -235,10 +235,10 @@ public:
   }
 
 private:
-  inline void ReadCheck() { assert(mReadingCounts >= 0); }
-  inline void WriteCheck() { assert(mWriteLock >= 0); }
+  inline void ReadCheck() const{ assert(mReadingCounts >= 0); }
+  inline void WriteCheck() const{ assert(mWriteLock >= 0); }
 
-  void tryLockRead() {
+  void tryLockRead()const {
     while (1) {
       std::lock_guard<std::mutex> lock(mWriteMutex);
       if (mWriteLock == 0) {
@@ -248,14 +248,14 @@ private:
     }
   }
 
-  void tryUnlockRead() {
+  void tryUnlockRead() const{
     {
       mReadingCounts--;
     }
     ReadCheck();
   }
 
-  void tryLockWrite() {
+  void tryLockWrite()const {
     {
       std::lock_guard<std::mutex> lock(mWriteMutex);
       mWriteLock++;
@@ -264,7 +264,7 @@ private:
     mModifyMutex.lock();
   }
 
-  void tryUnlockWrite() {
+  void tryUnlockWrite()const {
     mModifyMutex.unlock();
     {
       std::lock_guard<std::mutex> lock(mWriteMutex);
@@ -272,10 +272,10 @@ private:
     }
     WriteCheck();
   }
-  std::mutex mWriteMutex;
-  std::mutex mModifyMutex;
+  mutable std::mutex mWriteMutex;
+  mutable std::mutex mModifyMutex;
   mutable std::atomic_int mReadingCounts = 0;
-  std::atomic_int mWriteLock = 0;
+  mutable std::atomic_int mWriteLock = 0;
   
   tbb::concurrent_map<Key, Value, Comp> mMap;
 
