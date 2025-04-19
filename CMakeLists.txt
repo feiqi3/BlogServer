@@ -18,6 +18,11 @@ else()
     add_compile_definitions(FEI_RELEASE)
 endif(CMAKE_BUILD_TYPE MATCHES "Debug")
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(ASAN_FLAG "-fsanitize=address -fno-omit-frame-pointer")
+    add_compile_options(${ASAN_FLAG})
+    add_link_options(${ASAN_FLAG})
+endif()
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/debug)
