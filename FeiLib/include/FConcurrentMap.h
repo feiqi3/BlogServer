@@ -273,9 +273,10 @@ private:
     WriteCheck();
   }
   std::mutex mWriteMutex;
+  std::mutex mModifyMutex;
   mutable std::atomic_int mReadingCounts = 0;
   std::atomic_int mWriteLock = 0;
-
+  
   tbb::concurrent_map<Key, Value, Comp> mMap;
 
 
