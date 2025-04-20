@@ -10,8 +10,12 @@ public:
   static std::optional<std::string>  UpdateCategory(const Model::Category &category);
   static std::optional<std::string>  DeleteCategory(uint64_t categoryId);
   //id, name
-  static std::vector<std::tuple<uint64_t, std::string>>
+  static std::tuple<uint64_t, std::string>
   QueryCategoryBasicInfoById(uint64_t categoryId);
+
+  //id, name
+  static std::vector<std::tuple<uint64_t, std::string>>
+  QueryCategoryBasicInfo();
 
     //id, name
     static std::vector<std::tuple<uint64_t, std::string>>
