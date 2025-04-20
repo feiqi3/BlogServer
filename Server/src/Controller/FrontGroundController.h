@@ -14,5 +14,9 @@ namespace Blog{
 		Fei::Http::FHttpResponse Categories(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse CategoriesDetail(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse About(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		REGISTER_MAPPING_BEGIN("")
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/realIndex={page}", FrontGroundController, Articles);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/post/{id}", FrontGroundController, ArticleDetail);
+		REGISTER_MAPPING_END
     };
 };

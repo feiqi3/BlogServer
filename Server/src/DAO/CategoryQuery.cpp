@@ -23,6 +23,21 @@ CategoryQuery::QueryCategoryById(uint64_t categoryId) {
   return std::nullopt;
 }
 
+std::optional<std::string>CategoryQuery::QueryCategoryNameById(uint64_t categoryId){
+    auto getQuery = []() {
+      Query query(FIELD(Model::Category, name));
+      query.Where(FIELD(Model::Category, id) == PARAM).From("Categories");
+      return query;
+    };
+    thread_local auto query = getQuery();
+    query.exec(categoryId);
+    auto vec = query.getVector();
+    if (vec.size() > 0) {
+      return vec[0];
+    }
+    return std::nullopt;
+}
+
 std::optional<std::string>
 CategoryQuery::InsertCategory(const Model::Category &category) {
   Query<Model::Category> query;
