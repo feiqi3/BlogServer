@@ -18,13 +18,24 @@ namespace Blog{
             renderData[key] = value;
         }
 
+        void setData(const std::string& key,std::string&& value){
+            renderData[key] = std::move(value);
+        }
+
         template<typename Tp>
         void setData(const std::string& key,const std::vector<Tp>& val){
             renderData[key] = nlohmann::json::array();
             for(auto& v : val){
                 renderData[key].push_back(Fei::Http::FReflect::fromClass(v));
             }
-            auto str = renderData.dump();
+        }
+
+        template<typename Tp>
+        void setData(const std::string& key,std::vector<Tp>&& val){
+            renderData[key] = nlohmann::json::array();
+            for(auto&& v : val){
+                renderData[key].push_back(Fei::Http::FReflect::fromClass(std::move(v)));
+            }
         }
 
         template<typename Tp>
