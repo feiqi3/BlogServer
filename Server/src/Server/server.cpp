@@ -1,4 +1,5 @@
 #include "FConfigReader.h"
+#include "FDef.h"
 #include "FeiLibIniter.h"
 #include "server.h"
 #include "Http/FHttpServer.h"
@@ -12,6 +13,8 @@
 #include <thread>
 #include "Core/ServerBasicDef.h"
 #include "DAO/DataBaseOperation.h"
+#include "Utils/Digital.h"
+#include "Utils/FileCache.h"
 
 const std::string ResourceDir =  SERVER_RESOURCE_DIR;
 const std::string WebDir = ResourceDir + "web/";
@@ -33,7 +36,14 @@ Blog::Server::Server()
 	}
 	new DatabaseOperation();
 	DatabaseOperation::instance()->LoadDB(database);
-
+	auto fileCacheHoldTime = Fei::FConfigReader::instance()->getCfg("FileCacheHoldTime");
+	Fei::uint32 fileCacheHoldTimeMs = 1000 * 60 * 60;
+	if(fileCacheHoldTime.has_value()){
+		if(Digital::isNumber(fileCacheHoldTime.value())){
+			fileCacheHoldTimeMs = std::stoul(fileCacheHoldTime.value());
+		}
+	}
+	new FileCache(fileCacheHoldTimeMs);
 	new SessionManager();
 	new AdminLogin();
 	server = new Fei::Http::FHttpServer(10);
@@ -53,6 +63,7 @@ void Blog::Server::run()
 
 void Blog::Server::init()
 {
+	server->addAppTickEvent(std::bind(&FileCache::checkOverdue,FileCache::instance(),std::placeholders::_1));
 	server->addAppTickEvent(std::bind(&SessionManager::checkOverdue,SessionManager::instance(),std::placeholders::_1));
 	//server->setConnFilterCB(&filterAll);
 }

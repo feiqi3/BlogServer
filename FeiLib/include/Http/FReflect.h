@@ -11,13 +11,25 @@ namespace Fei::Http{
 class FReflect{
     public:
     template<typename T>
-    static nlohmann::json fromClass(T&& cls){
+    static nlohmann::json fromClass(const T& cls){
         using namespace nlohmann;
         json ret_json;
         //ret_json["__cls"] = reflect::type_name(cls);
         reflect::for_each([&ret_json,&cls](auto i){
             //only POD and string
             ret_json[reflect::member_name<i>(cls)] = reflect::get<i>(cls);
+        },cls);
+        return ret_json;
+    }
+
+    template<typename T>
+    static nlohmann::json fromClass(T&& cls){
+        using namespace nlohmann;
+        json ret_json;
+        //ret_json["__cls"] = reflect::type_name(cls);
+        reflect::for_each([&ret_json,&cls](auto i){
+            //only POD and string
+            ret_json[reflect::member_name<i>(cls)] = std::move(reflect::get<i>(std::forward<T>(cls)));
         },cls);
         return ret_json;
     }

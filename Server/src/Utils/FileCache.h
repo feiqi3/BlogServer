@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include "Utils/Singleton.h"
 namespace Blog{
-    class FileCache{
+    class FileCache:public Singleton<FileCache>{
         public:
             FileCache(uint64_t maxCacheTimeInMs);
             ~FileCache();
