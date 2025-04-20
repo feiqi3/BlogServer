@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Blog::DAO {
 std::optional<Model::Category>
@@ -67,7 +68,7 @@ std::optional<std::string> CategoryQuery::DeleteCategory(uint64_t categoryId) {
 }
 
 // id, name
-std::vector<std::tuple<uint64_t, std::string>>
+std::tuple<uint64_t, std::string>
 CategoryQuery::QueryCategoryBasicInfoById(uint64_t categoryId) {
   auto getQuery = []() {
     Query query(FIELD(Model::Category, id) - FIELD(Model::Category, name));
@@ -75,8 +76,18 @@ CategoryQuery::QueryCategoryBasicInfoById(uint64_t categoryId) {
     return query;
   };
   thread_local auto q = getQuery();
-  auto ret = q.exec(categoryId).getVector();
+  auto ret = q.exec(categoryId).getVector()[0];
   return ret;
+}
+
+std::vector<std::tuple<uint64_t, std::string>>
+CategoryQuery::QueryCategoryBasicInfo(){
+  auto getQuery =[](){
+    Query q(FIELD(Model::Category, id) - FIELD(Model::Category, name));
+    return q;
+  };
+  thread_local auto query = getQuery();
+  return query.exec().getVector();
 }
 
 // id, name

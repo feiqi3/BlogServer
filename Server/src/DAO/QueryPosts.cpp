@@ -20,6 +20,21 @@ PostQuery::QueryPostsDataProfileSinceLastByPageDesc(uint64_t lastId,
   return query.exec(lastId,perPageNum).getVector();
 }
 
+auto PostQuery::QueryPostDataProfile(uint64_t pageIdx,
+    int perPageNum)
+-> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
+uint64_t, std::string, uint64_t>>{
+    auto getQuery = []() {
+        Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
+                FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
+                FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic) - FIELD(Model::Post,category_id));
+        q.From("Posts").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at));
+        return q;
+      };
+      thread_local auto query = getQuery();
+      return query.exec(perPageNum,pageIdx * perPageNum).getVector();
+}
+
 auto PostQuery::QueryPostsBasicStatusByPage(uint64_t lastId,int perPageNum)      -> std::vector<
 std::tuple<uint64_t, std::string, uint64_t, uint64_t>>{
     auto getQuery = []() {
@@ -119,6 +134,17 @@ std::optional<std::string> PostQuery::DeletePostById(uint64_t postId){
     bool res = ptr->excute();
     if(res)return std::nullopt;
     return ptr->getErrMsg();
+}
+
+int PostQuery::QueryPageCount(){
+    auto getQuery = []() {
+        Query<int> q;
+        q.Select(SelectCount());
+        q.From("Posts");
+        return q;
+        };
+    thread_local auto query = getQuery();
+    return query.exec().getVector()[0];
 }
 
 } // namespace Blog::DAO
