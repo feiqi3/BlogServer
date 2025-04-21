@@ -8,10 +8,15 @@
 #include "Utils/Digital.h"
 #include "Utils/FileCache.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
+
+namespace {
+    int sPerPageCount = 10;
+}
 
 namespace Blog {
 Fei::Http::FHttpResponse
@@ -25,9 +30,9 @@ FrontGroundController::Articles(const Fei::Http::FHttpRequest &req,
     auto pageNum = var.get("page");
     int page = 0;
     if(!pageNum.empty() && Digital::isNumber(pageNum)){
-        page = std::min(std::stoi(pageNum) -1 ,0);
+        page = std::min(std::stoi(pageNum) + 1 ,1);
     }
-    auto postVec = DAO::PostQuery::QueryPostDataProfile(page);
+    auto postVec = DAO::PostQuery::QueryPostDataProfile(page - 1);
     struct BlogProfile{
         uint64_t id;
         std::string title;
@@ -51,10 +56,13 @@ FrontGroundController::Articles(const Fei::Http::FHttpRequest &req,
     }
 
     TemplateRenderData data;
+    int totalPageNum = std::max(1,int(std::ceil((float)DAO::PostQuery::QueryPostCount() / sPerPageCount)));
     //1. generate json
-    data.setData("radius",std::to_string(2));
-    data.setData("currentPage",std::to_string(page + 1));
-    data.setData("pageNums",std::to_string(DAO::PostQuery::QueryPageCount()));
+    data.setData("pageForward",std::max(page - 1,1));
+    data.setData("pageNext",std::min(page + 1,totalPageNum));
+    data.setData("radius",(2));
+    data.setData("currentPage", (page));
+    data.setData("pageNums", totalPageNum - 1);
     data.setData("posts",std::move(prf));
     TemplateRender render;
     std::string returnBody;

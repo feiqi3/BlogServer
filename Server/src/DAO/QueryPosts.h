@@ -38,7 +38,7 @@ uint64_t, std::string, uint64_t>>;
 
   static std::optional<std::string> DeletePostById(uint64_t postId);
 
-  static int QueryPageCount();
+  static int QueryPostCount();
 };
 
 } // namespace Blog::DAO

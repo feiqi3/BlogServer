@@ -136,7 +136,7 @@ std::optional<std::string> PostQuery::DeletePostById(uint64_t postId){
     return ptr->getErrMsg();
 }
 
-int PostQuery::QueryPageCount(){
+int PostQuery::QueryPostCount(){
     auto getQuery = []() {
         Query<int> q;
         q.Select(SelectCount());

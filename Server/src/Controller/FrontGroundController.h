@@ -8,7 +8,7 @@
 namespace Blog{
     class FrontGroundController: public Fei::Http::FControllerBase {
         public:
-        FrontGroundController();
+        FrontGroundController():Fei::Http::FControllerBase("FrontGroundController"){}
 		Fei::Http::FHttpResponse Articles(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse ArticleDetail(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse Categories(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
@@ -19,4 +19,5 @@ namespace Blog{
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/post/{id}", FrontGroundController, ArticleDetail);
 		REGISTER_MAPPING_END
     };
+	REGISTER_CONTROLLER_CLASS(FrontGroundController);
 };
