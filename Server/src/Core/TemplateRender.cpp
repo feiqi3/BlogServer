@@ -12,7 +12,6 @@ namespace Blog {
 
     class TemplateRenderPrivate{
         public:
-        std::unique_ptr<FileCache>  mFileCache;
         TemplateRenderPrivate(){
             int cacheTime = 1000 * 60 * 60 * 24;
             
@@ -21,12 +20,10 @@ namespace Blog {
             if(cacheTimeOpt.has_value()){
                 cacheTime = std::stoi(cacheTimeOpt.value());
             }
-            mFileCache = std::make_unique<FileCache>(cacheTime);
         }
     };
 
     void TemplateRender::checkOverdue(uint64_t time_ms){
-        mDp->mFileCache->checkOverdue(time_ms);
     }
 
     TemplateRender::TemplateRender(){
@@ -38,7 +35,7 @@ namespace Blog {
     }
 
     bool TemplateRender::render(const std::string& templateFilePath,TemplateRenderData&data,std::string& out){
-        auto filePtr = mDp->mFileCache->getOrGen(templateFilePath);
+        auto filePtr = FileCache::instance()->getOrGen(templateFilePath);
         if(!filePtr){
             out = "Template file not found: " + templateFilePath;
             Fei::Logger::instance()->log(Fei::lvl::err, "Template file not found: {}", templateFilePath);

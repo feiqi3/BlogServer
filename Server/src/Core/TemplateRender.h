@@ -18,6 +18,7 @@ namespace Blog{
             renderData[key] = value;
         }
 
+
         void setData(const std::string& key,std::string&& value){
             renderData[key] = std::move(value);
         }
@@ -40,7 +41,11 @@ namespace Blog{
 
         template<typename Tp>
         void setData(const std::string& key,const Tp& val){
-            renderData[key] = Fei::Http::FReflect::fromClass(val);
+            if constexpr (std::is_trivial_v<Tp> && std::is_standard_layout_v<Tp>) {
+                renderData[key] = val;
+            }else{
+                renderData[key] = Fei::Http::FReflect::fromClass(val);
+            }
         }
 
         nlohmann::json renderData;
