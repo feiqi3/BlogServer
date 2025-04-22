@@ -97,6 +97,9 @@ public:
       return exec(stmt);
   }
 
+  //If no parameter return 0
+  int getParameterIndex(const DBResultPtr& ptr, const std::string& name);
+
   template <typename... Args>
   void ReExec(const DBResultPtr& ptr, Args &&...arg) {
       auto stmt = ptr->mData;
