@@ -5,10 +5,10 @@
 
 namespace Blog::Model {
 
-	struct Status {
+	struct BlogStatus {
 		std::string name;
 		std::string data;
-		ENTITY_TABLE(Status)
+		ENTITY_TABLE(BlogStatus)
 	};
 }
 #endif
