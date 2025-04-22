@@ -249,6 +249,11 @@ DBResultPtr Blog::DatabaseOperation::exec(void* stmt){
 	return dp->exec(_s);
 }
 
+int Blog::DatabaseOperation::getParameterIndex(const DBResultPtr& ptr, const std::string& name){
+	auto idx = sqlite3_bind_parameter_index((sqlite3_stmt*)ptr->mData,name.data());
+	return idx;
+}
+
 void Blog::DatabaseOperation::resetStmt(void* stmt)
 {
 	auto _s = (sqlite3_stmt*)stmt;
