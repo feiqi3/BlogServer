@@ -5,8 +5,8 @@
 std::string Blog::DAO::BlogStatusQuery::queryBlogStatus(const std::string& propertyName)
 {
     auto getQuery = []()->auto {
-        auto ret = Query(FIELD(Model::Status, data));
-        ret.Where(FIELD(Model::Status, name) == PARAM);
+        auto ret = Query(FIELD(Model::BlogStatus, data));
+        ret.Where(FIELD(Model::BlogStatus, name) == PARAM);
         return ret;
         };
     static auto query = getQuery();

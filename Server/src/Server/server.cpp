@@ -8,6 +8,9 @@
 #include "Service/AdminLogin.h"
 
 #include "Service/Filter.h"
+
+#include "Service/BlogData.h"
+
 #include <functional>
 #include <string>
 #include <thread>
@@ -43,6 +46,7 @@ Blog::Server::Server()
 			fileCacheHoldTimeMs = std::stoul(fileCacheHoldTime.value());
 		}
 	}
+	new BlogData;
 	new FileCache(fileCacheHoldTimeMs);
 	new SessionManager();
 	new AdminLogin();
@@ -56,7 +60,7 @@ void Blog::Server::run()
 	server->run();
 	while (1) {
 		using namespace std::chrono_literals;
-		std::this_thread::sleep_for(200ms);
+		std::this_thread::sleep_for(5min);
 		server->tickAppEvents();
 	}
 }
@@ -65,6 +69,7 @@ void Blog::Server::init()
 {
 	server->addAppTickEvent(std::bind(&FileCache::checkOverdue,FileCache::instance(),std::placeholders::_1));
 	server->addAppTickEvent(std::bind(&SessionManager::checkOverdue,SessionManager::instance(),std::placeholders::_1));
+	server->addAppTickEvent(std::bind(&BlogData::syncData,BlogData::instance(),std::placeholders::_1));
 	//server->setConnFilterCB(&filterAll);
 }
 
@@ -74,5 +79,6 @@ Blog::Server::~Server()
 	delete DatabaseOperation::instance();
 	delete AdminLogin::instance();
 	delete SessionManager::instance();
+	delete BlogData::instance();
 	
 }
