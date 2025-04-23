@@ -12,9 +12,10 @@ namespace Blog {
 		Fei::Http::FHttpResponse toIndex(const Fei::Http::FHttpRequest&, const Fei::Http::FPathVar&);
 		
 
-		REGISTER_MAPPING_BEGIN("")
-			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/", IndexController, toIndex);
-		REGISTER_MAPPING_END
+		REGISTER_MAPPING_BEGIN("/")
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "", IndexController, toIndex);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "page={page}", IndexController, toIndex);
+			REGISTER_MAPPING_END
 
 	};
 

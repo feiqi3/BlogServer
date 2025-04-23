@@ -6,12 +6,16 @@ namespace Blog{
 class BlogData:public Singleton<BlogData>{
     public:
     BlogData();
-    uint64_t updateBlogViewTimes();
-
-    void addBlogNum();
+    inline uint64_t updateBlogViewTimes(){
+        return ++ mBlogTotalViewTimes;
+    }
+    inline uint64_t getBlogViewTimes(){
+        return mBlogTotalViewTimes;
+    }
+    uint64_t getTotalBlogNum();
     void addViewTimes();
     
-    void syncData();
+    void syncData(uint64_t );
     
     private:
     std::atomic_uint64_t mBlogTotalViewTimes = 0;
