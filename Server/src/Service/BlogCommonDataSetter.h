@@ -20,7 +20,7 @@ namespace Blog{
             data.setData("blogTotalNum",BlogData::instance()->getTotalBlogNum());
         }
 
-        inline void SetBlogCommonData(TemplateRenderData& data){
+        inline void setBlogCommonData(TemplateRenderData& data){
             data.setData("blogViewTimes",BlogData::instance()->getBlogViewTimes());
             data.setData("blogTotalNum",BlogData::instance()->getTotalBlogNum());
         }

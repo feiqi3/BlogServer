@@ -1,6 +1,8 @@
 #include "QueryPosts.h"
+#include "DAO/DataBaseOperation.h"
 #include "Model/Posts.h"
 #include "ORM.h"
+#include <cstdint>
 #include <optional>
 #include <threads.h>
 #include "Utils/TimeHelper.h"
@@ -33,6 +35,21 @@ uint64_t, std::string, uint64_t>>{
       };
       thread_local auto query = getQuery();
       return query.exec(perPageNum,pageIdx * perPageNum).getVector();
+}
+
+auto PostQuery::QueryPostDataProfileByCategoryId(uint64_t categoryId,uint64_t pageIdx,
+    int perPageNum)
+-> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
+uint64_t, std::string>>{
+    auto getQuery = []() {
+        Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
+                FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
+                FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic));
+        q.From("Posts").Where(FIELD(Model::Post,category_id) == PARAM).skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at));
+        return q;
+      };
+      thread_local auto query = getQuery();
+      return query.exec(categoryId,perPageNum,pageIdx * perPageNum).getVector();
 }
 
 auto PostQuery::QueryPostsBasicStatusByPage(uint64_t lastId,int perPageNum)      -> std::vector<
@@ -145,6 +162,27 @@ int PostQuery::QueryPostCount(){
         };
     thread_local auto query = getQuery();
     return query.exec().getVector()[0];
+}
+
+int PostQuery::QueryPostOfCategoryCount(uint64_t id){
+    auto getQuery = []() {
+        Query<int> q;
+        q.Select(SelectCount());
+        q.From("Posts").Where(FIELD(Model::Post, category_id) == PARAM);
+        return q;
+        };
+    thread_local auto query = getQuery();
+    return query.exec(id).getVector()[0];
+}
+
+
+void PostQuery::updateViewTimes(uint64_t id){
+    auto getQueryStatement = [](){
+        return DatabaseOperation::instance()->Prepare("UPDATE Posts SET view_times = view_times + 1 where id = ?");
+    };
+    thread_local auto q = getQueryStatement();
+    DatabaseOperation::instance()->ReExec(q, id);
+    q->excute();
 }
 
 } // namespace Blog::DAO

@@ -9,7 +9,6 @@
 
 namespace Blog{
 
-static int sPerPageCount = 10;
 
 Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
     auto cates = DAO::CategoryQuery::QueryAllCategoryBasicInfo();

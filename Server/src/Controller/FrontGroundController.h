@@ -17,7 +17,10 @@ namespace Blog{
 		REGISTER_MAPPING_BEGIN("")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/realIndex={page}", FrontGroundController, Articles);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/post/{id}", FrontGroundController, ArticleDetail);
-		REGISTER_MAPPING_END
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/category/id={id}&page={page}", FrontGroundController, CategoriesDetail);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/category/id={id}", FrontGroundController, CategoriesDetail);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/categories", FrontGroundController, Categories);
+			REGISTER_MAPPING_END
     };
 	REGISTER_CONTROLLER_CLASS(FrontGroundController);
 };
