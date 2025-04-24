@@ -18,6 +18,13 @@ public:
 -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
 uint64_t, std::string, uint64_t>>;
 
+  // Id, Title, Profile, Create Time, Update Time, titlePic
+  static auto QueryPostDataProfileByCategoryId(uint64_t categoryId,uint64_t pageIdx,
+    int perPageNum = 10)
+-> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
+uint64_t, std::string>>;
+
+
   // Id, Title, Create Time, Update Time
   static auto QueryPostsBasicStatusByPage(uint64_t lastId, int perPageNum = 10)
       -> std::vector<std::tuple<uint64_t, std::string, uint64_t, uint64_t>>;
@@ -38,7 +45,10 @@ uint64_t, std::string, uint64_t>>;
 
   static std::optional<std::string> DeletePostById(uint64_t postId);
 
+  static void updateViewTimes(uint64_t id);
+
   static int QueryPostCount();
+  static int QueryPostOfCategoryCount(uint64_t id);
 };
 
 } // namespace Blog::DAO

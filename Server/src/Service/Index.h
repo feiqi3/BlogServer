@@ -4,5 +4,6 @@
 #include "Http/FPathVar.h"
 
 namespace Blog{
-    Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+inline int sPerPageCount = 10;
+Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 }

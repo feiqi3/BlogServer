@@ -83,7 +83,7 @@ std::optional<std::string> CategoryQuery::DeleteCategory(uint64_t categoryId) {
 }
 
 // id, name
-std::tuple<uint64_t, std::string>
+std::optional<std::tuple<uint64_t, std::string>>
 CategoryQuery::QueryCategoryBasicInfoById(uint64_t categoryId) {
   auto getQuery = []() {
     Query query(FIELD(Model::Category, id) - FIELD(Model::Category, name));
@@ -91,8 +91,9 @@ CategoryQuery::QueryCategoryBasicInfoById(uint64_t categoryId) {
     return query;
   };
   thread_local auto q = getQuery();
-  auto ret = q.exec(categoryId).getVector()[0];
-  return ret;
+  auto ret = q.exec(categoryId).getVector();
+  if(ret.size() > 0 ) return ret[0]  ;
+  return std::nullopt;
 }
 
 std::vector<std::tuple<uint64_t, std::string>>
@@ -117,4 +118,15 @@ CategoryQuery::QueryAllCategoryBasicInfo ( ) {
   auto ret = q.exec().getVector();
   return ret;
 }
+
+std::vector<Model::Category> CategoryQuery::QueryAllCategory(){
+  auto getQuery = []() {
+    Query<Model::Category> q;
+    q.Select();
+    return q;
+  };
+  thread_local auto q = getQuery();
+  return q.exec().getVector();
+}
+
 } // namespace Blog::DAO
