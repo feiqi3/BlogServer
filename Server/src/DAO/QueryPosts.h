@@ -33,6 +33,8 @@ uint64_t, std::string>>;
 
   static std::optional<Model::Post> QueryPostByTitle(const char *postName);
 
+  static std::optional<uint64_t> QueryPostIdByTitle(const char *postName);
+
   static std::optional<std::string> UpdatePostById(uint64_t postId,
                                                    const Model::Post &post);
 

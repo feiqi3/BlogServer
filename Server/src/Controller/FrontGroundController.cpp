@@ -147,4 +147,12 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
     return res;
 }
 
+Fei::Http::FHttpResponse FrontGroundController::About(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    auto _id = DAO::PostQuery::QueryPostIdByTitle("关于网站");
+    if(!_id.has_value()){
+        return Redirector::RedirectTo("/404");
+    }
+    return Redirector::RedirectTo("/post/" + std::to_string(_id.value()));
+}
+
 } // namespace Blog
