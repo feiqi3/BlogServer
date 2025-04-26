@@ -81,6 +81,21 @@ std::optional<Model::Post> PostQuery::QueryPostById(uint64_t postId)
     return std::nullopt;
 }
 
+std::optional<uint64_t> PostQuery::QueryPostIdByTitle(const char *postName)
+{
+    auto getQuery = []() {
+        Query<uint64_t> query(FIELD(Model::Post,id));
+        query.Where(FIELD(Model::Post, title) == PARAM).From("Posts");
+        return query;
+        };
+    thread_local auto q = getQuery();
+    auto vec = q.exec(postName).getVector();
+    if(vec.empty()){
+        return std::nullopt;
+    }
+    return vec[0];
+}
+
 std::optional<Model::Post> PostQuery::QueryPostByTitle(const char* postName)
 {
     auto getQuery = []() {

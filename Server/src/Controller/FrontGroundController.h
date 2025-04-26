@@ -20,6 +20,7 @@ namespace Blog{
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/category/id={id}&page={page}", FrontGroundController, CategoriesDetail);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/category/id={id}", FrontGroundController, CategoriesDetail);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/categories", FrontGroundController, Categories);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/about", FrontGroundController, About);
 			REGISTER_MAPPING_END
     };
 	REGISTER_CONTROLLER_CLASS(FrontGroundController);
