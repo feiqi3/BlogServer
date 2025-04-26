@@ -18,9 +18,12 @@
 #include <sys/epoll.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
+  #include <sys/types.h>
 #include <unistd.h>
 #if defined(__linux__)
 #include <sys/uio.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #else
 
 #endif
@@ -478,7 +481,14 @@ int SetSockOpt(Socket s, SockOpt opt, int v) {
   } else if (opt == SockOpt::KeepIdle) {
     _opt = TCP_KEEPIDLE;
     lvl = IPPROTO_TCP;
-  } else {
+  }else if(opt == SockOpt::ReadTimeOut){
+    timeval st{0,v};
+    return setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&st, sizeof(st));
+  }else if(opt == SockOpt::SendTimeOut){
+    timeval st{0,v};
+    return setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char*)&st, sizeof(st));
+  }
+   else {
     return -1;
   }
 
@@ -534,4 +544,38 @@ int SetSockOpt(Socket s, SockOpt opt, bool on) {
   return -1;
 }
 
+F_API bool ResolveHost(const std::string& hostname,
+  const std::string& service,std::vector<FSocketAddr>& addr){
+    addrinfo hints;
+    struct addrinfo* result = nullptr;
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;      // Only Allow IPv4
+    hints.ai_socktype = SOCK_STREAM;  // TCP stream sockets
+    hints.ai_flags = AI_ADDRCONFIG;   // Only return addresses for configured families
+    int ret = getaddrinfo(hostname.c_str(), service.c_str(), &hints, &result);
+    if (ret != 0) {
+      return false;
+      for (addrinfo* ptr = result; ptr != nullptr; ptr = ptr->ai_next) {
+        char ipstr[INET_ADDRSTRLEN] = {0};
+        char portstr[NI_MAXSERV]   = {0};
+        if (getnameinfo(
+                ptr->ai_addr, ptr->ai_addrlen,
+                ipstr, sizeof(ipstr),
+                portstr, sizeof(portstr),
+                NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
+            uint16_t port = static_cast<uint16_t>(std::stoi(portstr));
+            addr.emplace_back(ipstr, port);
+        }
+    }
+
+    freeaddrinfo(result);
+
+  }
+  return true;
+}
+F_API bool ResolveHost(const std::string& hostname,
+  uint16 port,
+  std::vector<FSocketAddr>& addr){
+    return ResolveHost(hostname,std::to_string(port),addr);
+}
 }; // namespace Fei
