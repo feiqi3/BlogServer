@@ -41,12 +41,18 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
   SSLContext = (void *)SSL_CTX_new(TLS_server_method());
+  loadCertFiles(certificateFile,privateKeyFile);
+}
+
+void FSSLEnv::loadCertFiles(const std::string &certificateFile,
+                            const std::string &privateKeyFile) {
   if (!SSLContext) {
     auto errCode = ERR_get_error();
     auto reason = ERR_GET_REASON(errCode);
     Logger::instance()->log(MODULE_NAME, lvl::err,
                             "Unable to create SSL context, reason: \"{}\"",
                             reason);
+    return;
   }
   SSL_CTX *ctx = (SSL_CTX *)SSLContext;
   /* Set the key and cert */
@@ -57,6 +63,7 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
     Logger::instance()->log(
         MODULE_NAME, lvl::err,
         "Unable to load SSL certificate file, reason: \"{}\"", reason);
+    return;
   }
 
   if (SSL_CTX_use_PrivateKey_file(ctx, privateKeyFile.c_str(),
@@ -66,8 +73,10 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
     Logger::instance()->log(
         MODULE_NAME, lvl::err,
         "Unable to load SSL private key file, reason: \"{}\"", reason);
+    return;
   }
 }
+
 // Destroy SSL Context
 FSSLEnv::~FSSLEnv() {
   SSL_CTX_free((SSL_CTX *)SSLContext);
@@ -136,9 +145,9 @@ bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
     dataToSend.resize(pending);
     pending = BIO_read(out_bio, dataToSend.data(), dataToSend.size());
     ptr->send(std::move(dataToSend));
-  }else{
+  } else {
     SSL_read(ssl, 0, 0);
-    if(SSL_pending(ssl) > 0){
+    if (SSL_pending(ssl) > 0) {
       return true;
     }
   }
@@ -198,12 +207,12 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
     throw SSLNotPreparedException();
   }
   BIO *ioIn = dp->rbio;
-  //BIO *ioOut = dp->wbio;
+  // BIO *ioOut = dp->wbio;
 
   auto view = reader.peekAll();
   int size = view.size();
   // write encrypted data into bio
-  if(view.size() > 0){
+  if (view.size() > 0) {
     auto size = BIO_write(ioIn, (unsigned char *)view.get(), view.size());
     view.resetSize(size);
     reader.expireView(view);
@@ -211,23 +220,23 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   // read decrypted data out of ssl
   int toReadSize = SSL_pending(dp->sslHandler) + size;
 
-  //To read size --> a predicted reading size.
+  // To read size --> a predicted reading size.
   std::unique_ptr<char[]> temp(new char[toReadSize]);
   int readSize = SSL_read(dp->sslHandler, temp.get(), toReadSize);
-    if (readSize <= 0) {
+  if (readSize <= 0) {
     auto r = SSL_get_error(ssl, toReadSize);
     auto err = ERR_error_string(r, 0);
     Logger::instance()->log(MODULE_NAME, lvl::warn,
                             "SSL read error, reason \"{}\"", err);
     throw SSLDataException("SSL Write decrypt data error.");
   }
-  
+
   dp->outBuffer.Append(temp.get(), readSize);
   return dp->outBuffer;
 }
 
-void FSSLUtils::randomBytes(unsigned char* data,uint32 num){
-  RAND_bytes(data,(int)num);
+void FSSLUtils::randomBytes(unsigned char *data, uint32 num) {
+  RAND_bytes(data, (int)num);
 }
 
 } // namespace Fei

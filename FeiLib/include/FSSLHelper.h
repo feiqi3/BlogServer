@@ -15,6 +15,8 @@ public:
   //certificateFile --> like "cert.pem"
   //privateKeyFile --> like "key.pem"
   FSSLEnv(const std::string &certificateFile,const std::string &privateKeyFile);
+  //Change cert on the fly, for current existed connection
+  void loadCertFiles(const std::string &certificateFile,const std::string &privateKeyFile);
   // Destroy SSL Context
   ~FSSLEnv();
   bool isEnvSetup()const{
