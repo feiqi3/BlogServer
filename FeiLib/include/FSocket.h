@@ -2,6 +2,7 @@
 #define FSOCKET_H
 #include "FDef.h"
 #include <string>
+#include <vector>
 
 namespace Fei {
 
@@ -91,6 +92,8 @@ enum class SockOpt{
   KeepIdle,
   NoneBlock,
   CloseOnExec,
+  SendTimeOut, //us
+  ReadTimeOut, //us
   NoneBlockAndCloseOnExec,
 };
 F_API int SetSockOpt(Socket s,SockOpt opt,bool on);
@@ -200,5 +203,12 @@ F_API int EPollClose(EpollHandle ephnd);
 F_API int EPollWait(EpollHandle ephnd, FEpollEvent *events, int maxevents,
                      int timeout);
 
+F_API bool ResolveHost(const std::string& hostname,
+                        const std::string& port,
+                        std::vector<FSocketAddr>& addr);
+
+F_API bool ResolveHost(const std::string& hostname,
+                          uint16 port,
+                          std::vector<FSocketAddr>& addr);
 } // namespace Fei
 #endif
