@@ -13,7 +13,12 @@
 #include "FLogger.h"
 #include "FSSLHelper.h"
 #include "FTCPConnection.h"
+
+#include "openssl/opensslv.h"
+
 #include "openssl/rand.h"
+#include <openssl/hmac.h>
+#include <openssl/md5.h>
 
 #define MODULE_NAME "SSLHelper"
 
@@ -237,6 +242,23 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
 
 void FSSLUtils::randomBytes(unsigned char *data, uint32 num) {
   RAND_bytes(data, (int)num);
+}
+
+std::string FSSLUtils::hmac_sha1(const char* data, size_t dataSize, const char* key, size_t keySize)
+{
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    HMAC(EVP_sha1(), key, keySize, (const unsigned char*)data,
+        dataSize, digest, &digest_len);
+    return std::string((char*)digest, digest_len);
+}
+
+std::string FSSLUtils::base64(const char* data, size_t dataSize)
+{
+    size_t enc_len = 4 * ((dataSize + 2) / 3);
+    std::vector<unsigned char> buf(enc_len + 1, '\0');
+    int out_len = EVP_EncodeBlock((unsigned char*)buf.data(), (const unsigned char*)data, dataSize);
+    return std::string((char*)buf.data(), out_len);
 }
 
 } // namespace Fei

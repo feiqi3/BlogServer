@@ -14,8 +14,7 @@
 #include <string>
 #include <vector>
 
-#include <openssl/hmac.h>
-#include <openssl/md5.h>
+#include <FSSLHelper.h>
 
 #define CERT_DOMAIN "pic.feiqi3.cn"
 
@@ -38,23 +37,15 @@ QiNiuAuth *genQiNiuAuth(const char *Ak, const char *Sk, const char *path,
   if (body) {
     ss << body;
   }
-  unsigned char digest[EVP_MAX_MD_SIZE];
-  unsigned int digest_len = 0;
-  auto toEncryp = ss.str();
 
-  // 1. HMAC-SHA1 with Secret key
-  HMAC(EVP_sha1(), Sk, strlen(Sk), (const unsigned char *)toEncryp.data(),
-       toEncryp.length(), digest, &digest_len);
-
+  auto _str = ss.str();
+  auto hmac_sha1 = FSSLUtils::hmac_sha1(_str.c_str(), _str.size(), Sk, strlen(Sk));
+  auto base64 = FSSLUtils::base64(hmac_sha1.data(), hmac_sha1.size());
   auto ak_len = strlen(Ak);
-  size_t enc_len = 4 * ((digest_len + 2) / 3);
-  std::vector<unsigned char> buf(ak_len + 1 + enc_len + 1, '\0');
-
-  // 2. base64 safe for url
-  int out_len = EVP_EncodeBlock(buf.data(), digest, digest_len);
-  int write_pos = 0;
-  for (int i = 0; i < out_len; ++i) {
-    unsigned char c = buf[i + ak_len + 1];
+  int write_pos = ak_len + 1;
+  std::vector<char> buf(ak_len + 1 + base64.size());
+  for (int i = 0; i < base64.size(); ++i) {
+    auto c = base64[i];
     if (c == '+')
       buf[write_pos++] = '-';
     else if (c == '/')
@@ -65,15 +56,9 @@ QiNiuAuth *genQiNiuAuth(const char *Ak, const char *Sk, const char *path,
       buf[write_pos++] = c;
   }
   memcpy(buf.data(), Ak, ak_len);
-  {
-    union {
-      unsigned char c;
-      char _ = ':';
-    };
-    buf[ak_len] = static_cast<unsigned char>(c);
-  }
+  buf[ak_len] = ':';
   ret->outAuthToken =
-      std::string(reinterpret_cast<char *>(buf.data()), write_pos);
+      std::string((buf.data()), write_pos);
   return ret;
 }
 

@@ -553,8 +553,9 @@ F_API bool ResolveHost(const std::string& hostname,
     hints.ai_socktype = SOCK_STREAM;  // TCP stream sockets
     hints.ai_flags = AI_ADDRCONFIG;   // Only return addresses for configured families
     int ret = getaddrinfo(hostname.c_str(), service.c_str(), &hints, &result);
+    if (ret == 0)return false;
+
     if (ret != 0) {
-      return false;
       for (addrinfo* ptr = result; ptr != nullptr; ptr = ptr->ai_next) {
         char ipstr[INET_ADDRSTRLEN] = {0};
         char portstr[NI_MAXSERV]   = {0};

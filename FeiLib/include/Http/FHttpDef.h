@@ -20,14 +20,14 @@ enum class Method {
   MAX_SIZE = Invalid,
 };
 
-const char* methodToStr(Method method);
+F_API const char* methodToStr(Method method);
 
 enum class Version {
   Unknown,
   Http10,
   Http11,
 };
-const char* versionToStr(Version version);
+F_API const char* versionToStr(Version version);
 
 enum class StatusCode{
 //1xx
@@ -42,7 +42,7 @@ enum class StatusCode{
     _500,_501,_502,_505,
 };
 
-const char* statusCodeToStr(StatusCode code);
+F_API const char* statusCodeToStr(StatusCode code);
 
 const uint32 HttpMaxRequestPathLen = 4096;
 
