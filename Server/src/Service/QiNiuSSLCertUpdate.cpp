@@ -87,8 +87,8 @@ bool updateQiNiuSSLCert(const std::string &pri, const std::string &ca,
 
   const std::string QiNiuCertApi = "http://api.qiniu.com/";
   std::vector<FSocketAddr> addrs;
-  Fei::ResolveHost(QiNiuCertApi, 8080, addrs);
-  if (addrs.size() < 0) {
+  bool resolveResult = Fei::ResolveHost(QiNiuCertApi, 80, addrs);
+  if (addrs.size() == 0 || !resolveResult) {
     Logger::instance()->log(lvl::err, "Resolve address: {} error.",
                             QiNiuCertApi);
     return false;
