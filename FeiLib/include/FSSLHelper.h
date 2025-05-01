@@ -48,6 +48,8 @@ private:
 class F_API FSSLUtils{
   public:
   static void randomBytes(unsigned char* data,uint32 num);
+  static std::string hmac_sha1(const char* data, size_t dataSize, const char* key, size_t keySize);
+  static std::string base64(const char* data, size_t dataSize);
 };
 
 } // namespace Fei::Http
