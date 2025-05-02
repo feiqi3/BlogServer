@@ -63,6 +63,21 @@ def get_dns_challenge(domain,email):
     name = value = None
     for line in proc.stdout:
         print(line, end='')
+        if line.strip().startswith("2: Renew & replace the certificate"):
+            _ = next(proc.stdout)
+            print(_)
+            while True:
+                char = proc.stdout.read(1)
+                print(char,end='')
+                if char == ':':
+                    char = proc.stdout.read(1)
+                    print("",end='\n')
+                    break;     
+            proc.stdin.write("2\n")
+            proc.stdin.flush()
+            print("----ReNew Your Certification----")
+            return '','',proc
+
         if line.strip().startswith("(Y)es/(N)o:"):
             proc.stdin.write("Y\n")
         if line.strip().startswith("Please deploy a DNS TXT record under the name"):
@@ -205,10 +220,47 @@ def upload_cert_to_qiniu(qiniu_conf, domain):
     else:
         raise RuntimeError(f"上传七牛证书失败: {result}")
 
+def update_cert_for_domain(qiniu_conf, domain, cert_id, force_https=True, http2_enable=True):
+    """
+    更新七牛云域名的SSL证书
+    :param qiniu_conf: 七牛云的认证信息
+    :param domain: 需要更新证书的域名
+    :param cert_id: 新证书的ID
+    :param force_https: 是否强制 HTTPS 跳转
+    :param http2_enable: 是否启用 HTTP2
+    """
+    # 七牛云更新证书的 API 地址
+    url = f'http://api.qiniu.com/domain/{domain}/httpsconf'
+    
+    # 需要提交的数据
+    data = {
+        'certId': cert_id,  # 证书 ID
+        'forceHttps': force_https,  # 强制 HTTPS 启动
+        'http2Enable': http2_enable  # 是否启用 HTTP2
+    }
+    
+    # 认证并获取 token
+    auth = Auth(qiniu_conf['access_key'], qiniu_conf['secret_key'])
+    token = auth.token_of_request(url)
+
+    # 设置请求头
+    headers = {
+        'Authorization': f'QBox {token}',
+        'Content-Type': 'application/json'
+    }
+
+    # 发送请求以更新证书
+    resp = requests.put(url, json=data, headers=headers)
+    result = resp.json()
+
+    if resp.status_code == 200:
+        print(f"七牛云域名 {domain} 的证书更新成功！")
+    else:
+        raise RuntimeError(f"更新域名证书失败: {result}")
 
 def main():
     if len(sys.argv) != 2:
-        print("用法: python auto_cert.py <domain>")
+        print("用法: python auto_cert_v2.py <domain>")
         sys.exit(1)
     domain = sys.argv[1]
 
@@ -219,6 +271,20 @@ def main():
     main_domain = f"{ext.domain}.{ext.suffix}"
     # 1. 获取 DNS 验证记录
     name, value, proc = get_dns_challenge(domain,email)
+    # 特殊情况： 更新已有的证书
+    if len(name) == 0 and len(value)==0:
+        for line in proc.stdout:
+            print(line)
+        proc.wait()
+        if proc.returncode != 0:
+            print("Certbot 签发失败，请检查日志。")
+        else:
+            print("Certbot 签发成功")
+            certId = upload_cert_to_qiniu(qiniu_conf, domain)
+            update_cert_for_domain(qiniu_conf,domain,certId)
+
+        sys.exit(1)
+
     ext = tldextract.extract(name)
     # 2. 添加 DNS 记录
     create_domain_if_not_exists(tencent_conf,main_domain)
@@ -239,9 +305,10 @@ def main():
         sys.exit(1)
 
     # 4. 上传证书到七牛云证书管理
-    upload_cert_to_qiniu(qiniu_conf, domain)
-
-    # 5. 删除 DNS 验证记录
+    certId = upload_cert_to_qiniu(qiniu_conf, domain)
+    # 5. 更新七牛云证书
+    update_cert_for_domain(qiniu_conf,domain,certId)
+    # 6. 删除 DNS 验证记录
     delete_dns_record(tencent_conf, main_domain, record_id)
 
     print("证书申请、上传及清理流程完成。")
