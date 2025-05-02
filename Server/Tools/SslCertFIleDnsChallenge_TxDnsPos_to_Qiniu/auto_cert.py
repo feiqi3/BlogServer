@@ -15,6 +15,8 @@ from tencentcloud.common.profile.client_profile import ClientProfile
 from tencentcloud.dnspod.v20210323 import dnspod_client, models
 from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
 
+import tldextract
+
 # 七牛云 SDK & HTTP 请求
 from qiniu import Auth
 import requests
@@ -31,16 +33,28 @@ def read_config(path='config.ini'):
         'access_key': cfg['qiniu']['access_key'].strip(),
         'secret_key': cfg['qiniu']['secret_key'].strip()
     }
-    return tencent, qiniu_conf
+    optional_conf = {}
+    if cfg.has_section('optional'):
+        optional_conf = {
+            'email' : cfg.get('optional','email',fallback='').strip,
+        }
+    return tencent, qiniu_conf,optional_conf
 
 
-def get_dns_challenge(domain):
+def get_dns_challenge(domain,email):
+
     cmd = [
         'certbot', 'certonly',
         '--manual',
-        '--preferred-challenges', 'dns',
+        '--preferred-challenges', 'dns', '--agree-tos',
         '-d', domain
     ]
+    if len(email) == 0:
+        cmd.append('--register-unsafely-without-email')
+    else:
+        cmd.append('--email')
+        cmd.append(email)
+
     proc = subprocess.Popen(cmd,
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
@@ -49,21 +63,43 @@ def get_dns_challenge(domain):
     name = value = None
     for line in proc.stdout:
         print(line, end='')
+        if line.strip().startswith("(Y)es/(N)o:"):
+            proc.stdin.write("Y\n")
         if line.strip().startswith("Please deploy a DNS TXT record under the name"):
+            # 跳一行空行
+            _ = next(proc.stdout)
             # 下一行包含记录名和提示
             nl = next(proc.stdout)
             name = nl.strip().split()[0]
+            name = name.rstrip('.')
+            print(nl)
+            print("name = ",name)
             # 跳一行空行
             _ = next(proc.stdout)
+
+            # 跳一行 with the following value:
+            _ = next(proc.stdout)
+
+            # 跳一行空行
+            _ = next(proc.stdout)
+
             # 再下一行是 value
             vl = next(proc.stdout)
+            print(vl)
             value = vl.strip()
-        if line.strip().startswith("Press Enter to Continue"):
-            break
+            print("value = ",value)
+        if line.strip().startswith("Before continuing, verify the TXT record has been deployed."):
+            for line in iter(proc.stdout.readline, ''):
+                # 这里只会在 readline() 返回空字符串（EOF）时停止
+                print(line, end='')
+                if line.strip().startswith("- - - - - - - - - - "):
+                    print("Certbot operation hang up")
+                    return name, value, proc
     return name, value, proc
 
 
 def add_dns_record(tencent_conf, domain, sub_domain, txt_value):
+    print(f"尝试为 {domain} 添加 DNS TXT 记录：{sub_domain} -> {txt_value}")
     cred = credential.Credential(tencent_conf['secret_id'], tencent_conf['secret_key'])
     http_profile = HttpProfile()
     http_profile.endpoint = "dnspod.tencentcloudapi.com"
@@ -95,6 +131,35 @@ def delete_dns_record(tencent_conf, domain, record_id):
     client.DeleteRecord(req)
     print(f"已删除 DNS 记录：RecordId={record_id}")
 
+def create_domain_if_not_exists(tencent_conf, domain):
+    """
+    检查 DNSPod 是否已有该域名解析，如无则创建。
+    """
+    cred = credential.Credential(tencent_conf['secret_id'], tencent_conf['secret_key'])
+    http_profile = HttpProfile()
+    http_profile.endpoint = "dnspod.tencentcloudapi.com"
+    client_profile = ClientProfile(httpProfile=http_profile)
+    client = dnspod_client.DnspodClient(cred, "", client_profile)
+
+    # 查询域名列表，使用 Keyword 参数过滤
+    req = models.DescribeDomainListRequest()
+    req.Keyword = domain
+    req.Type = "ALL"
+    req.Offset = 0
+    req.Limit = 100
+    resp = client.DescribeDomainList(req)
+    if resp.DomainList:
+        # 精确匹配域名
+        for item in resp.DomainList:
+            if item.Name == domain:
+                print(f"域名 {domain} 已存在于 DNSPod。")
+                return
+    # 域名不存在，创建域名解析
+    create_req = models.CreateDomainRequest()
+    print(f"Query Domin: \"{domain}\"")
+    create_req.Domain = domain.strip()
+    create_resp = client.CreateDomain(create_req)
+    print(f"已在 DNSPod 创建域名：{domain} (DomainInfo={create_resp.DomainInfo})")
 
 def upload_cert_to_qiniu(qiniu_conf, domain):
     # 证书文件路径
@@ -143,16 +208,21 @@ def upload_cert_to_qiniu(qiniu_conf, domain):
 
 def main():
     if len(sys.argv) != 2:
-        print("用法: python auto_cert_v2.py <domain>")
+        print("用法: python auto_cert.py <domain>")
         sys.exit(1)
     domain = sys.argv[1]
 
-    tencent_conf, qiniu_conf = read_config()
+    tencent_conf, qiniu_conf,optional_conf = read_config()
 
+    email = optional_conf.get('email','')
+    ext = tldextract.extract(domain)
+    main_domain = f"{ext.domain}.{ext.suffix}"
     # 1. 获取 DNS 验证记录
-    name, value, proc = get_dns_challenge(domain)
+    name, value, proc = get_dns_challenge(domain,email)
+    ext = tldextract.extract(name)
     # 2. 添加 DNS 记录
-    record_id = add_dns_record(tencent_conf, domain, name, value)
+    create_domain_if_not_exists(tencent_conf,main_domain)
+    record_id = add_dns_record(tencent_conf, main_domain, ext.subdomain, value)
 
     print("等待 DNS 生效（约60秒）...")
     time.sleep(60)
@@ -160,17 +230,19 @@ def main():
     # 3. 继续 Certbot 完成签发
     proc.stdin.write("\n")
     proc.stdin.flush()
+    for line in proc.stdout:
+        print(line)
     proc.wait()
     if proc.returncode != 0:
         print("Certbot 签发失败，请检查日志。")
-        delete_dns_record(tencent_conf, domain, record_id)
+        delete_dns_record(tencent_conf, main_domain, record_id)
         sys.exit(1)
 
     # 4. 上传证书到七牛云证书管理
     upload_cert_to_qiniu(qiniu_conf, domain)
 
     # 5. 删除 DNS 验证记录
-    delete_dns_record(tencent_conf, domain, record_id)
+    delete_dns_record(tencent_conf, main_domain, record_id)
 
     print("证书申请、上传及清理流程完成。")
 
