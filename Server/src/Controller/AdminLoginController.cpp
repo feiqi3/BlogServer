@@ -29,7 +29,7 @@ void AdminController::lateInit() {
   auto user = cfg->getCfg("AdminUser");
   this->mUserName = user.value_or("admin");
   auto password = cfg->getCfg("admin");
-  if (user->empty() || password->empty()) {
+  if (!user.has_value() || !password.has_value() || user->empty() || password->empty()) {
     Fei::Logger::instance()->log(
         Fei::lvl::warn,
         MODULE_NAME "Admin user or password not set. Check config file.");
@@ -59,8 +59,8 @@ AdminController::Login(const Fei::Http::FHttpRequest &req,
   std::string sessionId;
   if (isLogin) {
     std::string username, userpswd;
-    username = json["username"].template get<std::string>();
-    userpswd = json["userpassword"].template get<std::string>();
+    JsonTool::get(json, std::string("username"), std::string(""), username);
+    JsonTool::get(json, std::string("userpassword"), std::string(""), userpswd);
     isLogin = admin->Login(username, userpswd, sessionId);
   }
   nlohmann::json j;
