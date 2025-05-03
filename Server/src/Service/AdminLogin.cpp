@@ -27,7 +27,7 @@ AdminLogin::AdminLogin() {
   this->mUserName = user.value_or("admin");
   auto password = cfg->getCfg("admin");
   this->mPassword = password.value_or("admin");
-  if (user->empty() || password->empty()) {
+  if (!user.has_value() || !password.has_value()|| user->empty() || password->empty()) {
     Fei::Logger::instance()->log(
         Fei::lvl::warn,
         MODULE_NAME "Admin user or password not set. Check config file.");
@@ -73,53 +73,79 @@ bool AdminLogin::isLogin(const std::string &sessionId) const {
   return false;
 }
 
+
 bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
                                   std::string &out) {
   bool isModify = false;
-
-  auto titleJson = json["title"];
-  if (titleJson.is_null()) {
-    out = "title is null";
-    return false;
-  }
-  std::string title = titleJson.get<std::string>();
-  if (title.empty()) {
-    out = "title is empty";
-    return false;
-  }
-
-  auto profileJson = json["profile"];
-  if (profileJson.is_null()) {
-    out = "profile is null";
-    return false;
-  }
-  std::string profile = profileJson.get<std::string>();
-  if (profile.empty()) {
-    out = "profile is empty";
-    return false;
+  uint32_t categoryId = 0;
+  bool isvalid = true;
+  {
+      std::string categoryStr;
+      isvalid = JsonTool::get(json, std::string("category_id"), std::string(""), categoryStr);
+      if (!isvalid) {
+        out = "Missing parameter: category_id";
+        return false;
+      }
+      if (Digital::isNumber(categoryStr)) {
+          categoryId = std::stoul(categoryStr);
+      }
   }
 
-  auto contentJson = json["content"];
-  if (contentJson.is_null()) {
-    out = "content is null";
-    return false;
+  {
+    
   }
-  std::string content = contentJson.get<std::string>();
-  if (content.empty()) {
-    out = "content is empty";
-    return false;
+  std::string title;
+  {
+      isvalid = JsonTool::get(json, std::string("title"), std::string(), title);
+      if (!isvalid) {
+          out = "Missing parameter: title";
+          return false;
+      }
+      if (title.empty()) {
+          out = "title is empty";
+          return false;
+      }
   }
 
-  auto titlepicJson = json["titlepic"];
-  if (contentJson.is_null()) {
-    out = "titlepic is null";
-    return false;
+  std::string profile;
+  {
+      isvalid = JsonTool::get(json, std::string("profile"), std::string(), profile);
+      if (!isvalid) {
+          out = "Missing parameter: profile";
+          return false;
+      }
+      if (profile.empty()) {
+          out = "profile is empty";
+          return false;
+      }
   }
-  std::string titlepic = titlepicJson.get<std::string>();
-  if (titlepic.empty()) {
-    out = "titlepic is empty";
-    return false;
+
+  std::string content;
+  {
+      isvalid = JsonTool::get(json, std::string("content"), std::string(), content);
+      if (!isvalid) {
+          out = "Missing parameter: content";
+          return false;
+      }
+      if (content.empty()) {
+          out = "content is empty";
+          return false;
+      }
   }
+
+  std::string titlepic;
+  {
+      isvalid = JsonTool::get(json, std::string("titlepic"), std::string(), titlepic);
+      if (!isvalid) {
+          out = "Missing parameter: titlepic";
+          return false;
+      }
+      if (titlepic.empty()) {
+          out = "titlepic is empty";
+          return false;
+      }
+  }
+
   Model::Post post;
   // modyify
   auto idItor = json.find("id");
@@ -141,8 +167,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.content = content;
     post.titlepic = titlepic;
     post.updated_at = TimeHelper::getCurrentTimeFromEpochMills();
-    // TODO: modify this
-    post.category_id = 0;
+    post.category_id = categoryId;
     auto out = DAO::PostQuery::UpdatePostById(id, post);
     if (out.has_value()) {
       out = out.value();
@@ -158,8 +183,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.titlepic = titlepic;
     post.created_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.updated_at = 0;
-    // TODO: modify this
-    post.category_id = 0;
+    post.category_id = categoryId;
     auto res = DAO::PostQuery::InsertPost(post);
     if (res.has_value()) {
       out = res.value();

@@ -8,5 +8,6 @@ public:
  std::string name;
  std::string categorypic;
  ENTITY_TABLE(Categories);
+ AUTO_INC_PK(id);
 };
 }
