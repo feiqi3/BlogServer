@@ -1,5 +1,6 @@
 #include "FConfigReader.h"
 #include "FDef.h"
+#include "FLogger.h"
 #include "FeiLibIniter.h"
 #include "server.h"
 #include "Http/FHttpServer.h"
@@ -58,11 +59,12 @@ Blog::Server::Server()
 void Blog::Server::run()
 {
 	server->run();
-	while (1) {
+	while (!shouldClose) {
 		using namespace std::chrono_literals;
 		std::this_thread::sleep_for(20s);
 		server->tickAppEvents();
 	}
+	server->stop();
 }
 
 void Blog::Server::init()
@@ -73,6 +75,11 @@ void Blog::Server::init()
 	//server->setConnFilterCB(&filterAll);
 }
 
+void Blog::Server::shutdown(){
+	shouldClose = true;
+}
+
+
 Blog::Server::~Server()
 {
 	delete server;
@@ -80,5 +87,7 @@ Blog::Server::~Server()
 	delete AdminLogin::instance();
 	delete SessionManager::instance();
 	delete BlogData::instance();
-	
+	Fei::Logger::instance()->log(Fei::lvl::info, "Server Shutdown.");
+	Fei::Http::FHttpServer::deinitSSLenv();
+	Fei::FeiLibUnInit();
 }
