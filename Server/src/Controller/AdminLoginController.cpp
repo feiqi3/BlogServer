@@ -25,15 +25,6 @@ namespace Blog {
 AdminController::AdminController() : Fei::Http::FControllerBase("AdminLogin") {}
 
 void AdminController::lateInit() {
-  auto cfg = Fei::FConfigReader::instance();
-  auto user = cfg->getCfg("AdminUser");
-  this->mUserName = user.value_or("admin");
-  auto password = cfg->getCfg("admin");
-  if (!user.has_value() || !password.has_value() || user->empty() || password->empty()) {
-    Fei::Logger::instance()->log(
-        Fei::lvl::warn,
-        MODULE_NAME "Admin user or password not set. Check config file.");
-  }
 }
 
 Fei::Http::FHttpResponse
