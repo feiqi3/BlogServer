@@ -25,7 +25,7 @@ AdminLogin::AdminLogin() {
   auto cfg = Fei::FConfigReader::instance();
   auto user = cfg->getCfg("AdminUser");
   this->mUserName = user.value_or("admin");
-  auto password = cfg->getCfg("admin");
+  auto password = cfg->getCfg("AdminPassword");
   this->mPassword = password.value_or("admin");
   if (!user.has_value() || !password.has_value()|| user->empty() || password->empty()) {
     Fei::Logger::instance()->log(
