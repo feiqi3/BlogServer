@@ -9,8 +9,10 @@ namespace Blog {
 		Server();
 		void run();
 		void init();
+		void shutdown();
 		~Server();
 	private:
+		bool shouldClose = false;
 		Fei::Http::FHttpServer* server;
 	};
 }

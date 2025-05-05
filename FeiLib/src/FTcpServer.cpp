@@ -32,14 +32,14 @@ void FTcpServer::deinitGlobalSSLEnv() {
     delete FSSLEnv::instance();
 }
 
-void FTcpServer::initGlobalSSLEnv(const std::string& certificateFile,const std::string& privateKeyFile) {
-  if (!FSSLEnv::valid())
-    {
-      new FSSLEnv(certificateFile,privateKeyFile);
-      if(!FSSLEnv::instance()->isEnvSetup()){
-        delete FSSLEnv::instance();
-      }
-    }else
+void FTcpServer::initGlobalSSLEnv(const std::string &certificateFile,
+                                  const std::string &privateKeyFile) {
+  if (!FSSLEnv::valid()) {
+    new FSSLEnv(certificateFile, privateKeyFile);
+    if (!FSSLEnv::instance()->isEnvSetup()) {
+      delete FSSLEnv::instance();
+    }
+  } else
     throw std::runtime_error("Double init SSL Environment");
 }
 
@@ -80,25 +80,18 @@ void FTcpServer::stop(bool forceClose) {
     else
       loop->Quit();
   }
-
-  while (toCloseNums > 0) {
-    for (auto i = 0u; i < toCloseNums;) {
-      auto eraseSize = std::erase_if(m_subLoops, [](auto &in) {
-        if (in->HasStoped()) {
-          return true;
-        }
-        return false;
-      });
-      m_subLoops.resize(m_subLoops.size() - eraseSize);
-      toCloseNums -= eraseSize;
-    }
+  for (auto &&loop : m_subLoops) {
+    while (!loop->HasStoped()){
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }; 
+      toCloseNums--;
   }
   m_running = false;
 }
 
 void FTcpServer::addSslListenPort(uint32 port, bool reuseport) {
-  if(!FSSLEnv::valid() || !FSSLEnv::instance()->isEnvSetup()){
-    Logger::instance()->log(lvl::err,"[FTcpServer]SSL Environment not setup");
+  if (!FSSLEnv::valid() || !FSSLEnv::instance()->isEnvSetup()) {
+    Logger::instance()->log(lvl::err, "[FTcpServer]SSL Environment not setup");
     return;
   }
   addListenPort(port, reuseport);
@@ -144,13 +137,14 @@ void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr,
   auto choosenLoop = m_subLoops[IOThread_Chooser++].get();
   IOThread_Chooser = IOThread_Chooser % m_subLoops.size();
   bool isSSL = false;
-  for(auto&& sslPort : this->m_sslPort){
-    if(sslPort == addrAccept.getPort()){
+  for (auto &&sslPort : this->m_sslPort) {
+    if (sslPort == addrAccept.getPort()) {
       isSSL = true;
       break;
     }
   }
-  auto ptr = FTcpConnection::makeConn(choosenLoop, inSock, addr, addrAccept,isSSL);
+  auto ptr =
+      FTcpConnection::makeConn(choosenLoop, inSock, addr, addrAccept, isSSL);
   ptr->setCloseCallback(
       std::bind(&FTcpServer::onClose, this, std::placeholders::_1));
   ptr->setMessageCallback(mOnMessageCallback);

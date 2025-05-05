@@ -20,7 +20,7 @@ class FEvent;
 class F_API FEventLoop : public FNoCopyable {
 public:
   FEventLoop(std::unique_ptr<FListener> listener);
-  ~FEventLoop(){assert(m_stoped);}
+  ~FEventLoop(){assert(m_stoped.load() == true);}
   void Loop();
   void Quit();
   void ForceQuit() {m_forceQuit = true;}
