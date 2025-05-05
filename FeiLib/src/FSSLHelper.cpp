@@ -223,20 +223,30 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
     reader.expireView(view);
   }
   // read decrypted data out of ssl
-  int toReadSize = SSL_pending(dp->sslHandler) + size;
+  SSL_read(dp->sslHandler, 0, 0);
+  int toReadSize = size;
 
   // To read size --> a predicted reading size.
   std::unique_ptr<char[]> temp(new char[toReadSize]);
-  int readSize = SSL_read(dp->sslHandler, temp.get(), toReadSize);
-  if (readSize <= 0) {
-    auto r = SSL_get_error(ssl, toReadSize);
-    auto err = ERR_error_string(r, 0);
-    Logger::instance()->log(MODULE_NAME, lvl::warn,
-                            "SSL read error, reason \"{}\"", err);
-    throw SSLDataException("SSL Write decrypt data error.");
-  }
+  
+  //Take care of pending data.
+  while(1){
+    int readSize = SSL_read(dp->sslHandler, temp.get(), toReadSize);
+    if (readSize < 0) {
+      auto r = SSL_get_error(ssl, readSize);
+      auto err = ERR_error_string(r, 0);
+      Logger::instance()->log(MODULE_NAME, lvl::warn,
+                              "SSL read error, reason \"{}\"", err);
+      throw SSLDataException("SSL Write decrypt data error.");
+    }
+    dp->outBuffer.Append(temp.get(), readSize);
+    SSL_read(dp->sslHandler, 0, 0);
+    
+    if (SSL_pending(ssl) <= 0) {
+      break;
+    }
 
-  dp->outBuffer.Append(temp.get(), readSize);
+  }
   return dp->outBuffer;
 }
 
