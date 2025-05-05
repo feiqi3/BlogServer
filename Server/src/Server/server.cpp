@@ -25,7 +25,7 @@ const std::string SSLFileDir = ResourceDir + "SSL/";
 
 Blog::Server::Server()
 {
-	Fei::FeiLibInit();
+	Fei::FeiLibInit(ResourceDir + "config/" + "server.cfg" );
 	Fei::Http::FHttpServer::initSSLenv(SSLFileDir + "cert.pem", SSLFileDir + "private.pem");
 
 	//init database
