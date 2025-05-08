@@ -58,10 +58,19 @@ public:
     return sslHelper!=nullptr;
   }
 
+  void setUserData(void* data) {
+    m_userData = data;
+  }
+  void* getUserData() {
+    return m_userData;
+  }
+  void* getUserData() const{
+    return m_userData;
+  }
 protected:
   // When output buffer is empty, send directly,
   // else queued in loop and send by buffer.
-  void sendInLoop(char *data, uint64 len);
+  void sendInLoop(char *data, int len);
   void handleRead();
   void handleWrite();
   void handleClose();
@@ -101,6 +110,8 @@ protected:
   TcpCloseCallback m_onCloseCallback;
 
   TcpConnState mstate;
+
+  void* m_userData = nullptr;
 };
 
 } // namespace Fei

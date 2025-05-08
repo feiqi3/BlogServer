@@ -23,6 +23,23 @@ extern const std::unordered_map<std::string, std::string> extensionToContentType
 
 namespace {
 
+	Fei::Http::FHttpServer::HttpConnData* getDataFromTcpConn(const Fei::FTcpConnPtr& ptr) {
+		auto data = static_cast<Fei::Http::FHttpServer::HttpConnData*>(ptr->getUserData());
+		if (data == nullptr) {
+			data = new Fei::Http::FHttpServer::HttpConnData();
+			ptr->setUserData(data);
+		}
+		return data;
+	}
+
+	void DestroyDataFromTcpConn(const Fei::FTcpConnPtr& ptr) {
+		auto data = static_cast<Fei::Http::FHttpServer::HttpConnData*>(ptr->getUserData());
+		if (data != nullptr) {
+			delete data;
+			ptr->setUserData(nullptr);
+		}
+	}
+
 	bool _getFileExtension(const std::string& filename, std::string& extension) {
 		static std::string fileExtensionSeperator = ".";
 		auto dotPos = std::find_first_of(filename.rbegin(), filename.rend(), fileExtensionSeperator.begin(), fileExtensionSeperator.end());
@@ -120,8 +137,21 @@ namespace Fei::Http {
 
 	void FHttpServer::handleTcpIn(const FTcpConnPtr& ptr, FBufferReader& reader)
 	{
-		FHttpRequest request(reader);
 		
+		auto http_data = getDataFromTcpConn(ptr);
+		bool isParseDone = http_data->parser.parse(reader);
+		
+		if(!isParseDone){
+			if (http_data->parser.getState() == FHttpParser::EState::Error) {
+				Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.",ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+				ptr->forceClose();
+			}
+			return;
+		}
+
+		FHttpRequest request(http_data->parser);
+		DestroyDataFromTcpConn(ptr);
+
 		preProcessTcpConn(ptr, request);
 
 		FRouter::RouteResult routeResult;
@@ -223,7 +253,7 @@ namespace Fei::Http {
 
 	void FHttpServer::handleTcpConnClosed(const FTcpConnPtr& ptr)
 	{
-
+		DestroyDataFromTcpConn(ptr);
 	}
 
 	void FHttpServer::preProcessTcpConn(const FTcpConnPtr& ptr, const FHttpRequest& request)

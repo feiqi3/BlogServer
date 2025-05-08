@@ -6,37 +6,39 @@
 
 namespace Fei::Http {
 
-FHttpRequest::FHttpRequest(FBufferReader &buffer)
-    : mHttpCtx(std::make_shared<FHttpContext>()) {
-  FHttpParser parser(buffer);
-  mIsValid = parser.parse(*mHttpCtx);
+FHttpRequest::FHttpRequest( FHttpParser& parser)
+{
+  if(parser.getState() != FHttpParser::EState::Done){
+    mIsValid = false;
+  }
+  mHttpCtx = std::move(parser.getContext());
 }
 
 int FHttpRequest::getCookieSize() const {
-  return mHttpCtx->getCookies().size();
+  return mHttpCtx.getCookies().size();
 }
 
 const FCookie &FHttpRequest::getCookie(int i) const {
-  return mHttpCtx->getCookies().at(i);
+  return mHttpCtx.getCookies().at(i);
 }
 
-Method FHttpRequest::getMethod() const { return mHttpCtx->getMethod(); }
+Method FHttpRequest::getMethod() const { return mHttpCtx.getMethod(); }
 Version FHttpRequest::getHttpVersion() const {
-  return mHttpCtx->getHttpVersion();
+  return mHttpCtx.getHttpVersion();
 }
 bool FHttpRequest::getHeader(const std::string &key,
                              std::string &outVal) const {
-  return mHttpCtx->getHeader(key, outVal);
+  return mHttpCtx.getHeader(key, outVal);
 }
 const std::string &FHttpRequest::getPath() const {
-  return mHttpCtx->getRequestPath();
+  return mHttpCtx.getRequestPath();
 }
 bool FHttpRequest::getQuery(const std::string &key, std::string &outVal) const {
-  return mHttpCtx->getQuery(key, outVal);
+  return mHttpCtx.getQuery(key, outVal);
 }
 
 std::string_view FHttpRequest::getRequestBody() const {
-  return mHttpCtx->getRequestBody();
+  return mHttpCtx.getRequestBody();
 }
 
 }; // namespace Fei::Http

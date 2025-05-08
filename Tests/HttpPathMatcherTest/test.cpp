@@ -4,6 +4,7 @@
 #include <sstream>
 #include <functional>
 #include "FDef.h"
+#include "Http/FHttpRequestParser.h"
 #include "Http/FPathVar.h"
 #include "Http/FPathMatcher.h"
 #include "Http/FRouter.h"
@@ -143,7 +144,23 @@ void test02()
 	using namespace Fei::Http;
 	FBuffer buffer(100);
 	FBufferReader reader(buffer);
-	FHttpRequest request(reader);
+	FHttpParser parser;
+	bool isParseDone = parser.parse(reader);
+	if(!isParseDone){
+		std::cout << "Parse Error\n";
+		return;
+	}
+
+    if(isParseDone){
+		Http::FHttpRequest request(parser);
+		std::cout << "Parse done\n";
+		std::cout << "Method: " << Http::methodToStr(request.getMethod()) << "\n";
+		std::cout << "Path: " << request.getPath() << "\n";
+		std::cout << "Version: " << Http::versionToStr(request.getHttpVersion()) << "\n";
+	  }
+	  
+
+	FHttpRequest request(parser);
 	REGISTER_CONTROLLER_CLASS_INLINE(ControllerTest)
 	auto matched = FRouter::instance()->route(Method::GET, "/abc");
 	if (matched.isvalid()) {

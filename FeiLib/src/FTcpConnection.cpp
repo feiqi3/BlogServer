@@ -53,24 +53,22 @@ FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,
   }
 }
 
-void FTcpConnection::sendInLoop(char *data, uint64 len) {
+void FTcpConnection::sendInLoop(char *data, int len) {
   m_loop->isInLoopAssert();
   if (mstate == TcpConnState::DisConnected) {
     return;
   }
-  int sendLen = 0;
 
   SocketStatus status = SocketStatus::Success;
-
+  const char* sendData = data;
+  int sendLen = 0;
   try {
     if (isSSLConnection() && sslHelper->hasShakeHandFin()) {
       auto reader = sslHelper->EncryptSendingData(data, len);
-      auto view = reader.peekAll();
-      data = (char *)view.get();
-      len = view.size();
+      sendData = (const char *)reader.peekAll(len);
+      reader.expireSize(len);
       //!!!!! Important : in current implementation we dont free the ptr to data
       //! immediately, so this is legal !!!!!
-      reader.expireView(view);
     }
   } catch (FException &e) {
     Logger::instance()->log(MODULE_NAME, lvl::warn,"%s", e.what());
@@ -84,7 +82,7 @@ void FTcpConnection::sendInLoop(char *data, uint64 len) {
   bool faultError = false;
 
   if (!m_event->isWriting() && outBuffer->getReadableSize() == 0) {
-    status = Send(m_sock->getFd(), data, len, sendLen);
+    status = Send(m_sock->getFd(), sendData, len, sendLen);
     if (status != SocketStatus::Success) {
       auto err = errno;
       sendLen = 0;
@@ -100,7 +98,7 @@ void FTcpConnection::sendInLoop(char *data, uint64 len) {
     }
   }
   if (!faultError && remaining > 0) {
-    outBuffer->Append(data + sendLen, remaining);
+    outBuffer->Append(sendData + sendLen, remaining);
     if (!m_event->isWriting()) {
       m_event->enableWriting();
     }
@@ -287,7 +285,7 @@ void FTcpConnection::startReadingInLoop() { m_event->enableReading(); }
 void FTcpConnection::stopReadingInLoop() { m_event->disableReading(); }
 
 void FTcpConnection::sendInLoopStr(std::string data) {
-  sendInLoop(data.data(), data.size());
+  sendInLoop(data.data(), (int)data.size());
 }
 
 void FTcpConnection::forceCloseInLoop() {

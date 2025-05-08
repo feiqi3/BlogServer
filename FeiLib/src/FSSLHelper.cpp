@@ -46,7 +46,7 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
   SSLContext = (void *)SSL_CTX_new(TLS_server_method());
-  loadCertFiles(certificateFile,privateKeyFile);
+  loadCertFiles(certificateFile, privateKeyFile);
 }
 
 void FSSLEnv::loadCertFiles(const std::string &certificateFile,
@@ -134,12 +134,12 @@ bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
   auto r = SSL_do_handshake(ssl);
   if (r < 0) {
     // Get data from reader
-    auto view = reader.peekAll();
+    int size = 0;
+    auto data = reader.peekAll(size);
 
-    int read = BIO_write(in_bio, (void *)view.get(), view.size());
+    int read = BIO_write(in_bio, (const void *)data, size);
     if (read > 0) {
-      view.resetSize(read);
-      reader.expireView(view);
+      reader.expireSize(read);
     }
   }
 
@@ -173,11 +173,11 @@ FBufferReader FSSLHelper::EncryptSendingData(const char *inData, int len) {
 
     dp->inBuffer.Append(inData, len);
     FBufferReader reader(dp->inBuffer);
-    auto view = reader.peekAll();
-    readSize = SSL_write(dp->sslHandler, (void *)view.get(), view.size());
+    int size = 0;
+    auto data = reader.peekAll(size);
+    readSize = SSL_write(dp->sslHandler, (const void *)data, size);
     if (readSize >= 0) {
-      view.resetSize(readSize);
-      reader.expireView(view);
+      reader.expireSize(readSize);
     }
   } else {
     readSize = SSL_write(dp->sslHandler, (void *)inData, len);
@@ -211,41 +211,50 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
   if (!hasShakeHandFin()) {
     throw SSLNotPreparedException();
   }
+
   BIO *ioIn = dp->rbio;
-  // BIO *ioOut = dp->wbio;
 
-  auto view = reader.peekAll();
-  int size = view.size();
-  // write encrypted data into bio
-  if (view.size() > 0) {
-    auto size = BIO_write(ioIn, (unsigned char *)view.get(), view.size());
-    view.resetSize(size);
-    reader.expireView(view);
+  // 1. Pull encrypted bytes from reader and feed into SSL BIO
+  int encryptedSize = 0;
+  const unsigned char *encryptedData =
+      reinterpret_cast<const unsigned char *>(reader.peekAll(encryptedSize));
+
+  if (encryptedSize > 0) {
+    int written = BIO_write(ioIn, encryptedData, encryptedSize);
+    reader.expireSize(written);
   }
-  // read decrypted data out of ssl
-  SSL_read(dp->sslHandler, 0, 0);
-  int toReadSize = size;
 
-  // To read size --> a predicted reading size.
-  std::unique_ptr<char[]> temp(new char[toReadSize]);
-  
-  //Take care of pending data.
-  while(1){
-    int readSize = SSL_read(dp->sslHandler, temp.get(), toReadSize);
-    if (readSize < 0) {
-      auto r = SSL_get_error(ssl, readSize);
-      auto err = ERR_error_string(r, 0);
-      Logger::instance()->log(MODULE_NAME, lvl::warn,
-                              "SSL read error, reason \"{}\"", err);
-      throw SSLDataException("SSL Write decrypt data error.");
+  // 2. Read all decrypted data from SSL into outBuffer
+  const int defaultBufSize = 4096;
+  std::unique_ptr<char[]> buffer(new char[defaultBufSize]);
+
+  while (true) {
+    // Determine how many bytes we can read without blocking
+    int pending = SSL_pending(ssl);
+    int toRead = (pending > 0 ? pending : defaultBufSize);
+    toRead = std::min(toRead, defaultBufSize);
+    // Perform the SSL read
+    int readBytes = SSL_read(ssl, buffer.get(), toRead);
+    if (readBytes > 0) {
+      // Append decrypted bytes to the output buffer
+      dp->outBuffer.Append(buffer.get(), readBytes);
+      continue; // keep reading until no more pending data
     }
-    dp->outBuffer.Append(temp.get(), readSize);
-    SSL_read(dp->sslHandler, 0, 0);
-    
-    if (SSL_pending(ssl) <= 0) {
+
+    // Handle zero or error return
+    int err = SSL_get_error(ssl, readBytes);
+    if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE ||
+        err == SSL_ERROR_ZERO_RETURN) {
+      // No more data available now or clean shutdown
       break;
     }
 
+    // Unexpected error: log and throw
+    char errBuf[256] = {0};
+    ERR_error_string_n(ERR_get_error(), errBuf, sizeof(errBuf));
+    Logger::instance()->log(MODULE_NAME, lvl::warn, "SSL_read failed: {}",
+                            errBuf);
+    throw SSLDataException("SSL read decrypt data error.");
   }
   return dp->outBuffer;
 }
@@ -254,21 +263,21 @@ void FSSLUtils::randomBytes(unsigned char *data, uint32 num) {
   RAND_bytes(data, (int)num);
 }
 
-std::string FSSLUtils::hmac_sha1(const char* data, size_t dataSize, const char* key, size_t keySize)
-{
-    unsigned char digest[EVP_MAX_MD_SIZE];
-    unsigned int digest_len = 0;
-    HMAC(EVP_sha1(), key, keySize, (const unsigned char*)data,
-        dataSize, digest, &digest_len);
-    return std::string((char*)digest, digest_len);
+std::string FSSLUtils::hmac_sha1(const char *data, size_t dataSize,
+                                 const char *key, size_t keySize) {
+  unsigned char digest[EVP_MAX_MD_SIZE];
+  unsigned int digest_len = 0;
+  HMAC(EVP_sha1(), key, keySize, (const unsigned char *)data, dataSize, digest,
+       &digest_len);
+  return std::string((char *)digest, digest_len);
 }
 
-std::string FSSLUtils::base64(const char* data, size_t dataSize)
-{
-    size_t enc_len = 4 * ((dataSize + 2) / 3);
-    std::vector<unsigned char> buf(enc_len + 1, '\0');
-    int out_len = EVP_EncodeBlock((unsigned char*)buf.data(), (const unsigned char*)data, dataSize);
-    return std::string((char*)buf.data(), out_len);
+std::string FSSLUtils::base64(const char *data, size_t dataSize) {
+  size_t enc_len = 4 * ((dataSize + 2) / 3);
+  std::vector<unsigned char> buf(enc_len + 1, '\0');
+  int out_len = EVP_EncodeBlock((unsigned char *)buf.data(),
+                                (const unsigned char *)data, dataSize);
+  return std::string((char *)buf.data(), out_len);
 }
 
 } // namespace Fei

@@ -8,20 +8,6 @@
 
 namespace Fei {
 class FBuffer;
-class FBufferReader;
-// A light-weight buffer reader, do not control buffer's lifetime
-class FBufferView {
-public:
-  FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end);
-  const Byte *get() const { return &((*this)[0]); }
-  const Byte &operator[](uint32 pos) const;
-  uint32 size() const { return end - beg; }
-  bool isEOF()const;
-  void resetSize(uint32 size);
-private:
-  FBuffer *buffer;
-  uint32 beg, end;
-};
 
 // Reader is a wrapper of buffer to keep buffer's function out off user's
 // visibility
@@ -32,24 +18,12 @@ public:
   // Fill buffer if not null
   int readTo(void *buffer, int bufLen);
 
-  enum class LineBreaker {
-    CRLF = 3, // Line feed carriage return, also known as /r/n
-    LF = 0,   // \n
-    CR = 1,   // \r
-  };
-
-  std::string
-  readLine(LineBreaker linebreaker = FBufferReader::LineBreaker::CRLF);
-  void popLine();
-  FBufferView readLineNoPop(
-      LineBreaker linebreaker = FBufferReader::LineBreaker::CRLF) const;
-
-  FBufferView peekAll()const;
-
-  // Pop view's range
-  void expireView(const FBufferView &view);
+  int getBufferReadableSize() const;
 
   char readNext();
+
+  const unsigned char* peekAll(int& size);
+  void expireSize(int size);
 
 private:
   FBuffer &mBuffer;

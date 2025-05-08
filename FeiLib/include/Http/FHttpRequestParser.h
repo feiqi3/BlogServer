@@ -21,14 +21,6 @@ public:
 
 public:
   FHttpContext() {}
-  FHttpContext(FHttpContext &&rhs) {
-    mHttpVersion = rhs.mHttpVersion;
-    mMethod = rhs.mMethod;
-    mRequestPath = std::move(rhs.mRequestPath);
-    cookies = std::move(rhs.cookies);
-    mHeaders = std::move(rhs.mHeaders);
-    mQueryMap = std::move(rhs.mQueryMap);
-  }
   Method getMethod() const { return mMethod; }
   Version getHttpVersion() const { return mHttpVersion; }
   bool getHeader(const std::string &key, std::string &outVal) const;
@@ -41,37 +33,44 @@ private:
   Method mMethod;
   std::string mRequestPath;
   Version mHttpVersion;
-
+  std::string mRequestBody;
   HttpQueryMap mQueryMap;
   HeaderMap mHeaders;
   std::vector<FCookie> cookies;
 };
 
-// Fix me: need a more easy and faster parser.
-// Current: stupid stupid code.
+// Fix me:faster parser,less copy
 class F_API FHttpParser {
 public:
   static const std::string &MethodToString(Method method);
   static Method StringToMethod(const std::string &);
 
-public:
-  FHttpParser(FBufferReader &buffer) : mBuffer(buffer) {}
-  bool parse(FHttpContext &ctx);
+  enum class EState {
+    RequestLine,
+    Headers,
+    Body,
+    Done,
+    Error
+  };
 
+public:
+  FHttpParser() {}
+  bool parse(FBufferReader &buffer);
+  EState getState()const{return state_;}
+  FHttpContext& getContext() { return mCtx; }
 private:
-  // Method and method data.
-  Http::Method parseMethod(FBufferView &inView, uint32 &cursor);
-  bool parseVersion(FBufferView &view, Http::Version &outVersion,
-                    uint32 &cursor);
-  bool parsePath(FBufferView &inView, std::string &outPath,
-                 HttpQueryMap &outmap, uint32 &cursor);
-  HeaderMap parseHeader(FBufferView &oldView);
-  FBufferView newLine(FBufferView *lastView);
+  void parseRequestLine(const std::string &line);
+  void parseQuery(const std::string &line);
+  void parseCookies(const std::string &line);
 private:
-  struct {
-    uint32 line = 0;
-  } _parseContext;
-  FBufferReader &mBuffer;
+  EState state_ = EState::RequestLine;
+  std::string lineBuf_;
+  size_t contentLength_ = 0;
+  size_t bodyBytesRead_ = 0;
+
+  bool chunked_ = false;
+
+  FHttpContext mCtx;
 };
 } // namespace Fei::Http
 #endif

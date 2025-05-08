@@ -1,6 +1,7 @@
 #pragma once
 #include "FDef.h"
 #include "Http/FCookie.h"
+#include "Http/FHttpRequestParser.h"
 #ifndef FHTTPREQUEST_H
 #define FHTTPREQUEST_H
 #include <memory>
@@ -15,7 +16,7 @@ namespace Fei::Http {
 class FHttpContext;
 class F_API FHttpRequest {
 public:
-  FHttpRequest(FBufferReader &buffer);
+  FHttpRequest( FHttpParser& parser);
   bool isValid() const { return mIsValid; }
   Method getMethod() const;
   Version getHttpVersion() const;
@@ -34,7 +35,7 @@ public:
   const FSocketAddr& getAddrIn()const { return mAddrIn; }
   const FSocketAddr& getAddrHost()const { return mAddrHost; }
 private:
-  std::shared_ptr<FHttpContext> mHttpCtx;
+  FHttpContext mHttpCtx;
   FSocketAddr mAddrIn;
   FSocketAddr mAddrHost;
   bool mIsValid = true;

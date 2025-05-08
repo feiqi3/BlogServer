@@ -14,6 +14,9 @@ FSock(FSock&& sock);
 FSock& operator=(FSock&& rhs);
 ~FSock();
 
+FSock(const FSock& sock) = delete;
+FSock& operator=(const FSock& rhs) = delete;
+
 Socket getFd()const;
 
 //Mainly work on unix
