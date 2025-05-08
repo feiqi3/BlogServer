@@ -20,6 +20,8 @@
 #include "FEventLoop.h"
 #include "FTCPServer.h"
 #include "FeiLib/FSocket.h"
+#include "Http/FHttpDef.h"
+#include "Http/FHttpRequest.h"
 #include "Http/FHttpRequestParser.h"
 #include "cstring"
 #include <chrono>
@@ -50,9 +52,21 @@ void FTcpServer_echo() {
   server->setOnMessageCallback([](FTcpConnPtr ptr, FBufferReader &buf) {
     auto len = buf.readTo(0, 0);
     std::vector<char> mBytes(len + 1);
-    Http::FHttpParser parser(buf);
-    Http::FHttpContext ctx;
-    parser.parse(ctx);
+    Http::FHttpParser parser;
+    bool isParseDone = parser.parse(buf);
+    
+    if(isParseDone){
+      Http::FHttpRequest request(parser);
+      std::cout << "Parse done\n";
+      std::cout << "Method: " << Http::methodToStr(request.getMethod()) << "\n";
+      std::cout << "Path: " << request.getPath() << "\n";
+      std::cout << "Version: " << Http::versionToStr(request.getHttpVersion()) << "\n";
+      std::cout << "AddrIn: " << ptr->getAddr().un.un_byte.a0 << "."
+                << ptr->getAddr().un.un_byte.a1 << "."
+                << ptr->getAddr().un.un_byte.a2 << "."
+                << ptr->getAddr().un.un_byte.a3 << "\n";
+    }
+    
     ptr->forceClose();
     //len = buf.readTo(mBytes.data(), len);
 

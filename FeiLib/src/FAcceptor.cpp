@@ -25,6 +25,7 @@ FAcceptor::FAcceptor(FEventLoop *loop, const char *listenAddr, int port,
   assert(status == SocketStatus::Success);
   m_sock = FSock(socket); // For a possible copy elision...
   m_sock.setReuseport(reusePort);
+  m_sock.setReuseAddr(reusePort);
   m_sock.setNoneBlock(true);
   m_sock.setExitOnExec(true);
   m_event =

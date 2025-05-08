@@ -29,7 +29,7 @@ public:
   int getReadableSize() const { return int(writeIdx - readIdx); }
 
 private:
-  friend class FBufferView;
+  friend class FBufferReader;
   const Byte &GetDirect(uint32 pos) const { return m_buffer.at(pos); }
   uint32 readIdx = 0;
   uint32 writeIdx = 0;

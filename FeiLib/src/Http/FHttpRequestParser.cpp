@@ -3,13 +3,61 @@
 #include "FLogger.h"
 #include "Http/FCookie.h"
 #include "Http/FHttpDef.h"
+#include <map>
 #include <string>
 #include <string_view>
 
 #include <algorithm>
-
+#include <sstream>
+#include <string_view>
 namespace Fei::Http {
 namespace {
+//%xx and +
+static std::string urlDecode(const std::string &s) {
+  std::string out;
+  out.reserve(s.size());
+  for (size_t i = 0; i < s.size(); ++i) {
+    char c = s[i];
+    if (c == '%') {
+      if (i + 2 < s.size()) {
+        int hi = std::isdigit(s[i + 1]) ? s[i + 1] - '0'
+                                        : std::toupper(s[i + 1]) - 'A' + 10;
+        int lo = std::isdigit(s[i + 2]) ? s[i + 2] - '0'
+                                        : std::toupper(s[i + 2]) - 'A' + 10;
+        out.push_back(static_cast<char>((hi << 4) | lo));
+        i += 2;
+      }
+    } else if (c == '+') {
+      out.push_back(' ');
+    } else {
+      out.push_back(c);
+    }
+  }
+  return out;
+}
+
+bool isAllDigits(const std::string &s) {
+  return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char c) {
+    return std::isdigit(c);
+  });
+}
+
+inline void trimSpaces(std::string &s) {
+  // 找到首个非空格字符的位置
+  size_t first = s.find_first_not_of(' ');
+  if (first == std::string::npos) {
+    // 整串都是空格，直接清空
+    s.clear();
+    return;
+  }
+  // 找到末尾第一个非空格字符的位置
+  size_t last = s.find_last_not_of(' ');
+  // 删除末尾多余空格
+  s.erase(last + 1);
+  // 删除开头多余空格
+  s.erase(0, first);
+}
+
 const std::string MethodsName[] = {
     "GET",   "POST",    "HEAD",    "PUT",   "DELETE",
     "PATCH", "CONNECT", "OPTIONS", "TRACE", "Invalid",
@@ -22,27 +70,6 @@ const std::map<std::string, Method> MethodsMap = {
     {"CONNECT", Method::CONNECT}, {"OPTIONS", Method::OPTIONS},
     {"TRACE", Method::TRACE},
 };
-uint32 findFirstNotSpace(FBufferView &view, uint32 begin = 0) {
-  uint32 cnt = begin;
-  for (; cnt < view.size(); ++cnt) {
-    if (view[cnt] == '\0')
-      break;
-    if (view[cnt] != ' ' && view[cnt] != '\r' && view[cnt] != '\n') {
-      break;
-    }
-  }
-  return cnt;
-}
-
-uint32 findFirstSpace(FBufferView &view, uint32 begin = 0) {
-  uint32 cnt = begin;
-  for (; cnt < view.size(); ++cnt) {
-    if (view[cnt] == ' ' || view[cnt] == '\r' || view[cnt] == '\n') {
-      break;
-    }
-  }
-  return cnt;
-}
 
 } // namespace
 
@@ -57,14 +84,7 @@ bool FHttpContext::getHeader(const std::string &key,
   return true;
 }
 
-std::string_view FHttpContext::getRequestBody() const {
-  auto itor = mHeaders.find("__body");
-  if (itor == mHeaders.end()) {
-    return {};
-  }
-
-  return itor->second;
-}
+std::string_view FHttpContext::getRequestBody() const { return mRequestBody; }
 
 bool FHttpContext::getQuery(const std::string &key, std::string &outVal) const {
   auto itor = mQueryMap.find(key);
@@ -119,277 +139,185 @@ Method FHttpParser::StringToMethod(const std::string &in) {
   return Method::Invalid;
 }
 
-HeaderMap FHttpParser::parseHeader(FBufferView &oldView) {
-  HeaderMap map;
-  FBufferView lineView(oldView);
-  while (1) {
-    lineView = newLine(&oldView);
-    if(lineView.size() == 0){
-      break;
-    }
-    std::string lineview_content((char *)lineView.get(), lineView.size());
-    oldView = lineView;
-    uint32 cursor = 0;
-    cursor = findFirstNotSpace(lineView);
-    // Blank line
-    if (lineView.size() == 0 || lineView.size() == cursor)
-      break;
-    // To long?
-    if (lineView.size() > HttpMaxRequestPathLen) {
-      Logger::instance()->log("HttpParser", lvl::warn,
-                              "Too long http header {} out of limit {}",
-                              lineView.size(), HttpMaxRequestPathLen);
-      continue;
-    }
+void FHttpParser::parseCookies(const std::string &line) {
+  mCtx.cookies.emplace_back(line);
+}
 
-    // Find colon
-    int findColon = -1;
-    for (int i = 0; i < (int)lineView.size(); ++i) {
-      if (lineView[i] == ':') {
-        findColon = i;
-        break;
-      }
-    }
-    if (findColon == -1) {
+void FHttpParser::parseQuery(const std::string &line) {
+  auto qm = line.find('?');
+  if (qm == std::string::npos) {
+    return; // No query
+  }
+
+  std::string query = line.substr(qm + 1);
+  mCtx.mRequestPath = line.substr(0, qm);
+  // Remove fragment identifier
+  auto hash = query.find('#');
+  if (hash != std::string::npos) {
+    query.resize(hash);
+  }
+
+  std::stringstream ss(query);
+  std::string pair;
+  while (std::getline(ss, pair, '&')) {
+    if (pair.empty())
       continue;
-    }
-    std::string header =
-        std::string((char *)&lineView[cursor], findColon - cursor);
-    cursor = findColon + 1;
-    cursor = findFirstNotSpace(lineView, cursor);
-    if (cursor == lineView.size()) {
-      // end of line --> only header.
-      map.insert({header, ""});
+
+    auto eq = pair.find('=');
+    std::string key, value;
+    if (eq != std::string::npos) {
+      key = urlDecode(pair.substr(0, eq));
+      value = urlDecode(pair.substr(eq + 1));
     } else {
+      key = urlDecode(pair);
+      value = "";
+    }
+    this->mCtx.mQueryMap.insert({std::move(key), std::move(value)});
+  }
+}
 
-      uint32 _crlfOffset = 0;
-      if (lineView.size() - cursor >= 2) {
-        if (lineView[lineView.size() - 2] == '\r' &&
-            lineView[lineView.size() - 1] == '\n') {
-          _crlfOffset = 2;
+void FHttpParser::parseRequestLine(const std::string &line) {
+  assert(state_ == EState::RequestLine);
+  std::string curBuffer;
+  int step = 0;
+  // 1. method, 2. path, 3. version
+  for (int i = 0; i <= (int)line.size(); i++) {
+    char c = line[i];
+    if (c == ' ' || i == (int)line.size()) {
+      switch (step) {
+      case 0: {
+        auto method = StringToMethod(curBuffer);
+        if (method == Method::Invalid) {
+          state_ = EState::Error;
+          return;
+        } else {
+          mCtx.mMethod = method;
         }
+      } break;
+
+      case 1: {
+        mCtx.mRequestPath = curBuffer;
+        parseQuery(mCtx.mRequestPath);
+      } break;
+      case 2: {
+        if (curBuffer == "HTTP/1.1") {
+          mCtx.mHttpVersion = Version::Http11;
+        } else if (curBuffer == "HTTP/1.0") {
+          mCtx.mHttpVersion = Version::Http10;
+        } else {
+          state_ = EState::Error;
+          return;
+        }
+      } break;
       }
-
-      std::string content = std::string((char *)&lineView[cursor],
-                                        lineView.size() - cursor - _crlfOffset);
-      map.insert({header, content});
-    }
-  }
-
-  // Check if have body
-  while (findFirstNotSpace(lineView) == lineView.size()) {
-    if (lineView.isEOF()) {
-      return map;
-    }
-    lineView = newLine(&lineView);
-  }
-  // Get buffer size
-  uint32 bufferSize = mBuffer.readTo(0, 0);
-  int len = 0;
-  if (map.find("Content-Length") != map.end()) {
-    len = std::stoi(map.find("Content-Length")->second);
-  }
-  std::string body;
-  if (len != 0) {
-    if (bufferSize != len && bufferSize != len + 2) {
-      Logger::instance()->log("HttpParser", lvl::warn,
-                              "Content-Length not match, {} != {}", bufferSize,
-                              len);
-    }
-  }
-  body.resize(bufferSize);
-  mBuffer.readTo(body.data(), bufferSize);
-  map.insert({"__body", std::move(body)});
-  // Pop all
-  mBuffer.expireView(mBuffer.peekAll());
-  return map;
-}
-
-bool FHttpParser::parse(FHttpContext &ctx) {
-  // Readline and parse
-  auto lineView = newLine(0);
-
-  uint32 cursor = 0;
-
-  Method method = parseMethod(lineView, cursor);
-
-  ctx.mMethod = method;
-
-  HttpQueryMap queryMap;
-  std::string path;
-  if (!parsePath(lineView, path, queryMap, cursor) && path.length() == 0) {
-    return false;
-    // Do something?
-  }
-
-  ctx.mRequestPath = std::move(path);
-  ctx.mQueryMap = std::move(queryMap);
-
-  Version ver;
-  if (!parseVersion(lineView, ver, cursor)) {
-    // Assume version is http1.1
-    ver = Version::Http11;
-    // TODO:
-    /* if(config.forceHTTP11)return false; */
-
-    // return false;
-    //  Do something?
-  }
-
-  ctx.mHttpVersion = ver;
-
-  auto headerMap = parseHeader(lineView);
-
-  auto cookieEqualRange = headerMap.equal_range("Cookie");
-  for (auto itor = cookieEqualRange.first; itor != cookieEqualRange.second;
-       itor++) {
-      FCookie cookie(itor->second);
-    ctx.cookies.emplace_back(cookie);
-  }
-  headerMap.erase(cookieEqualRange.first, cookieEqualRange.second);
-  ctx.mHeaders = std::move(headerMap);
-
-  return true;
-}
-
-bool FHttpParser::parseVersion(FBufferView &view, Http::Version &outVersion,
-                               uint32 &cursor) {
-  int64_t beg = findFirstNotSpace(view, cursor);
-  // blank line?
-  int64_t end = findFirstSpace(view, beg);
-  if (end - beg <= 0)
-    return false;
-  cursor = end + 1;
-  outVersion = Version::Unknown;
-  if (end - beg < 8) {
-    return false;
-  }
-  if (view[beg + 5] == '1') {
-    if (view[beg + 7] == '1') {
-      outVersion = Version::Http11;
+      step++;
+      curBuffer.clear();
+      continue;
     } else {
-      outVersion = Version::Http10;
+      curBuffer.push_back(c);
     }
-    return true;
   }
-  return false;
+
+  if (step != 3) {
+    state_ = EState::Error;
+    return;
+  }
 }
 
-bool FHttpParser::parsePath(FBufferView &view, std::string &outPath,
-                            HttpQueryMap &outmap, uint32 &cursor) {
-  int64_t beg = findFirstNotSpace(view, cursor);
-  int64_t end = findFirstSpace(view, cursor);
-  if (end - beg <= 0)
-    return false;
+bool FHttpParser::parse(FBufferReader &buffer) {
+  char c;
+  while ((c = buffer.readNext()) != '\0' &&
+         (state_ != EState::Done && state_ != EState::Error)) {
+    switch (state_) {
 
-  if (end - beg > HttpMaxRequestPathLen) {
-    Logger::instance()->log("HttpParser", lvl::warn,
-                            "Too long http request path {} out of limit {}",
-                            end - beg, HttpMaxRequestPathLen);
-    return false;
-  }
-  int hasQuestion = -1;
-  for (auto i = beg; i < end; ++i) {
-    // Find question
-    if (view[i] == '?') {
-      hasQuestion = i;
-      cursor = i + 1;
+      // parse request line
+    case EState::RequestLine: {
+      lineBuf_.push_back(c);
+      if (lineBuf_.size() >= 2 && lineBuf_.end()[-2] == '\r' &&
+          lineBuf_.end()[-1] == '\n') {
+        lineBuf_.resize(lineBuf_.size() - 2);
+        parseRequestLine(lineBuf_);
+        if (state_ == EState::Error) {
+          lineBuf_.clear();
+          return false;
+        }
+        lineBuf_.clear();
+        state_ = EState::Headers;
+      }
+    } break;
+
+    // parse headers
+    case EState::Headers: {
+      lineBuf_.push_back(c);
+      if (lineBuf_.size() >= 2 && lineBuf_.end()[-2] == '\r' &&
+          lineBuf_.end()[-1] == '\n') {
+        // End of headers
+        if (lineBuf_ == "\r\n") {
+          auto it = mCtx.mHeaders.find("Content-Length");
+          if (it != mCtx.mHeaders.end()) {
+            if (!isAllDigits(it->second)) {
+              state_ = EState::Error;
+              return false;
+            }
+
+            contentLength_ = std::stoul(it->second);
+            mCtx.mRequestBody.reserve(contentLength_);
+
+            state_ = (contentLength_ > 0 ? EState::Body : EState::Done);
+          } else {
+            // 没声明长度，按 RFC 7230 对请求消息可视为 0-length
+            state_ = EState::Done;
+          }
+
+          // parse Cookies
+          auto range = mCtx.mHeaders.equal_range("Cookie");
+          for (auto it = range.first; it != range.second; ++it) {
+            parseCookies(it->second);
+          }
+          mCtx.mHeaders.erase(range.first, range.second);
+
+        } else {
+          // 解析单条 header： "Name: value"
+          auto pos = lineBuf_.find(':');
+          // 去除 "\r\n"
+          if (lineBuf_.size() >= 2 && lineBuf_.end()[-2] == '\r' &&
+              lineBuf_.end()[-1] == '\n') {
+            lineBuf_.resize(lineBuf_.size() - 2);
+          }
+          if (pos != std::string::npos) {
+            std::string name = lineBuf_.substr(0, pos);
+            std::string value = lineBuf_.substr(pos + 1);
+            trimSpaces(value);
+
+            mCtx.mHeaders.insert({std::move(name), std::move(value)});
+          } else {
+            // Not valid header
+            mCtx.mHeaders.insert({std::move(lineBuf_), ""});
+          }
+        }
+        lineBuf_.clear();
+      }
+    } break;
+    case EState::Body:
+      mCtx.mRequestBody.push_back(c);
+      ++bodyBytesRead_;
+      if (bodyBytesRead_ >= contentLength_) {
+        state_ = EState::Done;
+      }
+      break;
+    case EState::Done:
+      return true;
+    case EState::Error:
+      return false;
       break;
     }
   }
 
-  if (hasQuestion > 0) {
-    outPath = std::string((char *)&view[beg], hasQuestion - beg);
-  } else {
-    outPath = std::string((char *)&view[beg], end - beg);
-    cursor = end + 1;
+  if (state_ == EState::Done) {
     return true;
-  }
-
-  int marker = hasQuestion + 1;
-  bool findK = false;
-  std::string key, val;
-  for (auto i = hasQuestion + 1; (uint32)i < end; ++i) {
-    if (view[i] == '=') {
-      if (i - marker - 1 < 0) {
-        Logger::instance()->log("HttpParser", lvl::warn, "Bad query.");
-        return false;
-      }
-      key = std::string((char *)&view[marker], i - marker);
-      marker = i + 1;
-      findK = true;
-    } else if (view[i] == '&') {
-      if (!findK) {
-        continue;
-      }
-      val = std::string((char *)&view[marker], i - marker);
-      outmap[key] = val;
-      findK = false;
-      marker = i + 1;
-    }
-  }
-
-  if (findK) {
-    val = std::string((char *)&view[marker], end - marker);
-    outmap[key] = val;
-  }
-
-  cursor = end + 1;
-  return true;
-}
-
-Http::Method FHttpParser::parseMethod(FBufferView &inView, uint32 &cursor) {
-  int64 findTokenBeg = findFirstNotSpace(inView, cursor);
-  cursor = findTokenBeg;
-  int64 findTokenEnd = findFirstSpace(inView, findTokenBeg);
-  if (findTokenEnd - findTokenBeg <= 0) {
-    return Http::Method::Invalid;
-  }
-  std::string method((char *)&inView[cursor], findTokenEnd - cursor);
-  // next
-  cursor = findTokenEnd + 1;
-  auto itor = MethodsMap.find(method);
-  Method ret = Method::Invalid;
-  if (itor != MethodsMap.end()) {
-    ret = itor->second;
-  }
-
-  if (ret == Method::Invalid) {
-    Logger::instance()->log("HttpParser", lvl::err,
-                            "Unknown request method {}.", method);
-  }
-
-  return ret;
-}
-FBufferView FHttpParser::newLine(FBufferView *lastView) {
-  if (_parseContext.line == 0) {
-    _parseContext.line++;
-    return mBuffer.readLineNoPop();
-  }
-  if (lastView == 0) {
-    mBuffer.popLine();
   } else {
-    mBuffer.expireView(*lastView);
+    return false;
   }
-  auto ret = mBuffer.readLineNoPop();
-  _parseContext.line++;
-  return ret;
-}
-
-static auto trim(const std::string &str) {
-  auto start = std::find_if_not(str.begin(), str.end(), [](unsigned char ch) {
-    return std::isspace(ch);
-  });
-  auto end = std::find_if_not(str.rbegin(), str.rend(), [](unsigned char ch) {
-               return std::isspace(ch);
-             }).base();
-  struct {
-    int beg;
-    int end;
-  } pospair;
-  pospair.beg = start - str.begin();
-  pospair.end = end - str.begin();
-  return pospair;
 }
 
 } // namespace Fei::Http

@@ -16,86 +16,29 @@ int FBufferReader::readTo(void *buffer, int bufLen) {
   }
 }
 
-FBufferView FBufferReader::peekAll() const {
-  int size = mBuffer.getReadableSize();
-  auto view = FBufferView(mBuffer, 0, size);
-  return view;
+int FBufferReader::getBufferReadableSize() const{
+  return mBuffer.getReadableSize();
 }
 
-std::string FBufferReader::readLine(LineBreaker linebreaker) {
-  const auto &reader = readLineNoPop(linebreaker);
-  auto sizeParsed = reader.size();
-  std::string ret;
-  ret.reserve(sizeParsed + 1);
-  auto sizeGet = mBuffer.Peek(sizeParsed + 1, ret.data());
-  assert((uint32)sizeGet == sizeParsed);
-  mBuffer.Pop(sizeGet);
-  return ret;
-}
-
-void FBufferReader::popLine() {
-  auto view = readLineNoPop();
-  expireView(view);
-}
-
-FBufferView FBufferReader::readLineNoPop(LineBreaker linebreaker) const {
-  int end = 0;
-  while (true) {
-    char nxt;
-    if ((nxt = mBuffer.Get(end)) == '\0')
-      {
-        end =std::max(0,end); // end + readIdx >= writeIdx ===> end = end - 1
-        break;
-      }
-    end++;
-
-    // LF
-    if (nxt == '\n' && linebreaker == LineBreaker::LF) {
-      break;
-    } else if (nxt == '\r' && (int)linebreaker & (int)LineBreaker::CR) {
-      // CRLF
-      if (linebreaker == LineBreaker::CRLF) {
-        char lookahead = mBuffer.Get(end);
-        if (lookahead == '\n') {
-          end++;
-          break;
-        }
-        // CR
-      } else {
-        break;
-      }
-    }
+char FBufferReader::readNext(){
+  if (mBuffer.getReadableSize() > 0) {
+    char c = mBuffer.Get(0);
+    mBuffer.readIdx++;
+    return c;
   }
-  auto view = FBufferView(mBuffer, 0, end);
-  return view;
-}
-void FBufferReader::expireView(const FBufferView &view) {
-  mBuffer.Pop(view.size());
+  return '\0';
 }
 
-char FBufferReader::readNext() {
-  char buf;
-  mBuffer.Peek(1, &buf);
-  mBuffer.Pop(1);
-  return buf;
+const unsigned char* FBufferReader::peekAll(int& size){
+  size = mBuffer.getReadableSize();
+  if(size == 0){
+    return nullptr;
+  }
+  return &mBuffer.GetDirect(mBuffer.readIdx);
 }
 
-FBufferView::FBufferView(FBuffer &inBuffer, uint32 _beg, uint32 _end)
-    : buffer(&inBuffer), beg(_beg + buffer->readIdx),
-      end(_end + buffer->readIdx) {
-        assert(end <=buffer->readIdx + buffer->getReadableSize());
-      }
-bool FBufferView::isEOF() const { return buffer->Get(0) == '\0'; }
-
-void FBufferView::resetSize(uint32 size)
-{
-  size = std::min(this->size(), size);
-  end = beg + size;
-}
-
-const Byte &FBufferView::operator[](uint32 pos) const {
-  assert(pos + beg < end);
-  return buffer->GetDirect(beg + pos);
+void FBufferReader::expireSize(int size){
+  mBuffer.Pop(size);
 }
 
 } // namespace Fei

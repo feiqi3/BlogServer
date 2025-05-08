@@ -8,7 +8,9 @@ namespace Fei {
 FSock::FSock(Socket sock) : m_fd(sock) {}
 
 FSock::FSock(FSock &&rhs) {
+  if(this == & rhs)return;
   m_fd = rhs.m_fd;
+  valid = true;
   rhs.valid = false;
 }
 
@@ -20,8 +22,10 @@ FSock::~FSock() {
 }
 
 FSock &FSock::operator=(FSock &&rhs) {
+  if(this == & rhs)return*this;
   m_fd = rhs.m_fd;
   rhs.valid = false;
+  valid = true;
   return *this;
 }
 

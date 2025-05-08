@@ -6,6 +6,7 @@
 #include "FCallBackDef.h"
 
 #include "FDef.h"
+#include "Http/FHttpRequestParser.h"
 
 namespace Fei{
 	class FTcpServer;
@@ -42,6 +43,10 @@ public:
 public:
 	static bool getContentTypeByPath(const std::string& path,std::string& extensionName);
 
+	struct HttpConnData{
+		FHttpParser parser;
+	};
+
 private:
 	void handleTcpIn(const FTcpConnPtr& ptr, FBufferReader& reader);
 	void handleRequestSend(const FTcpConnPtr& ptr, const FHttpRequest& request, FHttpResponse& response);
@@ -60,6 +65,7 @@ private:
 	RouteNotMatchCallback mRouteNotMatchCallback;
 	ConnectionFilterCallback mConnFilterFunc;
 	TickEventId mRouteCacheCleanEventId = 0;
+
 };
 } // namespace Fei
 
