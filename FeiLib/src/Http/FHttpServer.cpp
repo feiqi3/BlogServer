@@ -1,7 +1,9 @@
 #include <functional>
 #include <sstream>
 #include "Http/FHttpServer.h"
+#include "FConfigReader.h"
 #include "Http/FHttpRequest.h"
+#include "Http/FHttpRequestParser.h"
 #include "Http/FHttpResponse.h"
 #include "FTCPServer.h"
 #include "FTCPConnection.h"
@@ -9,8 +11,6 @@
 #include "FLogger.h"
 #include <algorithm>
 #define MODULE_NAME "HttpServer"
-#define TCP_TIMEOUT 60
-#define TCP_INTERVAL 5
 #define ERROR_ROUTE_PATH "/error"
 #define DEFAULT_CONTENT_TYPE "text/html"
 #define DEFAULT_CHAT_SET "; charset=UTF-8"
@@ -80,11 +80,25 @@ namespace Fei::Http {
 		if (!FRouter::valid()) {
 			new FRouter;
 		}
+		mTcpServer->init();
 		mTcpServer->setOnConnEstablisedCallback(std::bind(&FHttpServer::handleTcpConnEstablish, this,std::placeholders::_1));
 		mTcpServer->setOnMessageCallback(std::bind(&FHttpServer::handleTcpIn, this, std::placeholders::_1, std::placeholders::_2));
 		mTcpServer->setOnCloseCallback(std::bind( & FHttpServer::handleTcpConnClosed,this,std::placeholders::_1 ));
+		mTcpServer->setOnIdleCallback(std::bind(&FHttpServer::handleTcpIdle, this, std::placeholders::_1));
+		mTcpServer->setOnWriteCompleteCallback(std::bind(&FHttpServer::handleTcpWriteComplete, this, std::placeholders::_1));
 		mRouteCacheCleanEventId = mTcpServer->addTickEvent(std::bind(&FRouter::checkRouteCache,FRouter::instance(),std::placeholders::_1));
 		FRouter::instance()->lateInit();
+		const auto cfg = FConfigReader::instance();
+		{
+			auto headerWait = cfg->getCfg("HttpRequestWaitTime");
+			if(headerWait.has_value()){
+				FCfgUtils::toNumber(headerWait.value(), this->mHttpRequestWaitTime);
+			}
+			auto httpConnectTimeout = cfg->getCfg("HttpConnectTimeout");
+			if(httpConnectTimeout.has_value()){
+				FCfgUtils::toNumber(httpConnectTimeout.value(), this->mHttpConnectionTimeout);
+			}
+		}
 	}
 
 	FHttpServer::~FHttpServer() {
@@ -139,6 +153,9 @@ namespace Fei::Http {
 	{
 		
 		auto http_data = getDataFromTcpConn(ptr);
+		if(http_data->hasSurvivedTime == 0){
+			http_data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		}
 		bool isParseDone = http_data->parser.parse(reader);
 		
 		if(!isParseDone){
@@ -150,7 +167,6 @@ namespace Fei::Http {
 		}
 
 		FHttpRequest request(http_data->parser);
-		DestroyDataFromTcpConn(ptr);
 
 		preProcessTcpConn(ptr, request);
 
@@ -255,9 +271,47 @@ namespace Fei::Http {
 	{
 		DestroyDataFromTcpConn(ptr);
 	}
+	void FHttpServer::handleTcpIdle(const FTcpConnPtr& ptr){
+		const auto connData = getDataFromTcpConn(ptr);
+		bool isTimeOut = false;
+		bool isHeadWaitTimeOut = false;
+		bool isParseNotComplete = false;
+		
+		auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		
+		if (mHttpRequestWaitTime>= 0 && now - connData->hasSurvivedTime > mHttpRequestWaitTime) {
+			isHeadWaitTimeOut = true;
+		}
+		
+		if(mHttpConnectionTimeout >= 0 && now - connData->hasSurvivedTime > mHttpConnectionTimeout){
+			isTimeOut = true;
+		}
+
+		if(connData->parser.getState() != FHttpParser::EState::Done){
+			isParseNotComplete = true;
+		}
+
+		if (isHeadWaitTimeOut && isParseNotComplete) {
+			Logger::instance()->log(MODULE_NAME, lvl::info, "request timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+			ptr->forceClose();
+		}else if(isTimeOut){
+			Logger::instance()->log(MODULE_NAME, lvl::info, "connection timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+			ptr->forceClose();
+		}
+
+
+	}
+
+	void FHttpServer::handleTcpWriteComplete(const FTcpConnPtr& ptr){
+		auto connData = getDataFromTcpConn(ptr);
+		if (!connData->shouldKeepAlive) {
+			ptr->forceClose();
+		}
+	}
 
 	void FHttpServer::preProcessTcpConn(const FTcpConnPtr& ptr, const FHttpRequest& request)
 	{
+		const auto connData = getDataFromTcpConn(ptr);
 		std::string headerAttracted;
 		auto addr = ptr->getAddr();
 		Logger::instance()->log("FHttpServer", lvl::trace, "Http conntection established, from {}.{}.{}.{} : {}", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
@@ -273,11 +327,7 @@ namespace Fei::Http {
 			setKeepAlive = true;
 		}
 
-		if (setKeepAlive) {
-			ptr->setKeepAlive(true);
-			ptr->setKeepIdle(TCP_TIMEOUT);
-			ptr->setKeepInterval(TCP_INTERVAL);
-		}
+		connData->shouldKeepAlive = setKeepAlive;
 	}
 
 	void FHttpServer::defaultHandleRouterMismatchFunc(const FHttpRequest& request, FHttpResponse& response)

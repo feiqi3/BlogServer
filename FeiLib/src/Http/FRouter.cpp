@@ -258,9 +258,10 @@ namespace Fei::Http {
 		}
 		_dp->mControllerMap.insert( controllerName ,controller );
 		if (Logger::valid())
+		{
 			Logger::instance()->log("FRouter", lvl::trace, "Register Controller {}", controllerName);
-		
-			if(_dp->hasLateInit){
+		}
+		if(_dp->hasLateInit){
 			controller->lateInit();
 		}
 	}

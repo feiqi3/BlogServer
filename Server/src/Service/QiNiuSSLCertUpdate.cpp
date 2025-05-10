@@ -120,8 +120,8 @@ bool updateQiNiuSSLCert(const std::string &pri, const std::string &ca,
     Close(s);
     return false;
   }
-  SetSockOpt(s, SockOpt::SendTimeOut, 1000 * 1000 * 5);
-  SetSockOpt(s, SockOpt::ReadTimeOut, 1000 * 1000 * 5);
+  SetSockOpt(s, SockOpt::SendTimeOut, 5);
+  SetSockOpt(s, SockOpt::ReadTimeOut, 5);
   // Send Request
   auto req = builder.build();
   int writeLen;

@@ -15,7 +15,7 @@ uint64 FTimeQueue::AddTask(const std::function<void()>& task, TimePoint time) {
     FTimerTask timerTask{};
     timerTask.task = task;
 
-    TimerID id = m_timerCounter++;
+    TimerID id = ++m_timerCounter;
     timerTask.id =id;
     m_tasks.insert({time, timerTask});
     m_timerID2Time.insert(std::make_pair(id, time));

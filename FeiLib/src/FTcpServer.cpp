@@ -7,6 +7,7 @@
 
 #include "FAcceptor.h"
 #include "FCallBackDef.h"
+#include "FConfigReader.h"
 #include "FDef.h"
 #include "FEPollListener.h"
 #include "FEventLoop.h"
@@ -25,7 +26,27 @@ FTcpServer::FTcpServer(uint32 threadNum)
 
 FTcpServer::~FTcpServer() { stop(true); }
 
-void FTcpServer::init() { m_threadNums = std::max(m_threadNums, 1u); }
+void FTcpServer::init() {
+  m_threadNums = std::max(m_threadNums, 1u);
+
+  //* read config *//
+  const auto cfg = FConfigReader::instance();
+  auto tcpIdle = cfg->getCfg("TcpIdleTime");
+  if(tcpIdle.has_value()){
+    int idleTime = -1;
+    if(FCfgUtils::toNumber(tcpIdle.value(), idleTime)){
+      mTcpConnIdleTime = idleTime;
+    }
+  }
+
+  auto socketKeepAlive = cfg->getCfg("SocketKeepAliveTime");
+  if(socketKeepAlive.has_value()){
+    int idleTime = -1;
+    if(FCfgUtils::toNumber(socketKeepAlive.value(), idleTime)){
+      mSocketKeepAlive = idleTime;
+    }
+  }
+}
 
 void FTcpServer::deinitGlobalSSLEnv() {
   if (FSSLEnv::valid())
@@ -149,6 +170,15 @@ void FTcpServer::onNewConnIn(Socket inSock, FSocketAddr addr,
       std::bind(&FTcpServer::onClose, this, std::placeholders::_1));
   ptr->setMessageCallback(mOnMessageCallback);
   ptr->setWriteCompleteCallback(mWriteCompleteCallback);
+
+  if(mOnIdleCallback){
+    ptr->setIdleCallback(mOnIdleCallback, mTcpConnIdleTime);
+  }
+
+  if(mSocketKeepAlive > 0){
+    ptr->setKeepAlive(true);
+    ptr->setKeepIdle(mSocketKeepAlive);
+  }
   choosenLoop->AddTask(std::bind(mOnEstablishedCallback, ptr));
   {
     FAUTO_LOCK(m_mutex);

@@ -8,6 +8,7 @@
 #include "FCallBackDef.h"
 #include "FDef.h"
 #include "FNoCopyable.h"
+#include "FTimeQueue.h"
 
 namespace Fei {
 class FEventLoop;
@@ -74,6 +75,7 @@ protected:
   void handleRead();
   void handleWrite();
   void handleClose();
+  void handleOnIdle();
   void handleError(Errno_t err);
   void shutdownInLoop();
   void handleWriteComplete() {}
@@ -95,12 +97,25 @@ protected:
     m_onCloseCallback = std::move(cb);
   }
 
+  void setIdleCallback(TcpIdleCallback cb,int idleTime){
+    m_onIdleCallback = std::move(cb);
+    mIdleTime = idleTime;
+  }
+
+  void handlePostEvent(){
+    resetIdle();
+  }
+  
+  void resetIdle();
+  void cancelIdleFunc();
+
   FEventLoop *m_loop;
   std::unique_ptr<FSock> m_sock;
 
   FSocketAddr m_addrIn;
   FSocketAddr m_addrAccept;
-  std::shared_ptr<FEvent> m_event;
+  FEventPtr m_event;
+  void* m_userData = nullptr;
 
   std::unique_ptr<FBuffer> inBuffer;
   std::unique_ptr<FBuffer> outBuffer;
@@ -108,10 +123,12 @@ protected:
   TcpMessageCallback m_onMessage;
   TcpWriteCompleteCallback m_onWriteComplete;
   TcpCloseCallback m_onCloseCallback;
-
+  TcpIdleCallback m_onIdleCallback;
+  TimerID mIdleTImer = 0;
+  //millisecond
+  int mIdleTime = 0;
   TcpConnState mstate;
 
-  void* m_userData = nullptr;
 };
 
 } // namespace Fei

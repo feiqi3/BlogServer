@@ -45,6 +45,8 @@ public:
 
 	struct HttpConnData{
 		FHttpParser parser;
+		bool shouldKeepAlive = true;
+		uint32 hasSurvivedTime = 0;
 	};
 
 private:
@@ -54,7 +56,9 @@ private:
 	void handleTcpConnEstablish(const FTcpConnPtr& ptr);
 	void handleTcpConnClosed(const FTcpConnPtr& ptr);
 	void preProcessTcpConn(const FTcpConnPtr& ptr,const FHttpRequest& request);
-private:
+	void handleTcpIdle(const FTcpConnPtr& ptr);
+	void handleTcpWriteComplete(const FTcpConnPtr& ptr);
+	private:
 	void defaultHandleRouterMismatchFunc(const FHttpRequest& request, FHttpResponse& response);
 	void defaultExceptionFunc(const FHttpRequest& request, FHttpResponse& response,const ::Fei::FException& exception);
 
@@ -65,7 +69,17 @@ private:
 	RouteNotMatchCallback mRouteNotMatchCallback;
 	ConnectionFilterCallback mConnFilterFunc;
 	TickEventId mRouteCacheCleanEventId = 0;
+	
 
+	// In Seconds
+
+	//Time wait for uncomplete http request
+	//if the time is out, the connection will be closed.
+	int mHttpRequestWaitTime = -1;
+
+	//Time wait for idle connection
+	//if the time is out, the connection will be closed.
+	int mHttpConnectionTimeout = -1;
 };
 } // namespace Fei
 
