@@ -482,10 +482,10 @@ int SetSockOpt(Socket s, SockOpt opt, int v) {
     _opt = TCP_KEEPIDLE;
     lvl = IPPROTO_TCP;
   }else if(opt == SockOpt::ReadTimeOut){
-    timeval st{0,v};
+    timeval st{v,0};
     return setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&st, sizeof(st));
   }else if(opt == SockOpt::SendTimeOut){
-    timeval st{0,v};
+    timeval st{v,0};
     return setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char*)&st, sizeof(st));
   }
    else {
@@ -506,6 +506,7 @@ int SetSockOpt(Socket s, SockOpt opt, bool on) {
     return 0;
 #endif
   } else if (opt == SockOpt::KeepAlive) {
+    //Watchout! WinSDK >= Windows 10 1709 
     _opt = SO_KEEPALIVE;
   }
   int data = on ? 1 : 0;

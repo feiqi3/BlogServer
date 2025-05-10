@@ -111,6 +111,12 @@ void FEvent::handleEvent() {
     if (mWriteCallback)
       mWriteCallback();
   }
+  if(mAddedToLoop){
+    if(mPostEventCallback){
+      mPostEventCallback();
+    }
+  }
+
   mEventHandling = false;
 }
 

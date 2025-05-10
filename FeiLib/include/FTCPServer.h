@@ -35,6 +35,7 @@ class F_API FTcpServer : public FNoCopyable{
     void setOnMessageCallback(TcpMessageCallback cb){mOnMessageCallback = std::move(cb);}
     void setOnCloseCallback(TcpCloseCallback cb){mOnCloseCallback = std::move(cb);}
     void setOnWriteCompleteCallback(TcpWriteCompleteCallback cb){mWriteCompleteCallback = std::move(cb);}
+    void setOnIdleCallback(TcpIdleCallback cb){mOnIdleCallback = std::move(cb);}
     
     //Tick by user in there app
     TickEventId addTickEvent(AppTickEvent event);
@@ -47,6 +48,7 @@ class F_API FTcpServer : public FNoCopyable{
     TcpConnectionEstablishedCallback mOnEstablishedCallback;
     TcpMessageCallback mOnMessageCallback;
     TcpCloseCallback mOnCloseCallback;
+    TcpIdleCallback mOnIdleCallback;
     TcpWriteCompleteCallback mWriteCompleteCallback;
     std::unique_ptr<FEventLoop> m_listenerLoop;
     std::vector<std::unique_ptr<FEventLoop>> m_subLoops;
@@ -58,6 +60,9 @@ class F_API FTcpServer : public FNoCopyable{
     std::atomic_int m_tickEventId = 0;
     uint32 IOThread_Chooser = 0;
     bool m_running = false;
+    //second
+    int mSocketKeepAlive = -1;
+    int mTcpConnIdleTime = -1;
     std::mutex m_tickEventMutex;
     std::mutex m_mutex;
 };

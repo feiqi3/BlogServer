@@ -28,6 +28,7 @@ public:
   void setWriteCallback(EventCallback cb) { mWriteCallback = std::move(cb); }
   void setCloseCallback(EventCallback cb) { mCloseCallback = std::move(cb); }
   void setErrorCallback(EventCallback cb) { mErrorCallback = std::move(cb); }
+  void setPostEventCallback(EventCallback cb) { mPostEventCallback = std::move(cb); }
   Event getEvents() const { return mEvent; }
   uint64 getId() const { return mId; }
 
@@ -67,6 +68,7 @@ private:
   EventCallback mWriteCallback;
   EventCallback mCloseCallback;
   EventCallback mErrorCallback;
+  EventCallback mPostEventCallback;
 
   TimeStamp mReceiveTime;
 };

@@ -97,6 +97,7 @@ enum class SockOpt{
   NoneBlockAndCloseOnExec,
 };
 F_API int SetSockOpt(Socket s,SockOpt opt,bool on);
+//for time: v = second
 F_API int SetSockOpt(Socket s,SockOpt opt, int v);
 
 F_API std::string GetErrorStr();
