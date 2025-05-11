@@ -6,6 +6,8 @@
 #include "Http/FHttpServer.h"
 #include "Core/Session.h"
 
+#include "FEventLoop.h"
+
 #include "Service/AdminLogin.h"
 
 #include "Service/Filter.h"
@@ -79,6 +81,10 @@ void Blog::Server::shutdown(){
 	shouldClose = true;
 }
 
+void Blog::Server::CurThreadCleanCallback(std::function<void()> callback){
+	if(!Fei::FEventLoop::getCurrentLoop())return;
+	Fei::FEventLoop::getCurrentLoop()->addLoopCloseCallback(callback);
+}
 
 Blog::Server::~Server()
 {

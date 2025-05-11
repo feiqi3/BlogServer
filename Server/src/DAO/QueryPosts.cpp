@@ -15,7 +15,7 @@ PostQuery::QueryPostsDataProfileSinceLastByPageDesc(uint64_t lastId,
     Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
             FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
             FIELD(Model::Post, updated_at) - FIELD(Model::Post,tags) - FIELD(Model::Post,category_id));
-    q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id));
+    q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id)).setStaticQuery(true);
     return q;
   };
   thread_local auto query = getQuery();
@@ -30,7 +30,7 @@ uint64_t, std::string, uint64_t>>{
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                 FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
                 FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic) - FIELD(Model::Post,category_id));
-        q.From("Posts").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at));
+        q.From("Posts").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at)).setStaticQuery(true);
         return q;
       };
       thread_local auto query = getQuery();
@@ -45,7 +45,7 @@ uint64_t, std::string>>{
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                 FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
                 FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic));
-        q.From("Posts").Where(FIELD(Model::Post,category_id) == PARAM).skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at));
+        q.From("Posts").Where(FIELD(Model::Post,category_id) == PARAM).skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at)).setStaticQuery(true);
         return q;
       };
       thread_local auto query = getQuery();
@@ -58,7 +58,7 @@ std::tuple<uint64_t, std::string, uint64_t, uint64_t>>{
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                  FIELD(Model::Post, created_at) -
                 FIELD(Model::Post, updated_at));
-        q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id));
+        q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id)).setStaticQuery(true);
         return q;
       };
     thread_local auto query = getQuery();
@@ -69,7 +69,7 @@ std::optional<Model::Post> PostQuery::QueryPostById(uint64_t postId)
 {
     auto getQuery = []() {
         Query<Model::Post> query;
-        query.Select().Where(FIELD(Model::Post, id) == PARAM);
+        query.Select().Where(FIELD(Model::Post, id) == PARAM).setStaticQuery(true);
         return query;
         };
  thread_local auto query = getQuery();
@@ -85,7 +85,7 @@ std::optional<uint64_t> PostQuery::QueryPostIdByTitle(const char *postName)
 {
     auto getQuery = []() {
         Query<uint64_t> query(FIELD(Model::Post,id));
-        query.Where(FIELD(Model::Post, title) == PARAM).From("Posts");
+        query.Where(FIELD(Model::Post, title) == PARAM).From("Posts").setStaticQuery(true);
         return query;
         };
     thread_local auto q = getQuery();
@@ -100,7 +100,7 @@ std::optional<Model::Post> PostQuery::QueryPostByTitle(const char* postName)
 {
     auto getQuery = []() {
         Query<Model::Post> query;
-        query.Where(FIELD(Model::Post, title) == PARAM);
+        query.Where(FIELD(Model::Post, title) == PARAM).setStaticQuery(true);
         return query;
         };
     thread_local auto query = getQuery();
@@ -118,7 +118,7 @@ auto PostQuery::QueryPostsDataWithCategoryProfileSinceLastByPageDesc(uint64_t la
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
             FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
             FIELD(Model::Post, updated_at) - FIELD(Model::Post, tags));
-        q.From("Posts").Where(FIELD(Model::Post, id) > PARAM && FIELD(Model::Post, category_id) == PARAM ).limit(PARAM).OrderByDesc(FIELD(Model::Post, id));
+        q.From("Posts").Where(FIELD(Model::Post, id) > PARAM && FIELD(Model::Post, category_id) == PARAM ).limit(PARAM).OrderByDesc(FIELD(Model::Post, id)).setStaticQuery(true);
         return q;
         };
     thread_local auto query = getQuery();
@@ -144,7 +144,7 @@ std::optional<std::string> PostQuery::UpdatePostById(uint64_t postId,
             (FIELD(Model::Post, profile) == PARAM) -
             (FIELD(Model::Post, titlepic) == PARAM) -
             (FIELD(Model::Post, content) == PARAM) -
-            (FIELD(Model::Post,updated_at) ==PARAM)).Where(FIELD(Model::Post, id) == PARAM);
+            (FIELD(Model::Post,updated_at) ==PARAM)).Where(FIELD(Model::Post, id) == PARAM).setStaticQuery(true);
         return query;
         };
     thread_local auto query = getQuery();
@@ -158,7 +158,7 @@ std::optional<std::string> PostQuery::UpdatePostById(uint64_t postId,
 std::optional<std::string> PostQuery::DeletePostById(uint64_t postId){
     auto getQuery = []() {
         Query<Model::Post> query;
-        query.Delete().Where(FIELD(Model::Post, id) == PARAM);
+        query.Delete().Where(FIELD(Model::Post, id) == PARAM).setStaticQuery(true);
         return query;
         };
     thread_local auto q = getQuery();
@@ -172,7 +172,7 @@ int PostQuery::QueryPostCount(){
     auto getQuery = []() {
         Query<int> q;
         q.Select(SelectCount());
-        q.From("Posts");
+        q.From("Posts").setStaticQuery(true);
         return q;
         };
     thread_local auto query = getQuery();
@@ -183,7 +183,7 @@ int PostQuery::QueryPostOfCategoryCount(uint64_t id){
     auto getQuery = []() {
         Query<int> q;
         q.Select(SelectCount());
-        q.From("Posts").Where(FIELD(Model::Post, category_id) == PARAM);
+        q.From("Posts").Where(FIELD(Model::Post, category_id) == PARAM).setStaticQuery(true);
         return q;
         };
     thread_local auto query = getQuery();
@@ -193,8 +193,11 @@ int PostQuery::QueryPostOfCategoryCount(uint64_t id){
 
 void PostQuery::updateViewTimes(uint64_t id){
     auto getQueryStatement = [](){
-        return DatabaseOperation::instance()->Prepare("UPDATE Posts SET view_times = view_times + 1 where id = ?");
-    };
+        auto ret = DatabaseOperation::instance()->Prepare("UPDATE Posts SET view_times = view_times + 1 where id = ?");
+        DatabaseOperation::addThreadCleanDBData(ret);
+        return ret;
+    }
+    ;
     thread_local auto q = getQueryStatement();
     DatabaseOperation::instance()->ReExec(q, id);
     q->excute();

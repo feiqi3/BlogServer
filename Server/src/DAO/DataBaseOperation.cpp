@@ -1,10 +1,11 @@
 #include <sqlite3.h>
+#include <threads.h>
 #include <vector>
 #include <memory>
 
 #include "DataBaseOperation.h"
 #include "FLogger.h"
-
+#include "Server/server.h"
 #define SQL_SINGLE_CONNECTION 1
 #define SQL_MAKE_NEW 1
 
@@ -18,6 +19,9 @@ using namespace Blog;
 
 namespace {
 	thread_local sqlite3* _db;
+
+	thread_local std::vector<sqlite3_stmt*> _stmtToClearPostThread;
+	thread_local bool sHasAddedThreadClean = false;
 
 	int toSqlite3Type(DataType dtp) {
 		switch (dtp)
@@ -62,8 +66,6 @@ namespace {
 class DatabaseOperationPrivate {
 public:
 	std::string dbPath;
-	std::vector<sqlite3**> dbConnPerThread;
-	std::mutex mLock;
 public:
 	const char* getErrMsg()const {
 		if(_db != 0)
@@ -88,14 +90,29 @@ public:
 	void makeConThreadLocal() {
 		if (_db != nullptr)return;
 		int flag = SQLITE_OPEN_READWRITE | SQLITE_OPEN_SHAREDCACHE;
-		std::lock_guard<std::mutex> guard(mLock);
 		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &_db, flag, nullptr), {
 		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(_db));
 			});
 		sqlite3_busy_timeout(_db,5000);
 		sqlite3_exec(_db, "PRAGMA foreign_keys = ON;", 0, 0, 0);
 		sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", 0, 0, 0);
-		dbConnPerThread.push_back(&_db);
+
+		if(!sHasAddedThreadClean){
+			sHasAddedThreadClean = true;
+			auto vec = & _stmtToClearPostThread;
+			auto db = &_db;
+			Server::CurThreadCleanCallback([vec,db](){
+				for(auto&& i : *vec){
+					sqlite3_finalize(i);
+				}
+				_stmtToClearPostThread.clear();
+				auto ret =sqlite3_close_v2(*db);
+				if(ret != SQLITE_OK){
+					Logger::instance()->log(MODULE_NAME,lvl::err,"Close database error, reason \"{}\"",sqlite3_errmsg(*db));
+				}
+			});
+		}
+
 	}
 
 	sqlite3* getDbConn() {
@@ -180,11 +197,6 @@ public:
 	}
 
 	~DatabaseOperationPrivate() {
-		std::lock_guard<std::mutex> guard(mLock);
-		for (auto&& i : dbConnPerThread) {
-			sqlite3_close_v2(*i);
-			i = 0;
-		}
 	}
 
 };
@@ -223,10 +235,10 @@ Blog::DatabaseOperation::DatabaseOperation():dp(new DatabaseOperationPrivate)
 
 Blog::DatabaseOperation::~DatabaseOperation()
 {
-	sqlite3_shutdown();
-
 	delete dp;
 	dp = 0;
+	sqlite3_shutdown();
+
 }
 
 void Blog::DatabaseOperation::LoadDB(const std::string& databaseName)
@@ -259,6 +271,11 @@ void Blog::DatabaseOperation::resetStmt(void* stmt)
 	auto _s = (sqlite3_stmt*)stmt;
 	sqlite3_clear_bindings(_s);
 	sqlite3_reset(_s);
+}
+
+void Blog::DatabaseOperation::addThreadCleanDBData(const DBResultPtr& ptr){
+	_stmtToClearPostThread.push_back((sqlite3_stmt*)ptr->mData);
+	ptr->mIsAutoCleaned = true;
 }
 
 void* Blog::DatabaseOperation::stmtPrepare(const std::string& sql){
@@ -339,6 +356,7 @@ bool Blog::DBResult::excute(){
 
 Blog::DBResult::~DBResult()
 {
+	if(mIsAutoCleaned)return;
 	sqlite3_finalize((sqlite3_stmt*)this->mData);
 }
 DataType Blog::DBResult::getType(int col)const{

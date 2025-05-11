@@ -459,13 +459,19 @@ public:
     return ret;
   }
   DBResultPtr getResult() const { return result; }
-
+  Query &setStaticQuery(bool isStatic) {
+    isStaticQuery = isStatic;
+    return *this;
+  }
   template <typename... Args> Query &exec(Args &&...arg) {
       if (result) {
           DatabaseOperation::instance()->ReExec(result, std::forward<Args>(arg)...);
       }
       else {
           result = DatabaseOperation::instance()->Exec(toSql(), std::forward<Args>(arg)...);
+          if (isStaticQuery) {
+            DatabaseOperation::addThreadCleanDBData(result);
+          }
       }
       return *this;
   }
@@ -585,7 +591,7 @@ private:
   int mlimit = 0;
   std::string op;
   DBResultPtr result;
-
+  bool isStaticQuery = false;
 private:
   T ToEntity() const {
     if constexpr (is_tuple<T>::value) {

@@ -49,6 +49,12 @@ void FEventLoop::Loop() {
     }
     mActiveEvents.clear();
   }
+  for (auto& callback : mLoopCloseCallbacks) {
+    if (m_forceQuit)
+      break;
+    callback();
+  }
+  mLoopCloseCallbacks.clear();
   m_stoped = true;
 }
 
@@ -61,5 +67,8 @@ void FEventLoop::RemoveEvent(FEvent* event) { m_listener->removeEvent(event); }
 void FEventLoop::UpdateEvent(FEvent* event) { m_listener->updateEvent(event); }
 bool FEventLoop::isInLoopThread() const {
   return _this_thread_loop == (uint64)this;
+}
+FEventLoop* FEventLoop::getCurrentLoop() {
+  return ( FEventLoop* )_this_thread_loop;
 }
 } // namespace Fei

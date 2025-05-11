@@ -11,7 +11,7 @@ std::optional<Model::Category>
 CategoryQuery::QueryCategoryById(uint64_t categoryId) {
   auto getQuery = []() {
     Query<Model::Category> query;
-    query.Select().Where(FIELD(Model::Category, id) == PARAM);
+    query.Select().Where(FIELD(Model::Category, id) == PARAM).setStaticQuery(true);
     return query;
   };
   thread_local auto query = getQuery();
@@ -26,7 +26,7 @@ CategoryQuery::QueryCategoryById(uint64_t categoryId) {
 std::optional<std::string>CategoryQuery::QueryCategoryNameById(uint64_t categoryId){
     auto getQuery = []() {
       Query query(FIELD(Model::Category, name));
-      query.Where(FIELD(Model::Category, id) == PARAM).From("Categories");
+      query.Where(FIELD(Model::Category, id) == PARAM).From("Categories").setStaticQuery(true);
       return query;
     };
     thread_local auto query = getQuery();
@@ -56,7 +56,7 @@ CategoryQuery::UpdateCategory(const Model::Category &category) {
     query
         .update((FIELD(Model::Category, name) == PARAM) -
                 (FIELD(Model::Category, categorypic) == PARAM))
-        .Where(FIELD(Model::Category, id) == PARAM);
+        .Where(FIELD(Model::Category, id) == PARAM).setStaticQuery(true);
     return query;
   };
   thread_local auto query = getQuery();
@@ -71,7 +71,7 @@ CategoryQuery::UpdateCategory(const Model::Category &category) {
 std::optional<std::string> CategoryQuery::DeleteCategory(uint64_t categoryId) {
   auto getQuery = []() {
     Query<Model::Category> query;
-    query.Delete().Where(FIELD(Model::Category, id) == PARAM);
+    query.Delete().Where(FIELD(Model::Category, id) == PARAM).setStaticQuery(true);
     return query;
   };
   thread_local auto query = getQuery();
@@ -87,7 +87,7 @@ std::optional<std::tuple<uint64_t, std::string>>
 CategoryQuery::QueryCategoryBasicInfoById(uint64_t categoryId) {
   auto getQuery = []() {
     Query query(FIELD(Model::Category, id) - FIELD(Model::Category, name));
-    query.Where(FIELD(Model::Category,id) == PARAM);
+    query.Where(FIELD(Model::Category,id) == PARAM).setStaticQuery(true);
     return query;
   };
   thread_local auto q = getQuery();
@@ -100,6 +100,7 @@ std::vector<std::tuple<uint64_t, std::string>>
 CategoryQuery::QueryCategoryBasicInfo(){
   auto getQuery =[](){
     Query q(FIELD(Model::Category, id) - FIELD(Model::Category, name));
+    q.setStaticQuery(true);
     return q;
   };
   thread_local auto query = getQuery();
@@ -111,7 +112,7 @@ std::vector<std::tuple<uint64_t, std::string>>
 CategoryQuery::QueryAllCategoryBasicInfo ( ) {
   auto getQuery = []() {
     Query query(FIELD(Model::Category, id) - FIELD(Model::Category, name));
-    query.From("Categories");
+    query.From("Categories").setStaticQuery(true);
     return query;
   };
   thread_local auto q = getQuery();
@@ -122,7 +123,7 @@ CategoryQuery::QueryAllCategoryBasicInfo ( ) {
 std::vector<Model::Category> CategoryQuery::QueryAllCategory(){
   auto getQuery = []() {
     Query<Model::Category> q;
-    q.Select();
+    q.Select().setStaticQuery(true);
     return q;
   };
   thread_local auto q = getQuery();

@@ -74,6 +74,8 @@ private:
     void* mData;
     int cols = 0;
     const char* errReason = 0;
+    bool mIsAutoCleaned = false;
+
 };
 
 class DatabaseOperation : public Singleton<DatabaseOperation> {
@@ -110,8 +112,11 @@ public:
       bindArgs(stmt, std::forward<Args>(arg)...);
   }
 
-private:
+public: 
+static void addThreadCleanDBData(const DBResultPtr& ptr);
 
+private:
+  
   void *stmtPrepare(const std::string &sql);
   DBResultPtr exec(void *stmt);
 

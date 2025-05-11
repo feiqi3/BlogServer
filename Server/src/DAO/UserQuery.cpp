@@ -5,7 +5,7 @@ namespace Blog::DAO{
    bool UserQuery::queryUserAndPasswordHash(const std::string &userName, const std::string &hash){
     auto getQuery = []()->auto {
         auto ret = Query(FIELD(Model::User, id));
-        ret.Where(FIELD(Model::User,username) == PARAM && FIELD(Model::User,password_hash) == PARAM);
+        ret.Where(FIELD(Model::User,username) == PARAM && FIELD(Model::User,password_hash) == PARAM).setStaticQuery(true);
         return ret;
     };
     thread_local auto query = getQuery();
