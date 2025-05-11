@@ -18,6 +18,24 @@
 
 namespace {
 const int sMaxErrorTime = 5;
+std::string html_escape(const std::string& input) {
+  std::string output;
+  output.reserve(input.size() * 1.2);
+
+  for (char c : input) {
+      switch (c) {
+          case '<':  output.append("&lt;");   break;
+          case '>':  output.append("&gt;");   break;
+          case '&':  output.append("&amp;");  break;
+          case '"':  output.append("&quot;"); break;
+          case '\'': output.append("&apos;"); break;
+          default:   output.push_back(c);     break;
+      }
+  }
+
+  return output;
+}
+
 }
 
 namespace Blog {
@@ -164,7 +182,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.id = id;
     post.title = title;
     post.profile = profile;
-    post.content = content;
+    post.content = html_escape(content);
     post.titlepic = titlepic;
     post.updated_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.category_id = categoryId;
