@@ -25,11 +25,17 @@
 namespace Fei {
 
 FTcpConnection::~FTcpConnection() {
-  m_loop->isInLoopAssert();
-  cancelIdleFunc();
-  assert(mstate == TcpConnState::DisConnected);
-  // Remove event out of loop
-  m_event->remove();
+  bool isInLoopThread = m_loop->isInLoopThread();
+  if (isInLoopThread) {
+    cancelIdleFunc();
+    assert(mstate == TcpConnState::DisConnected);
+    // Remove event out of loop
+    m_event->remove();
+  }else{
+    //Only happened when Server is closed
+    m_event->setAddedToLoop(false);
+    //Event remove is not thread safe
+  }
 }
 
 FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,
@@ -73,7 +79,7 @@ void FTcpConnection::sendInLoop(char *data, int len) {
       //! immediately, so this is legal !!!!!
     }
   } catch (FException &e) {
-    Logger::instance()->log(MODULE_NAME, lvl::warn,"%s", e.what());
+    Logger::instance()->log(MODULE_NAME, lvl::warn, "%s", e.what());
     handleClose();
     return;
   }
@@ -302,11 +308,11 @@ void FTcpConnection::sendInLoopStr(std::string data) {
 
 void FTcpConnection::resetIdle(){
   cancelIdleFunc();
-  if(m_onIdleCallback && mIdleTime > 0){
-    auto func = makeWeakFunction(weak_from_this(),&FTcpConnection::handleOnIdle);
-    //millisecond
-    if(mstate!=TcpConnState::DisConnected){
-      mIdleTImer = m_loop->RunAfter((uint64)mIdleTime,func);
+  if (m_onIdleCallback && mIdleTime > 0){
+    auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::handleOnIdle);
+    // millisecond
+    if (mstate != TcpConnState::DisConnected) {
+      mIdleTImer = m_loop->RunAfter((uint64)mIdleTime, func);
     }
   }
 }

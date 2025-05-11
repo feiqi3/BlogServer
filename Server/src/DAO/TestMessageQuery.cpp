@@ -23,7 +23,7 @@ std::vector<std::tuple<std::string, std::string>>
 TestMessageQuery::QueryMessageByPage(uint32_t pageNum, uint32_t perPage){
     auto getQuery = []() {
         Query q(FIELD(TestMessage, name) - FIELD(TestMessage, content));
-        q.From("TestMessage").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(TestMessage, id));
+        q.From("TestMessage").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(TestMessage, id)).setStaticQuery(true);
         return q;
     };
     thread_local auto query = getQuery();
@@ -38,7 +38,7 @@ TestMessageQuery::QueryMessageByPage(uint32_t pageNum, uint32_t perPage){
 uint32_t TestMessageQuery::QueryMessagePageNum(){
         auto getQuery = []() {
             Query<int> q;
-            q.Select(SelectCount()).From("TestMessage");
+            q.Select(SelectCount()).From("TestMessage").setStaticQuery(true);
             return q;
         };
         thread_local auto query = getQuery();

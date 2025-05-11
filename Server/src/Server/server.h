@@ -2,6 +2,7 @@
 #define SERVER_H
 
 #include "Http/FHttpServer.h"
+#include <functional>
 
 namespace Blog {
 	class Server {
@@ -10,6 +11,7 @@ namespace Blog {
 		void run();
 		void init();
 		void shutdown();
+		static void CurThreadCleanCallback(std::function<void()> callback);
 		~Server();
 	private:
 		bool shouldClose = false;

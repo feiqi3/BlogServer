@@ -33,14 +33,21 @@ public:
   void UpdateEvent(FEvent* event);
   uint64 getUniqueIdInLoop(){return mIdCounter++; }
 
+  static FEventLoop* getCurrentLoop();
+
   bool isInLoopThread()const;
   void isInLoopAssert()const{assert(isInLoopThread());}
+
+  void addLoopCloseCallback(std::function<void()> callback) {
+    mLoopCloseCallbacks.push_back(std::move(callback));
+  }
 private:
   std::atomic_bool m_stoped;
   std::atomic_bool m_quit;
   std::unique_ptr<FTimeQueue> m_timeQueue;
   std::unique_ptr<FListener> m_listener;
   std::vector<FEventPtr> mActiveEvents;
+  std::vector<std::function<void()>> mLoopCloseCallbacks;
   uint64 mIdCounter = 1;
   std::atomic_bool m_forceQuit = false;
 };

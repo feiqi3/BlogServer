@@ -94,6 +94,8 @@ void FTcpServer::stop(bool forceClose) {
 
   while (!m_listenerLoop->HasStoped())
     ;
+  
+  m_tcpConns.clear();
 
   for (auto &&loop : m_subLoops) {
     if (forceClose)
