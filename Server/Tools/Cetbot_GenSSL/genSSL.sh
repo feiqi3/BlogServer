@@ -4,8 +4,8 @@ set -euo pipefail
 # —————————————————————————
 # 检查参数
 # —————————————————————————
-if [ $# -ne 1 ]; then
-  echo "用法: $0 <服务器二进制文件路径，例如 /opt/server/bin/server>"
+if [ $# -ne 2 ]; then
+  echo "用法: $0 <服务器资源路径，例如 BlogServer\Server\resources> $1 <服务器二进制路径，例如 BlogServer\build\release\server>"
   exit 1
 fi
 
@@ -13,15 +13,15 @@ fi
 # 配置区
 # —————————————————————————
 # Webroot 验证目录
-WEBROOT="$(cd "$(dirname "$0")")/../resources/web/other/certbot"
+WEBROOT="$1/temp/certbot"
 # 证书存放目录
-CERTDIR="$(cd "$(dirname "$0")")/../resources/SSL"
+CERTDIR="$1/SSL"
 # 域名列表（用空格分隔）
 DOMAINS=(feiqi3.cn www.feiqi3.cn)
 # 联系邮箱
 EMAIL="zjgtzn@outlook.com"
 
-SERVER_EXEC="$1"
+SERVER_EXEC="$2"
 
 SHUTDOWN_URL="http://localhost/shutdown"
 # 构建 -d 参数
@@ -55,6 +55,12 @@ else
   echo "[$(date '+%F %T')] 发送关机请求失败"
 fi
 
+echo "[$(date '+%F %T')] 等待 30 秒服务器关机"
+sleep 30
+
+cp "$CERTDIR/config/live/${DOMAINS[0]}/fullchain.pem" "$CERTDIR/cert.pem"
+cp "$CERTDIR/config/live/${DOMAINS[0]}/privkey.pem"   "$CERTDIR/private.pem"
+
 # —————————————————————————
 # 等待 一段时间后 重新启动服务器
 # —————————————————————————
@@ -62,7 +68,7 @@ echo "[$(date '+%F %T')] 等待 90 秒后启动：$SERVER_EXEC"
 sleep 90
 
 echo "[$(date '+%F %T')] 启动服务器：$SERVER_EXEC"
-nohup "$SERVER_EXEC" > /dev/null 2>&1 &
+nohup "$SERVER_EXEC"
 disown
 
 echo "[$(date '+%F %T')] 服务器已启动"
