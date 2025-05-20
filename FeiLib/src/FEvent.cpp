@@ -13,7 +13,6 @@ static const Event WriteEvent = REvent::Out;
 
 FEventPtr FEvent::createEvent(FEventLoop *loop, Socket fd, uint64 id) {
   auto ret = std::make_shared<FEvent>(loop, fd, id);
-  ret->addSelfToLoop();
   return ret;
 }
 

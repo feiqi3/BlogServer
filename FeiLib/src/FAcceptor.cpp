@@ -30,6 +30,7 @@ FAcceptor::FAcceptor(FEventLoop *loop, const char *listenAddr, int port,
   m_sock.setExitOnExec(true);
   m_event =
       FEvent::createEvent(m_loop, m_sock.getFd(), loop->getUniqueIdInLoop());
+  m_event->init();
   m_event->enableReading();
   m_addr = FSocketAddr(listenAddr, port);
   status = Bind(m_sock.getFd(), m_addr);
