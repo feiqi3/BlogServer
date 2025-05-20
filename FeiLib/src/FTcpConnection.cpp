@@ -177,6 +177,11 @@ void FTcpConnection::forceCloseInDelay(uint32 ms) {
       makeWeakFunction(weak_from_this(), &FTcpConnection::forceCloseInLoop);
   m_loop->RunAfter(ms, func);
 }
+FTcpConnPtr FTcpConnection::makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn, FSocketAddr addrAccept,bool sslSupport) {
+    auto ret = std::make_shared<FTcpConnection>(loop, s, addrIn,addrAccept,sslSupport);
+    ret->m_event->init();
+    return ret;
+  }
 
 void FTcpConnection::setReading(bool v) {
 
@@ -296,10 +301,11 @@ void FTcpConnection::handleOnIdle(){
   {
     return;
   }
-  m_onIdleCallback(shared_from_this());
   // Reset the timer
   mIdleTImer = 0;
   resetIdle();
+  m_onIdleCallback(shared_from_this());
+
 }
 
 void FTcpConnection::sendInLoopStr(std::string data) {
@@ -309,9 +315,9 @@ void FTcpConnection::sendInLoopStr(std::string data) {
 void FTcpConnection::resetIdle(){
   cancelIdleFunc();
   if (m_onIdleCallback && mIdleTime > 0){
-    auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::handleOnIdle);
     // millisecond
     if (mstate != TcpConnState::DisConnected) {
+      auto func = makeWeakFunction(weak_from_this(), &FTcpConnection::handleOnIdle);
       mIdleTImer = m_loop->RunAfter((uint64)mIdleTime, func);
     }
   }

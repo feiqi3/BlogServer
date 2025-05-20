@@ -30,9 +30,7 @@ public:
     DisConnecting
   };
 
-  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn, FSocketAddr addrAccept,bool sslSupport) {
-    return std::make_shared<FTcpConnection>(loop, s, addrIn,addrAccept,sslSupport);
-  }
+  static FTcpConnPtr makeConn(FEventLoop *loop, Socket s, FSocketAddr addrIn, FSocketAddr addrAccept,bool sslSupport);
 
   // High water callback: when there are too much data in inBuffer/outBuffer
   //                      While user consume it slow, then this will be called

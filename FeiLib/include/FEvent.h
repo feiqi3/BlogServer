@@ -19,6 +19,7 @@ public:
 
 public:
   FEvent(FEventLoop *loop, Socket fd, uint64 id);
+  void init(){addSelfToLoop();}
   ~FEvent();
 
 public:
