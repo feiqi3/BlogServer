@@ -151,6 +151,8 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
       }
   }
 
+  content = html_escape(content);
+
   std::string titlepic;
   {
       isvalid = JsonTool::get(json, std::string("titlepic"), std::string(), titlepic);
@@ -182,7 +184,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.id = id;
     post.title = title;
     post.profile = profile;
-    post.content = html_escape(content);
+    post.content = content;
     post.titlepic = titlepic;
     post.updated_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.category_id = categoryId;
