@@ -63,10 +63,9 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
     };
     TemplateRenderData data;
     data.setData("post",std::move(mPost));
-    TemplateRender render;
     std::string renderOut;
     setBlogCommonData(data);
-    render.render(BlogWebPagePath + "article.html", data, renderOut);
+    TemplateRender::instance()->render(BlogWebPagePath + "article.html", data, renderOut);
     Fei::Http::FHttpResponse res;
     res.setBody(renderOut);
     return res;
@@ -81,10 +80,9 @@ Fei::Http::FHttpResponse FrontGroundController::Categories(const Fei::Http::FHtt
     
     TemplateRenderData data;
     data.setData("categories",std::move(DAO::CategoryQuery::QueryAllCategory()));
-    TemplateRender render;
     std::string renderOut;
     setBlogCommonData(data);
-    render.render(BlogWebPagePath + "category.html", data, renderOut);
+    TemplateRender::instance()->render(BlogWebPagePath + "category.html", data, renderOut);
     Fei::Http::FHttpResponse res;
     res.setBody(renderOut);
     return res;
@@ -139,9 +137,8 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
     setBlogCommonData(data);
     data.setData("posts",std::move(prf));
     data.setData("category",cate);
-    TemplateRender render;
     std::string returnBody;
-    render.render(BlogWebPagePath + "category-detail.html", data, returnBody);
+    TemplateRender::instance()->render(BlogWebPagePath + "category-detail.html", data, returnBody);
     Fei::Http::FHttpResponse res;
     res.setBody(returnBody);
     return res;
