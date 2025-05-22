@@ -50,9 +50,8 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
     setPageData(data, page, totalPageNum, 2);
     updateAndsetBlogCommonData(data);
     data.setData("posts",std::move(prf));
-    TemplateRender render;
     std::string returnBody;
-    render.render(BlogWebPagePath + "index.html", data, returnBody);
+    TemplateRender::instance()->render(BlogWebPagePath + "index.html", data, returnBody);
     Fei::Http::FHttpResponse res;
     res.setBody(returnBody);
     return res;

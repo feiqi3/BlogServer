@@ -64,9 +64,8 @@ namespace Blog{
             model.push_back(fromTuple<BasicBlogProfile>(i));
         }
         renderData.setData("posts",model);
-        TemplateRender render;
         std::string renderRes;
-        render.render(BlogWebPagePath + "backyard-articles.html",renderData,renderRes);
+        TemplateRender::instance()->render(BlogWebPagePath + "backyard-articles.html",renderData,renderRes);
         Fei::Http::FHttpResponse response;
         response.setBody(renderRes);
         return response;
@@ -103,9 +102,8 @@ namespace Blog{
             model.push_back(fromTuple<CategoryProfile>(i));
         }
         renderData.setData("categories",model);
-        TemplateRender render;
         std::string renderRes;
-        render.render(BlogWebPagePath + "backyard-categories.html",renderData,renderRes);
+        TemplateRender::instance()->render(BlogWebPagePath + "backyard-categories.html",renderData,renderRes);
         Fei::Http::FHttpResponse response;
         response.setBody(renderRes);
         return response;

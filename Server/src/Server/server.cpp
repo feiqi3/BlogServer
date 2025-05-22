@@ -1,3 +1,4 @@
+#include "Core/TemplateRender.h"
 #include "FConfigReader.h"
 #include "FDef.h"
 #include "FLogger.h"
@@ -53,6 +54,7 @@ Blog::Server::Server()
 	new FileCache(fileCacheHoldTimeMs);
 	new SessionManager();
 	new AdminLogin();
+	new TemplateRender;
 	server = new Fei::Http::FHttpServer(10);
 	server->addListenPort(80);
 	server->addSSLPort(443);
@@ -74,6 +76,7 @@ void Blog::Server::init()
 	server->addAppTickEvent(std::bind(&FileCache::checkOverdue,FileCache::instance(),std::placeholders::_1));
 	server->addAppTickEvent(std::bind(&SessionManager::checkOverdue,SessionManager::instance(),std::placeholders::_1));
 	server->addAppTickEvent(std::bind(&BlogData::syncData,BlogData::instance(),std::placeholders::_1));
+	server->addAppTickEvent(std::bind(&TemplateRender::checkOverdue,TemplateRender::instance(),std::placeholders::_1));
 	//server->setConnFilterCB(&filterAll);
 }
 
@@ -89,6 +92,7 @@ void Blog::Server::CurThreadCleanCallback(std::function<void()> callback){
 Blog::Server::~Server()
 {
 	delete server;
+	delete TemplateRender::instance();
 	delete DatabaseOperation::instance();
 	delete AdminLogin::instance();
 	delete SessionManager::instance();
