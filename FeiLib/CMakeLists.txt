@@ -90,7 +90,7 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
     # stupid msvc
     target_compile_definitions(${PROJECT_NAME} PRIVATE
-    _CRT_SECURE_NO_WARNINGS
+    _CRT_SECURE_NO_WARNINGS NOMINMAX
 )
 endif()
 

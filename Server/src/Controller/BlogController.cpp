@@ -5,6 +5,8 @@
 #include "Http/FReflect.h"
 #include "Model/Posts.h"
 #include "Utils/Digital.h"
+#include "Utils/HtmlHelper.h"
+
 namespace Blog{
 
     BlogController::BlogController():Fei::Http::FControllerBase("BlogController"){
@@ -24,7 +26,8 @@ Fei::Http::FHttpResponse BlogController::GetBlog(const Fei::Http::FHttpRequest& 
         res.setBody(JsonTool::ToString(getErrorJson("Post not exist")));
         return res;
     }
-    Model::Post post = postOpt.value();
+    Model::Post& post = postOpt.value();
+    post.content = html_unescape(post.content);
     auto j = Fei::Http::FReflect::fromClass(post);
     j["result"] = ApiOk;
     res.setBody(JsonTool::ToString(j));

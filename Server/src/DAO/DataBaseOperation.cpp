@@ -1,5 +1,4 @@
 #include <sqlite3.h>
-#include <threads.h>
 #include <vector>
 #include <memory>
 
