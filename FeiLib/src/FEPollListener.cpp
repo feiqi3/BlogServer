@@ -67,6 +67,7 @@ void FEPollListener::removeEvent(FEvent* event) {
   }
   if (-1 ==
       EPollCtl(m_epollfd, EPollOp::Del, event->getFd(), nullptr)) {
+      //Why this happen? The Object holds socket handle (TCPConnection) was released before this happened in other thread
     std::cout << GetErrorStr();
   }
 }
