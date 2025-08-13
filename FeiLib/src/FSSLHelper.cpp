@@ -46,6 +46,9 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
   SSLContext = (void *)SSL_CTX_new(TLS_server_method());
+  SSL_CTX_set_min_proto_version((SSL_CTX*)SSLContext, TLS1_2_VERSION);
+  // optional: SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+  SSL_CTX_set_options((SSL_CTX*)SSLContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
   loadCertFiles(certificateFile, privateKeyFile);
 }
 
@@ -61,8 +64,7 @@ void FSSLEnv::loadCertFiles(const std::string &certificateFile,
   }
   SSL_CTX *ctx = (SSL_CTX *)SSLContext;
   /* Set the key and cert */
-  if (SSL_CTX_use_certificate_file(ctx, certificateFile.c_str(),
-                                   SSL_FILETYPE_PEM) <= 0) {
+  if (SSL_CTX_use_certificate_chain_file(ctx, certificateFile.c_str()) <= 0) {
     auto errCode = ERR_get_error();
     auto reason = ERR_GET_REASON(errCode);
     Logger::instance()->log(
