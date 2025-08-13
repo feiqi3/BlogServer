@@ -1,9 +1,10 @@
-import requests
+import urllib.request
 
 url = "http://localhost/shutdown"
 
 try:
-    response = requests.get(url)
-    print(f"关闭请求发送成功")
-except requests.RequestException as e:
-    print(f"关闭请求发送失败")
+    with urllib.request.urlopen(url) as response:
+        status_code = response.getcode()
+        print(f"状态码: {status_code}")
+except urllib.error.URLError as e:
+    print(f"请求失败: {e}")
