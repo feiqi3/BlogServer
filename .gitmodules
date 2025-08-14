@@ -20,3 +20,6 @@
 	path = FeiLib/3rd/oneTBB
 	url = https://github.com/feiqi3/oneTBB.git
 	tag = v2021.13.0
+[submodule "FeiLib/3rd/nghttp2"]
+	path = FeiLib/3rd/nghttp2
+	url = https://github.com/feiqi3/nghttp2.git
