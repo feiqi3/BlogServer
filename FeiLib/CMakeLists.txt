@@ -78,6 +78,8 @@ add_custom_command(
     COMMENT "Copying TBB $<TARGET_FILE:TBB::tbb> to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )
 
+set(ENABLE_LIB_ONLY ON)
+add_subdirectory(3rd/nghttp2)
 
 if(WIN32)
     add_subdirectory(3rd/wepoll)
