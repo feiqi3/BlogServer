@@ -63,7 +63,8 @@ FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,
 
 bool FTcpConnection::isHttp2() const
 {
-    return sslHelper->isHttp2();
+
+    return sslHelper != nullptr ? sslHelper->isHttp2() : false;
 }
 
 void FTcpConnection::sendInLoop(const char *data, int len) {

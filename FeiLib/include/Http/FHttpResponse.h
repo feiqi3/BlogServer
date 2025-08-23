@@ -26,6 +26,10 @@ public:
       return mBody;
   }
 
+  std::string& getBody() {
+      return mBody;
+  }
+
   FHttpResponse &setBody(std::string &&body) {
     mBody = std::move(body);
     return *this;

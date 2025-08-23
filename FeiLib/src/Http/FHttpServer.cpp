@@ -28,11 +28,13 @@ namespace {
 		auto data = static_cast<Fei::Http::FHttpServer::HttpConnData*>(ptr->getUserData());
 		if (data == nullptr) {
 			data = new Fei::Http::FHttpServer::HttpConnData();
-			if (ptr->isHttp2()) {
-				data->http2Ctx = (std::unique_ptr<Fei::Http::FHttp2Context>(new Fei::Http::FHttp2Context(ptr->getAddr())));
-			}
 			ptr->setUserData(data);
 		}
+
+		if (ptr->isHttp2() && data->http2Ctx == nullptr) {
+			data->http2Ctx = (std::unique_ptr<Fei::Http::FHttp2Context>(new Fei::Http::FHttp2Context(ptr->getAddr())));
+		}
+
 		return data;
 	}
 

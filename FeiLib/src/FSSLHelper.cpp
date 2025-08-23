@@ -118,6 +118,7 @@ public:
   BIO *rbio = 0;
   BIO *wbio = 0;
   bool mIsH2 = false;
+  bool mSelectedH2 = false;
 };
 
 FSSLHelper::~FSSLHelper() {
@@ -175,12 +176,6 @@ bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
   } else {
     SSL_read(ssl, 0, 0);
     if (SSL_pending(ssl) > 0) {
-      const unsigned char* alpn = NULL;
-      unsigned int alpnlen = 0;
-      SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
-      if (alpn && alpnlen == 2 && memcmp("h2", alpn, 2) == 0) {
-          dp->mIsH2 = true;
-      }
       return true;
     }
   }
@@ -289,7 +284,18 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
 
 bool FSSLHelper::isHttp2() const
 {
-    return dp->mIsH2;
+  SSL *ssl = dp->sslHandler;
+  if(!dp->mSelectedH2)
+  {
+      const unsigned char* alpn = NULL;
+      unsigned int alpnlen = 0;
+      SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
+      if (alpn && alpnlen == 2 && memcmp("h2", alpn, 2) == 0) {
+          dp->mIsH2 = true;
+      }
+      dp->mSelectedH2 = true;
+  }
+  return dp->mIsH2;
 }
 
 void FSSLUtils::randomBytes(unsigned char *data, uint32 num) {

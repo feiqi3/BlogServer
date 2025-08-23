@@ -84,8 +84,8 @@ namespace Fei::Http {
         FHttp2Context(FSocketAddr addr);
         ~FHttp2Context();
         FBufferReader getSendBufferReader();
-        void http2SubmitResponseStream(uint32_t streamId,const FHttpResponse& response, bool closeStream);
-        void http2SubmitPushPromise(uint32_t streamId, FHttpRequestBuilder& pushRequest, const FHttpResponse& pushResponse,bool autoHostSet = true);
+        void http2SubmitResponseStream(uint32_t streamId,FHttpResponse& response, bool closeStream);
+        void http2SubmitPushPromise(uint32_t streamId, FHttpRequestBuilder& pushRequest, FHttpResponse& pushResponse,bool autoHostSet = true);
         void http2SubmitGoaway();
         uint32_t http2SendProcess();
         uint32_t http2RecvProcess(FBufferReader& reader);
@@ -96,7 +96,7 @@ namespace Fei::Http {
 
     private:
 
-        std::unique_ptr<FHttp2Private> mDp = 0;
+        std::unique_ptr<FHttp2Private> mDp;
         FSocketAddr mAddr;
     };
 
