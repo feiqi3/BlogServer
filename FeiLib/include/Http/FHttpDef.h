@@ -2,23 +2,23 @@
 #define FHTTPDEF_H
 #include <map>
 #include "../FDef.h"
-namespace Fei {
-namespace Http {
+namespace Fei::Http {
     
-
 enum class Method {
   GET = 0,
   POST = 1,
   HEAD = 2,
   PUT = 3,
-  DELETE = 4,
+  DELET = 4, //winrt.h : define DELETE ....
   PATCH = 5,
   CONNECT = 6,
   OPTIONS = 7,
   TRACE = 8,
   Invalid = 9,
-  MAX_SIZE = Invalid,
+  MAX_SIZE = Invalid
 };
+
+F_API Method stringToMethod(const std::string& str);
 
 F_API const char* methodToStr(Method method);
 
@@ -26,6 +26,7 @@ enum class Version {
   Unknown,
   Http10,
   Http11,
+  Http2,
 };
 F_API const char* versionToStr(Version version);
 
@@ -43,10 +44,12 @@ enum class StatusCode{
 };
 
 F_API const char* statusCodeToStr(StatusCode code);
-
+F_API const char* statusCodeToStr2(StatusCode code);
 const uint32 HttpMaxRequestPathLen = 4096;
 
-} // namespace Http
-} // namespace Fei
+using HttpQueryMap = std::map<std::string, std::string>;
+using HeaderMap = std::multimap<std::string, std::string>;
+
+} // namespace Fei::Http
 
 #endif

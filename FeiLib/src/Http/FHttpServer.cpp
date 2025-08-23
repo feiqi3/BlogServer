@@ -9,6 +9,7 @@
 #include "FTCPConnection.h"
 #include "Http/FRouter.h"
 #include "FLogger.h"
+#include "Http/FHttp2Helper.h"
 #include <algorithm>
 #define MODULE_NAME "HttpServer"
 #define ERROR_ROUTE_PATH "/error"
@@ -27,6 +28,9 @@ namespace {
 		auto data = static_cast<Fei::Http::FHttpServer::HttpConnData*>(ptr->getUserData());
 		if (data == nullptr) {
 			data = new Fei::Http::FHttpServer::HttpConnData();
+			if (ptr->isHttp2()) {
+				data->http2Ctx = (std::unique_ptr<Fei::Http::FHttp2Context>(new Fei::Http::FHttp2Context(ptr->getAddr())));
+			}
 			ptr->setUserData(data);
 		}
 		return data;
@@ -151,87 +155,13 @@ namespace Fei::Http {
 
 	void FHttpServer::handleTcpIn(const FTcpConnPtr& ptr, FBufferReader& reader)
 	{
-		
-		auto http_data = getDataFromTcpConn(ptr);
-		if(http_data->hasSurvivedTime == 0){
-			http_data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-		}
-		bool isParseDone = http_data->parser.parse(reader);
-		
-		if(!isParseDone){
-			if (http_data->parser.getState() == FHttpParser::EState::Error) {
-				Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.",ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
-				ptr->forceClose();
-			}
-			return;
-		}
-
-		FHttpRequest request(http_data->parser);
-
-		preProcessTcpConn(ptr, request);
-
-		FRouter::RouteResult routeResult;
-		bool notMatchError = false;
-		bool isFiltered = false;
-		auto addr = ptr->getAddr();
-		request.setAddrIn(addr);
-		request.setAddrHost(ptr->getAddrAccept());
-		FHttpResponse response;
-		if (mConnFilterFunc && mConnFilterFunc(request, response)) {
-			isFiltered = true;
-		}
-		
-		if (!request.isValid()) {
-			Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.",addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
-			notMatchError = true;
-		}
-		else if(!isFiltered) {
-			routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
-			if(!routeResult.isvalid()){
-				notMatchError = true;
-			}
-		}
-
-		if (notMatchError) {
-			routeResult = FRouter::instance()->route(Method::GET,ERROR_ROUTE_PATH);
-			if (!routeResult.isvalid()) {
-				if (mRouteNotMatchCallback) {
-					mRouteNotMatchCallback(request, response);
-				}
-				else {
-					defaultHandleRouterMismatchFunc(request, response);
-				}
-			}
-			else {
-				response = routeResult.controllerFunc(request, routeResult.pathVariable);
-			}
-		}
-		else if (isFiltered) {
-			
+		bool h2 = ptr->isHttp2();
+		if (!h2) {
+			http1Process(ptr, reader);
 		}
 		else {
-			try
-			{
-				response = routeResult.controllerFunc(request, routeResult.pathVariable);
-			}
-			catch (::Fei::FException& exception)
-			{
-				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason: {}", request.getPath(),exception.what());
-				if (mInternalErrCallback) {
-					mInternalErrCallback(request, response, exception);
-				}
-				else {
-					defaultExceptionFunc(request, response, exception);
-				}
-			}catch (std::exception& e){
-				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason: {}",request.getPath(),e.what());
-				FException exception;
-				defaultExceptionFunc(request, response, exception);
-			}
+			http2Process(ptr, reader);
 		}
-
-		preProcessHttpRequestSend(ptr, request, response);
-		ptr->send(std::move(response.toString()));
 	}
 
 	void FHttpServer::handleRequestSend(const FTcpConnPtr& ptr, const FHttpRequest& request, FHttpResponse& response)
@@ -272,33 +202,66 @@ namespace Fei::Http {
 		DestroyDataFromTcpConn(ptr);
 	}
 	void FHttpServer::handleTcpIdle(const FTcpConnPtr& ptr){
+		//TODO: for http2, need to traversal streams.
+
 		const auto connData = getDataFromTcpConn(ptr);
-		bool isTimeOut = false;
-		bool isHeadWaitTimeOut = false;
-		bool isParseNotComplete = false;
-		
+
 		auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-		
-		if (mHttpRequestWaitTime>= 0 && now - connData->hasSurvivedTime > mHttpRequestWaitTime) {
-			isHeadWaitTimeOut = true;
-		}
-		
-		if(mHttpConnectionTimeout >= 0 && now - connData->hasSurvivedTime > mHttpConnectionTimeout){
-			isTimeOut = true;
-		}
+		bool isTimeOut = false;
+		if (!ptr->isHttp2()) {
 
-		if(connData->parser.getState() != FHttpParser::EState::Done){
-			isParseNotComplete = true;
-		}
+			bool isHeadWaitTimeOut = false;
+			bool isParseNotComplete = false;
 
-		if (isHeadWaitTimeOut && isParseNotComplete) {
-			Logger::instance()->log(MODULE_NAME, lvl::info, "request timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
-			ptr->forceClose();
-		}else if(isTimeOut){
-			Logger::instance()->log(MODULE_NAME, lvl::info, "connection timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
-			ptr->forceClose();
-		}
 
+			if (mHttpRequestWaitTime >= 0 && now - connData->hasSurvivedTime > mHttpRequestWaitTime) {
+				isHeadWaitTimeOut = true;
+			}
+
+			if (mHttpConnectionTimeout >= 0 && now - connData->hasSurvivedTime > mHttpConnectionTimeout) {
+				isTimeOut = true;
+			}
+
+			if (connData->parser.getState() != FHttpParser::EState::Done) {
+				isParseNotComplete = true;
+			}
+
+			if (isHeadWaitTimeOut && isParseNotComplete) {
+				Logger::instance()->log(MODULE_NAME, lvl::info, "request timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+				ptr->forceClose();
+			}
+			else if (isTimeOut) {
+				Logger::instance()->log(MODULE_NAME, lvl::info, "connection timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+				ptr->forceClose();
+			}
+		}
+		else {
+			int h2ConnIdleMulti = 2;
+			bool firstTimeOut = false;
+			if (mHttpRequestWaitTime >= 0 && now - connData->hasSurvivedTime > mHttpRequestWaitTime * h2ConnIdleMulti) {
+				firstTimeOut = true;
+			}
+
+			if (mHttpConnectionTimeout >= 0 && now - connData->hasSurvivedTime > mHttpConnectionTimeout * h2ConnIdleMulti) {
+				isTimeOut = true;
+			}
+
+			if (isTimeOut) {
+				if (isTimeOut) {
+					Logger::instance()->log(MODULE_NAME, lvl::info, "connection timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+					ptr->forceClose();
+				}
+			}
+			else if (firstTimeOut) {
+				auto& h2 = connData->http2Ctx;
+				h2->http2SubmitGoaway();
+				auto sendNum = h2->http2SendProcess();
+				if (sendNum > 0) {
+					auto reader = h2->getSendBufferReader();
+					
+				}
+			}
+		}
 
 	}
 
@@ -312,22 +275,25 @@ namespace Fei::Http {
 	void FHttpServer::preProcessTcpConn(const FTcpConnPtr& ptr, const FHttpRequest& request)
 	{
 		const auto connData = getDataFromTcpConn(ptr);
-		std::string headerAttracted;
 		auto addr = ptr->getAddr();
 		Logger::instance()->log("FHttpServer", lvl::trace, "Http conntection established, from {}.{}.{}.{} : {}", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
-		bool hasConnectionIndicator = request.getHeader("Connection", headerAttracted);
-		bool setKeepAlive = false;
-		if (!hasConnectionIndicator) {
-			if (request.getHttpVersion() == Version::Http11) {
+		if (!ptr->isHttp2())
+		{
+			std::string headerAttracted;
+			bool hasConnectionIndicator = request.getHeader("Connection", headerAttracted);
+			bool setKeepAlive = false;
+			if (!hasConnectionIndicator) {
+				if (request.getHttpVersion() == Version::Http11) {
+					setKeepAlive = true;
+				}
+			}
+
+			if (headerAttracted == "keep-alive") {
 				setKeepAlive = true;
 			}
-		}
 
-		if (headerAttracted == "keep-alive") {
-			setKeepAlive = true;
+			connData->shouldKeepAlive = setKeepAlive;
 		}
-
-		connData->shouldKeepAlive = setKeepAlive;
 	}
 
 	void FHttpServer::defaultHandleRouterMismatchFunc(const FHttpRequest& request, FHttpResponse& response)
@@ -346,6 +312,130 @@ namespace Fei::Http {
 		}
 		response.setBody(ss.str());
 		return;
+	}
+
+	void FHttpServer::http1Process(const FTcpConnPtr& ptr, FBufferReader& reader)
+	{
+		auto http_data = getDataFromTcpConn(ptr);
+		if (http_data->hasSurvivedTime == 0) {
+			http_data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		}
+		bool isParseDone = http_data->parser.parse(reader);
+
+		if (!isParseDone) {
+			if (http_data->parser.getState() == FHttpParser::EState::Error) {
+				Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+				ptr->forceClose();
+			}
+			return;
+		}
+
+		FHttpRequest request(http_data->parser);
+		auto addr = ptr->getAddr();
+		request.setAddrIn(addr);
+		request.setAddrHost(ptr->getAddrAccept());
+		auto response = httpHandle(ptr, request);
+		ptr->send(std::move(response.toString()));
+	}
+
+	void FHttpServer::http2Process(const FTcpConnPtr& ptr, FBufferReader& reader)
+	{
+		assert(ptr->isHttp2());
+
+		//1. process data
+		auto http_data = getDataFromTcpConn(ptr);
+		if (http_data->hasSurvivedTime == 0) {
+			http_data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		}
+		auto& http2Ctx = http_data->http2Ctx;
+		http2Ctx->http2RecvProcess(reader);
+
+		if (http2Ctx->isConnEnd()) {
+			ptr->forceClose();
+			return;
+		}
+
+		auto perStream = [&ptr,this,&http_data](const FHttpRequest& request,uint32_t streamID) {
+			auto response = httpHandle(ptr, request);
+			http_data->http2Ctx->http2SubmitResponseStream(streamID,response,true);
+			return true;
+		};
+		http2Ctx->traversalFinishedStreams(perStream);
+		auto sendNum = http2Ctx->http2SendProcess();
+		if (sendNum == 0)return; //Window control?
+		auto sreader = http2Ctx->getSendBufferReader();
+		int dataSize = 0;
+		auto dataPtr = sreader.peekAll(dataSize);
+		ptr->send((const char*)dataPtr,dataSize);
+		sreader.expireSize(dataSize);
+	}
+
+	FHttpResponse FHttpServer::httpHandle(const FTcpConnPtr& ptr,const FHttpRequest& request)
+	{
+
+		preProcessTcpConn(ptr, request);
+		auto addr = ptr->getAddr();
+		FRouter::RouteResult routeResult;
+		bool notMatchError = false;
+		bool isFiltered = false;
+
+		FHttpResponse response;
+		if (mConnFilterFunc && mConnFilterFunc(request, response)) {
+			isFiltered = true;
+		}
+
+		if (!request.isValid()) {
+			Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.", addr.un.un_byte.a0, addr.un.un_byte.a1, addr.un.un_byte.a2, addr.un.un_byte.a3, addr.port);
+			notMatchError = true;
+		}
+		else if (!isFiltered) {
+			routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
+			if (!routeResult.isvalid()) {
+				notMatchError = true;
+			}
+		}
+
+		if (notMatchError) {
+			routeResult = FRouter::instance()->route(Method::GET, ERROR_ROUTE_PATH);
+			if (!routeResult.isvalid()) {
+				if (mRouteNotMatchCallback) {
+					mRouteNotMatchCallback(request, response);
+				}
+				else {
+					defaultHandleRouterMismatchFunc(request, response);
+				}
+			}
+			else {
+				response = routeResult.controllerFunc(request, routeResult.pathVariable);
+			}
+		}
+		else if (isFiltered) {
+
+		}
+		else {
+			try
+			{
+				response = routeResult.controllerFunc(request, routeResult.pathVariable);
+			}
+			catch (::Fei::FException& exception)
+			{
+				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason: {}", request.getPath(), exception.what());
+				if (mInternalErrCallback) {
+					mInternalErrCallback(request, response, exception);
+				}
+				else {
+					defaultExceptionFunc(request, response, exception);
+				}
+			}
+			catch (std::exception& e) {
+				Logger::instance()->log("FHttpServer", lvl::err, "Request handle error: request path: \"{}\", Reason: {}", request.getPath(), e.what());
+				FException exception;
+				defaultExceptionFunc(request, response, exception);
+			}
+		}
+
+		preProcessHttpRequestSend(ptr, request, response);
+		return response;
 	}
 
 };

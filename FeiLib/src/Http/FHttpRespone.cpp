@@ -24,5 +24,13 @@ namespace Fei::Http{
     auto&& retRes = ss.str();
     return retRes;
   }
+
+  void FHttpResponse::traversalHeader(std::function<bool(const std::pair<std::string, std::string>&)>func)const 
+  {
+      for (const auto& pair : mHeaders) {
+          bool shouldContinue = func(pair);
+          if (!shouldContinue)return;
+      }
+  }
     
 }

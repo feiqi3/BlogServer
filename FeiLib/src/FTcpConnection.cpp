@@ -61,7 +61,12 @@ FTcpConnection::FTcpConnection(FEventLoop *loop, Socket s, FSocketAddr addrIn,
   }
 }
 
-void FTcpConnection::sendInLoop(char *data, int len) {
+bool FTcpConnection::isHttp2() const
+{
+    return sslHelper->isHttp2();
+}
+
+void FTcpConnection::sendInLoop(const char *data, int len) {
   m_loop->isInLoopAssert();
   if (mstate == TcpConnState::DisConnected) {
     return;
@@ -275,7 +280,7 @@ void FTcpConnection::shutdownInLoop() {
 
 Socket FTcpConnection::getFd() { return m_sock->getFd(); }
 
-void FTcpConnection::send(char *data, uint64 len) {
+void FTcpConnection::send(const char *data, uint64 len) {
   if (m_loop->isInLoopThread()) {
     sendInLoop(data, len);
   } else {

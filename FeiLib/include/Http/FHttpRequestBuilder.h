@@ -27,6 +27,23 @@ namespace Fei::Http{
             return *this;
         }
 
+        inline FHttpRequestBuilder& findHeader(const std::string& name, std::string& out) {
+            auto itor = headers_.find(name);
+            if (itor != headers_.end()) {
+                out = itor->second;
+            }
+            return *this;
+        }
+
+        inline FHttpRequestBuilder& removeHeader(const std::string& name) {
+            headers_.erase(name);
+            return *this;
+        }
+
+        inline Method getMethod()const { return method_; }
+        inline const std::string& getUrl() const{ return url_; }
+
+
         // Build and return the HTTP request as a string
         inline std::string build() {
             std::ostringstream oss;
@@ -43,6 +60,14 @@ namespace Fei::Http{
             // Body
             oss << body_;
             return oss.str();
+        }
+
+        inline void traversalHeaders(
+            std::function<bool(const std::pair<std::string, std::string>&)> func
+        )const {
+            for (auto itor = headers_.begin(); itor != headers_.end(); ++itor) {
+                bool shouldCon = func(*itor);
+            }
         }
 
     private:

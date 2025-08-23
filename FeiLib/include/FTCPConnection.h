@@ -41,7 +41,7 @@ public:
 
   TcpConnState getState() const { return mstate; }
   void setReading(bool v);
-  void send(char *data, uint64 len);
+  void send(const char *data, uint64 len);
   void send(std::string&& data);
   void setKeepAlive(bool v);
   void setKeepIdle(int idleTime);
@@ -66,10 +66,12 @@ public:
   void* getUserData() const{
     return m_userData;
   }
+
+  bool isHttp2()const;
 protected:
   // When output buffer is empty, send directly,
   // else queued in loop and send by buffer.
-  void sendInLoop(char *data, int len);
+  void sendInLoop(const char *data, int len);
   void handleRead();
   void handleWrite();
   void handleClose();
