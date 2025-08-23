@@ -12,10 +12,11 @@ class FBufferReader;
 } // namespace Fei
 
 namespace Fei::Http {
-
+	class FHttp2Parser;
 class FHttpContext;
 class F_API FHttpRequest {
 public:
+  FHttpRequest(FHttp2Parser& parser);
   FHttpRequest( FHttpParser& parser);
   bool isValid() const { return mIsValid; }
   Method getMethod() const;

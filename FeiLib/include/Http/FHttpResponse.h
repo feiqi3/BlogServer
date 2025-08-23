@@ -83,6 +83,10 @@ public:
 
   std::string toString() const;
 
+  StatusCode getStatusCode()const { return mStatus; };
+
+  void traversalHeader(std::function<bool(const std::pair<std::string,std::string>&)> func)const ;
+  const std::vector<FCookie>& getCookies()const { return mCookies; }
 private:
   Version mVersion = Version::Http11;
   StatusCode mStatus = StatusCode::_200;

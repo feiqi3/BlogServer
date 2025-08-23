@@ -84,6 +84,9 @@ struct F_API FSocketAddr {
   void toHumanFriendyType(char *buf, uint32 len, uint16 *port);
 };
 
+constexpr int IPV4_ADDR_CH_LEN = 16;
+constexpr int IPV6_ADDR_CH_LEN = 46;
+
 #ifdef _WIN32
   using Errno_t = errno_t;
 #else

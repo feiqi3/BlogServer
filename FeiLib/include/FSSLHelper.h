@@ -39,7 +39,7 @@ public:
   // Will throw FException e
   FBufferReader EncryptSendingData(const char* inData,int len);
   FBufferReader DecryptRecvingData(FBufferReader &reader);
-
+  bool isHttp2()const;
 private:
 
   std::unique_ptr<_FSSLHelperPrivate> dp;

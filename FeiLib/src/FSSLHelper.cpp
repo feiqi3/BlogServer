@@ -20,7 +20,24 @@
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 
+
+#include "Http/FHttp2Helper.h"
+
 #define MODULE_NAME "SSLHelper"
+
+static int alpn_select_proto_cb(SSL* ssl, const unsigned char** out,
+    unsigned char* outlen, const unsigned char* in,
+    unsigned int inlen, void* arg) {
+    int rv;
+
+    rv = Fei::Http::FHttp2Context::select_alpn(out, outlen, in, inlen);
+
+    if (rv == -1) {
+        return SSL_TLSEXT_ERR_NOACK;
+    }
+
+    return SSL_TLSEXT_ERR_OK;
+}
 
 class SSLNotPreparedException : public Fei::FException {
 public:
@@ -38,6 +55,7 @@ private:
   std::string mreason;
 };
 
+
 namespace Fei {
 
 // SetUp SSL Context
@@ -49,6 +67,7 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   SSL_CTX_set_min_proto_version((SSL_CTX*)SSLContext, TLS1_2_VERSION);
   // optional: SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
   SSL_CTX_set_options((SSL_CTX*)SSLContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+  SSL_CTX_set_alpn_select_cb((SSL_CTX*)SSLContext, alpn_select_proto_cb, NULL);
   loadCertFiles(certificateFile, privateKeyFile);
 }
 
@@ -98,6 +117,7 @@ public:
   SSL *sslHandler = 0;
   BIO *rbio = 0;
   BIO *wbio = 0;
+  bool mIsH2 = false;
 };
 
 FSSLHelper::~FSSLHelper() {
@@ -155,6 +175,12 @@ bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
   } else {
     SSL_read(ssl, 0, 0);
     if (SSL_pending(ssl) > 0) {
+      const unsigned char* alpn = NULL;
+      unsigned int alpnlen = 0;
+      SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
+      if (alpn && alpnlen == 2 && memcmp("h2", alpn, 2) == 0) {
+          dp->mIsH2 = true;
+      }
       return true;
     }
   }
@@ -259,6 +285,11 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
     throw SSLDataException("SSL read decrypt data error.");
   }
   return dp->outBuffer;
+}
+
+bool FSSLHelper::isHttp2() const
+{
+    return dp->mIsH2;
 }
 
 void FSSLUtils::randomBytes(unsigned char *data, uint32 num) {

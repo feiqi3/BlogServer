@@ -7,7 +7,7 @@
 
 #include "FDef.h"
 #include "Http/FHttpRequestParser.h"
-
+#include "FHttp2Helper.h"
 namespace Fei{
 	class FTcpServer;
 }
@@ -47,6 +47,7 @@ public:
 		FHttpParser parser;
 		bool shouldKeepAlive = true;
 		uint32 hasSurvivedTime = 0;
+		std::unique_ptr<FHttp2Context> http2Ctx = nullptr;
 	};
 
 private:
@@ -61,7 +62,9 @@ private:
 	private:
 	void defaultHandleRouterMismatchFunc(const FHttpRequest& request, FHttpResponse& response);
 	void defaultExceptionFunc(const FHttpRequest& request, FHttpResponse& response,const ::Fei::FException& exception);
-
+	void http1Process(const FTcpConnPtr& ptr, FBufferReader& reader);
+	void http2Process(const FTcpConnPtr& ptr, FBufferReader& reader);
+	FHttpResponse httpHandle(const FTcpConnPtr& ptr,const FHttpRequest& request);
 private:
 	std::unique_ptr<FTcpServer> mTcpServer;
 	PreSendHttpResponseCallback mPreSendCallback;

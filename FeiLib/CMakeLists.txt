@@ -80,6 +80,8 @@ add_custom_command(
 
 set(ENABLE_LIB_ONLY ON)
 add_subdirectory(3rd/nghttp2)
+target_include_directories(${PROJECT_NAME} PRIVATE 3rd/nghttp2)
+target_link_libraries(${PROJECT_NAME} PRIVATE nghttp2)
 
 if(WIN32)
     add_subdirectory(3rd/wepoll)

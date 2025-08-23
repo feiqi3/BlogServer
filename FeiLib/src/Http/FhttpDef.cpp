@@ -1,6 +1,14 @@
 #include "Http/FHttpDef.h"
 
 namespace Fei::Http {
+    const std::map<std::string, Method> MethodsMap = {
+    {"GET", Method::GET},         {"POST", Method::POST},
+    {"HEAD", Method::HEAD},       {"PUT", Method::PUT},
+    {"DELETE", Method::DELET},   {"PATCH", Method::PATCH},
+    {"CONNECT", Method::CONNECT}, {"OPTIONS", Method::OPTIONS},
+    {"TRACE", Method::TRACE},
+    };
+
 const char *statusCodeToStr(StatusCode code) {
   switch (code) {
   case StatusCode::_100:
@@ -56,6 +64,68 @@ const char *statusCodeToStr(StatusCode code) {
   return statusCodeToStr(StatusCode::_200);
 }
 
+const char* statusCodeToStr2(StatusCode code) {
+    switch (code) {
+    case StatusCode::_100:
+        return "100";
+    case StatusCode::_200:
+        return "200";
+    case StatusCode::_201:
+        return "201";
+    case StatusCode::_202:
+        return "202";
+    case StatusCode::_204:
+        return "204";
+    case StatusCode::_301:
+        return "301";
+    case StatusCode::_302:
+        return "302";
+    case StatusCode::_303:
+        return "303";
+    case StatusCode::_304:
+        return "304";
+    case StatusCode::_307:
+        return "307";
+    case StatusCode::_308:
+        return "308";
+    case StatusCode::_400:
+        return "400";
+    case StatusCode::_401:
+        return "401";
+    case StatusCode::_403:
+        return "403";
+    case StatusCode::_404:
+        return "404";
+    case StatusCode::_405:
+        return "405";
+    case StatusCode::_408:
+        return "408";
+    case StatusCode::_418:
+        return "418";
+    case StatusCode::_429:
+        return "429";
+    case StatusCode::_500:
+        return "500";
+    case StatusCode::_501:
+        return "501";
+    case StatusCode::_502:
+        return "502";
+    case StatusCode::_505:
+        return "505";
+    }
+    // default
+    return "200";
+}
+
+F_API Method stringToMethod(const std::string& str)
+{
+    auto itor = MethodsMap.find(str);
+    if (itor != MethodsMap.end()) {
+        return itor->second;
+    }
+    return Method::Invalid;
+}
+
 const char* methodToStr(Method method)
 {
     switch (method)
@@ -68,7 +138,7 @@ const char* methodToStr(Method method)
         break;
     case Fei::Http::Method::PUT:return "PUT";
         break;
-    case Fei::Http::Method::DELETE:return "DELETE";
+    case Fei::Http::Method::DELET:return "DELETE";
         break;
     case Fei::Http::Method::PATCH:return "PATCH";
         break;

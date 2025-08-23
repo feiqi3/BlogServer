@@ -13,12 +13,11 @@
 
 namespace Fei::Http {
 
-using HttpQueryMap = std::map<std::string, std::string>;
-using HeaderMap = std::multimap<std::string, std::string>;
+
 class F_API FHttpContext {
 public:
   friend class FHttpParser;
-
+  friend class FHttpRequest;
 public:
   FHttpContext() {}
   Method getMethod() const { return mMethod; }
@@ -42,8 +41,7 @@ private:
 // Fix me:faster parser,less copy
 class F_API FHttpParser {
 public:
-  static const std::string &MethodToString(Method method);
-  static Method StringToMethod(const std::string &);
+
 
   enum class EState {
     RequestLine,

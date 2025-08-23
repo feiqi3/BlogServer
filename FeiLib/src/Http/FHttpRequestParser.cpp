@@ -3,6 +3,8 @@
 #include "FLogger.h"
 #include "Http/FCookie.h"
 #include "Http/FHttpDef.h"
+#include "Http/FHttpParserHelper.h"
+
 #include <map>
 #include <string>
 #include <string_view>
@@ -13,29 +15,6 @@
 namespace Fei::Http {
 namespace {
 //%xx and +
-static std::string urlDecode(const std::string &s) {
-  std::string out;
-  out.reserve(s.size());
-  for (size_t i = 0; i < s.size(); ++i) {
-    char c = s[i];
-    if (c == '%') {
-      if (i + 2 < s.size()) {
-        int hi = std::isdigit(s[i + 1]) ? s[i + 1] - '0'
-                                        : std::toupper(s[i + 1]) - 'A' + 10;
-        int lo = std::isdigit(s[i + 2]) ? s[i + 2] - '0'
-                                        : std::toupper(s[i + 2]) - 'A' + 10;
-        out.push_back(static_cast<char>((hi << 4) | lo));
-        i += 2;
-      }
-    } else if (c == '+') {
-      out.push_back(' ');
-    } else {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
 bool isAllDigits(const std::string &s) {
   return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char c) {
     return std::isdigit(c);
@@ -57,19 +36,6 @@ inline void trimSpaces(std::string &s) {
   // 删除开头多余空格
   s.erase(0, first);
 }
-
-const std::string MethodsName[] = {
-    "GET",   "POST",    "HEAD",    "PUT",   "DELETE",
-    "PATCH", "CONNECT", "OPTIONS", "TRACE", "Invalid",
-};
-
-const std::map<std::string, Method> MethodsMap = {
-    {"GET", Method::GET},         {"POST", Method::POST},
-    {"HEAD", Method::HEAD},       {"PUT", Method::PUT},
-    {"DELETE", Method::DELETE},   {"PATCH", Method::PATCH},
-    {"CONNECT", Method::CONNECT}, {"OPTIONS", Method::OPTIONS},
-    {"TRACE", Method::TRACE},
-};
 
 } // namespace
 
@@ -96,85 +62,13 @@ bool FHttpContext::getQuery(const std::string &key, std::string &outVal) const {
   return true;
 }
 
-const std::string &FHttpParser::MethodToString(Method method) {
-  switch (method) {
-  case Fei::Http::Method::GET:
-    return MethodsName[0];
-    break;
-  case Fei::Http::Method::POST:
-    return MethodsName[1];
-    break;
-  case Fei::Http::Method::HEAD:
-    return MethodsName[2];
-    break;
-  case Fei::Http::Method::PUT:
-    return MethodsName[3];
-    break;
-  case Fei::Http::Method::DELETE:
-    return MethodsName[4];
-    break;
-  case Fei::Http::Method::PATCH:
-    return MethodsName[5];
-    break;
-  case Fei::Http::Method::CONNECT:
-    return MethodsName[6];
-    break;
-  case Fei::Http::Method::OPTIONS:
-    return MethodsName[7];
-    break;
-  case Fei::Http::Method::TRACE:
-    return MethodsName[8];
-    break;
-  case Fei::Http::Method::Invalid:
-  default:
-    return MethodsName[9];
-    break;
-  }
-}
-Method FHttpParser::StringToMethod(const std::string &in) {
-  auto itor = MethodsMap.find(in);
-  if (itor != MethodsMap.end()) {
-    return itor->second;
-  }
-  return Method::Invalid;
-}
-
 void FHttpParser::parseCookies(const std::string &line) {
   mCtx.cookies.emplace_back(line);
 }
 
 void FHttpParser::parseQuery(const std::string &line) {
-  auto qm = line.find('?');
-  if (qm == std::string::npos) {
-    return; // No query
+    ParserUtils::ParsePathLine(line, mCtx.mRequestPath, mCtx.mQueryMap);
   }
-
-  std::string query = line.substr(qm + 1);
-  mCtx.mRequestPath = line.substr(0, qm);
-  // Remove fragment identifier
-  auto hash = query.find('#');
-  if (hash != std::string::npos) {
-    query.resize(hash);
-  }
-
-  std::stringstream ss(query);
-  std::string pair;
-  while (std::getline(ss, pair, '&')) {
-    if (pair.empty())
-      continue;
-
-    auto eq = pair.find('=');
-    std::string key, value;
-    if (eq != std::string::npos) {
-      key = urlDecode(pair.substr(0, eq));
-      value = urlDecode(pair.substr(eq + 1));
-    } else {
-      key = urlDecode(pair);
-      value = "";
-    }
-    this->mCtx.mQueryMap.insert({std::move(key), std::move(value)});
-  }
-}
 
 void FHttpParser::parseRequestLine(const std::string &line) {
   assert(state_ == EState::RequestLine);
@@ -186,7 +80,7 @@ void FHttpParser::parseRequestLine(const std::string &line) {
     if (c == ' ' || i == (int)line.size()) {
       switch (step) {
       case 0: {
-        auto method = StringToMethod(curBuffer);
+        auto method = stringToMethod(curBuffer);
         if (method == Method::Invalid) {
           state_ = EState::Error;
           return;
