@@ -1,4 +1,5 @@
 #include "Http/FHttp2Helper.h"
+#include <memory>
 #include <vector>
 #ifdef _WIN32
 #define NGHTTP2_NO_SSIZE_T
@@ -8,8 +9,13 @@
 #include "FBuffer.h"
 #include "Http/FHttpResponse.h"
 #include "Http/FHttpRequestBuilder.h"
+
+#include "FConfigReader.h"
+
 #define MODULE_NAME "[Http2]"
 
+bool s_enablePush = true;
+uint32_t s_maxConcurrentStream = 5;
 namespace Fei{
 
     namespace {
@@ -134,7 +140,7 @@ namespace Fei{
 
         //(optional) for push promise, there should have a pre-send header frame contains persudo headers
         void generatePushPromiseHeaderFromRequestBuilder(const Http::FHttpRequestBuilder& builder, const std::string& host, std::vector<uint8_t>& headerStringDataOut, std::vector< nghttp2_nv>& nva) {
-            //1. method = ...     
+            //1. method = ...      
             {
                 auto method = builder.getMethod();
                 auto methodStr = Http::methodToStr(method);
@@ -246,7 +252,7 @@ namespace Fei{
 
     struct Http2StreamData {
         Fei::Http::FHttp2Parser parser;
-        FHttp2Response* returnResponse = 0;
+        std::unique_ptr<FHttp2Response> returnResponse = 0;
         std::unique_ptr<FHttp2PushPromise> pushPromise = 0;
         bool isEnd = false;
         bool isServerOpen = false;
@@ -257,9 +263,12 @@ namespace Fei{
 
     struct Http2SessionData {
         Http2SessionData(uint32_t bufferSize):mOutDataBuffer(bufferSize) {
+            lastStreamId = 2 * s_maxConcurrentStream - 1; //For client initiated streams, they are odd numbers
         }
         Fei::FBuffer mOutDataBuffer;
+        bool mHasGoawaySent = false;
         uint32_t openedStreams = 0;
+        uint32_t lastStreamId = 0;
         std::map<uint32_t, Http2StreamData> mStreamDataMap;
         Http2SessionSettings settings;
 #ifdef HTTP2_DEBUG
@@ -319,6 +328,16 @@ namespace Fei{
         static int on_data_chunk_recv_callback(nghttp2_session* session, uint8_t flags, int32_t stream_id, const uint8_t* data, size_t len, void* user_data) {
             Http2StreamData* streamUD = getStreamUserData(session, stream_id);
             Http2SessionData* sessionData = (Http2SessionData*)user_data;
+            if(stream_id > sessionData->lastStreamId){
+                if(!sessionData->mHasGoawaySent){
+                    nghttp2_submit_goaway(session, 0,sessionData->lastStreamId , NGHTTP2_NO_ERROR, NULL, 0);
+                    sessionData->mHasGoawaySent = true;
+                }
+                //ignore all headers after goaway sent
+                nghttp2_submit_rst_stream(session, 0, stream_id, NGHTTP2_REFUSED_STREAM);
+                return 0;
+            }
+            
             auto& parser = streamUD->parser;
             parser.appendData((char*)data, len);
             if (flags & NGHTTP2_FLAG_END_STREAM) {
@@ -332,7 +351,6 @@ namespace Fei{
             Http2SessionData* session_data = (Http2SessionData*)user_data;
             Http2StreamData* stream_data = (Http2StreamData*)nghttp2_session_get_stream_user_data(session, stream_id);
             if (stream_data) {
-                delete stream_data->returnResponse;
                 stream_data->returnResponse= 0;
                 stream_data->pushPromise = 0;
                 session_data->mStreamDataMap.erase(stream_id);
@@ -344,7 +362,19 @@ namespace Fei{
 
         static int on_header_callback(nghttp2_session* session, const nghttp2_frame* frame, const uint8_t* name, size_t namelen, const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data)
         {
-            auto streamId = frame->rst_stream.hd.stream_id;
+            auto streamId = frame->hd.stream_id;
+            auto sessionData = (Http2SessionData*)user_data;
+            if(streamId > sessionData->lastStreamId){
+
+                if(!sessionData->mHasGoawaySent){
+                    nghttp2_submit_goaway(session, 0,sessionData->lastStreamId , NGHTTP2_NO_ERROR, NULL, 0);
+                    sessionData->mHasGoawaySent = true;
+                }
+
+                //ignore all headers after goaway sent
+                nghttp2_submit_rst_stream(session, 0, streamId, NGHTTP2_REFUSED_STREAM);
+                return 0;
+            }
             Http2StreamData* streamUD = getStreamUserData(session, streamId);
             auto& parser = streamUD->parser;
             parser.addHeader(std::string((char*)name, namelen), std::string((char*)value, valuelen));
@@ -477,8 +507,35 @@ namespace Fei::Http {
         return nghttp2_select_alpn(out, outlen, in, inlen);
     }
 
-    FHttp2Context::FHttp2Context(FSocketAddr addr):mDp(new FHttp2Private(1024,addr)){
+    void FHttp2Context::loadConfig(){
+        auto config = Fei::FConfigReader::instance();
+        auto enablePush = config->getCfg("H2EnablePush");
+        if(enablePush.has_value()){
+            if(enablePush.value()=="0"){
+                s_enablePush = false;
+            }
+            else{
+                s_enablePush = true;
+            }
+        }
+        
+        auto maxStreamNum = config->getCfg("H2MaxStreamNum");
+        if(maxStreamNum.has_value()){
+            try{
+                auto num = std::stoul(maxStreamNum.value());
+                if(num >= 1){
+                    s_maxConcurrentStream = num;
+                }
+            }
+            catch(...){
+                Logger::instance()->log(lvl::warn, MODULE_NAME"Invalid H2MaxStreamNum config value: {}", maxStreamNum.value());
+            }
+        }
+        Logger::instance()->log(lvl::info, MODULE_NAME"Load Config: H2EnablePush={}, H2MaxStreamNum={}", s_enablePush ? 1 : 0, s_maxConcurrentStream);
+    }
 
+
+    FHttp2Context::FHttp2Context(FSocketAddr addr):mDp(new FHttp2Private(1024,addr)){
     }
 
     FHttp2Context::~FHttp2Context()
@@ -489,47 +546,29 @@ namespace Fei::Http {
     void FHttp2Context::http2SubmitResponseStream(uint32_t streamId, FHttpResponse& response, bool closeStream)
     {
 
-        FHttp2Response* h2Response = 0;
         Http2StreamData* streamUD = 0;
         Http2SessionData& sessionData = mDp->sessionData;
         auto session = mDp->session;
-//        if (!pushPromise) {
+
         streamUD = (Http2StreamData*)nghttp2_session_get_stream_user_data(mDp->session, streamId);
 
-        //}
-        //else {
-        //    if (sessionData.openedStreams == 0) {
-        //        Logger::instance()->log(lvl::err, MODULE_NAME"Submit a push promise need an existed stream.");
-        //        return;
-        //    }
-        //    auto parentStreamId = sessionData.mStreamDataMap.begin()->first;
-        //}
-
-        streamUD->returnResponse = new FHttp2Response(response);
-        h2Response = streamUD->returnResponse;
+        streamUD->returnResponse =std::make_unique<FHttp2Response>(response);
+        auto& h2Response = streamUD->returnResponse;
         auto & dataProvider = streamUD->returnResponse->dataProvider;
         dataProvider.source.ptr = nullptr;
         dataProvider.read_callback = Http2Callbacks::submit_data_read_callback;
-        //if (!pushPromise) {
         auto& h2NVA = h2Response->getNgHttp2NameValueArray();
         //DO NOT USE SUBMIT HEADER AND SUBMIT DATA
         auto res = nghttp2_submit_response2(session, streamId, h2NVA.data(), h2NVA.size(), &streamUD->returnResponse->dataProvider);
         if (res != 0) {
             Logger::instance()->log(lvl::err, MODULE_NAME"Submit response error.");
         }
-        //}
-        //else {
-        //   //1. push promise need to use an exsited stream 
-
-        //    nghttp2_submit_push_promise(session,0,)
-        //        streamUD = &(sessionData.mStreamDataMap.insert({ streamId,{} }).first->second);
-        //}
     }
 
     void FHttp2Context::http2SubmitPushPromise(uint32_t streamId, FHttpRequestBuilder& pushRequest, FHttpResponse& pushResponse, bool autoHostSet)
     {
         Http2SessionData& sessionData = mDp->sessionData;
-        if(!sessionData.settings.enablePush){
+        if(!sessionData.settings.enablePush || !s_enablePush){
             Logger::instance()->log(lvl::info, MODULE_NAME"Push Promise Error cause client disabled push");
             return;
         }
@@ -598,8 +637,12 @@ namespace Fei::Http {
     void FHttp2Context::http2SubmitGoaway()
     {
         auto session = mDp->session;
-        int32_t last = nghttp2_session_get_last_proc_stream_id(session);
+        auto sessionData = &mDp->sessionData;
+        if(sessionData->mHasGoawaySent)return;
+        uint32_t last = nghttp2_session_get_last_proc_stream_id(session);
+        sessionData->lastStreamId = std::min(last, sessionData->lastStreamId);
         nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, last, NGHTTP2_NO_ERROR, NULL, 0);
+        sessionData->mHasGoawaySent = true;
     }
 
     uint32_t FHttp2Context::http2RecvProcess(FBufferReader& reader)

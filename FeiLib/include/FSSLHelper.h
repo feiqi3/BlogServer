@@ -26,8 +26,13 @@ public:
   void* getSSLContext()const{
     return SSLContext;
   }
+
+  inline bool preferH2()const{
+    return mPreferH2;
+  }
 private:
   void *SSLContext = 0;
+  bool mPreferH2 = false;
 };
 
 class FSSLHelper {

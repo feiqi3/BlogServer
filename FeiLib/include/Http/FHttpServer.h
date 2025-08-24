@@ -83,6 +83,8 @@ private:
 	//Time wait for idle connection
 	//if the time is out, the connection will be closed.
 	int mHttpConnectionTimeout = -1;
+	int mHttp2DrainTimeOut = 15;//seconds
+	bool mHttp2CloseImm = false;
 };
 } // namespace Fei
 

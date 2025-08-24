@@ -79,7 +79,14 @@ namespace Fei::Http {
 	public:
         static int select_alpn(const unsigned char** out, unsigned char* outlen,
             const unsigned char* in, unsigned int inlen);
-
+        /*
+        
+        H2MaxStreamNum: default 5    
+        : max stream to handle concurrently
+        H2EnablePush: default 1
+        : enable server push or not
+        */
+        static void loadConfig();
 	public:
         FHttp2Context(FSocketAddr addr);
         ~FHttp2Context();
