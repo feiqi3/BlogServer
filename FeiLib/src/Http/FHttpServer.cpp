@@ -10,6 +10,7 @@
 #include "Http/FRouter.h"
 #include "FLogger.h"
 #include "Http/FHttp2Helper.h"
+#include <chrono>
 #include <algorithm>
 #define MODULE_NAME "HttpServer"
 #define ERROR_ROUTE_PATH "/error"
@@ -28,6 +29,7 @@ namespace {
 		auto data = static_cast<Fei::Http::FHttpServer::HttpConnData*>(ptr->getUserData());
 		if (data == nullptr) {
 			data = new Fei::Http::FHttpServer::HttpConnData();
+			data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 			ptr->setUserData(data);
 		}
 
@@ -94,6 +96,14 @@ namespace Fei::Http {
 		mTcpServer->setOnWriteCompleteCallback(std::bind(&FHttpServer::handleTcpWriteComplete, this, std::placeholders::_1));
 		mRouteCacheCleanEventId = mTcpServer->addTickEvent(std::bind(&FRouter::checkRouteCache,FRouter::instance(),std::placeholders::_1));
 		FRouter::instance()->lateInit();
+
+		/*
+			HttpRequestWaitTime: the max wait time for a http request's header to be completely received. In seconds
+
+			HttpConnectTimeout: the max wait time for a http connection to be idle. In seconds
+
+
+		*/
 		const auto cfg = FConfigReader::instance();
 		{
 			auto headerWait = cfg->getCfg("HttpRequestWaitTime");
@@ -104,7 +114,22 @@ namespace Fei::Http {
 			if(httpConnectTimeout.has_value()){
 				FCfgUtils::toNumber(httpConnectTimeout.value(), this->mHttpConnectionTimeout);
 			}
+			auto http2CloseImm = cfg->getCfg("Http2CloseImm");
+			if(http2CloseImm.has_value()){
+				int val = 0;
+				FCfgUtils::toNumber(http2CloseImm.value(), val);
+				if(val != 0){
+					this->mHttp2CloseImm = true;
+				}
+			}
+			auto http2DrainTimeout = cfg->getCfg("Http2DrainTimeout");
+			if(http2DrainTimeout.has_value()){
+				FCfgUtils::toNumber(http2DrainTimeout.value(), this->mHttp2DrainTimeOut);
+				this->mHttp2DrainTimeOut = std::max(0, this->mHttp2DrainTimeOut);
+			}
+
 		}
+		FHttp2Context::loadConfig();
 	}
 
 	FHttpServer::~FHttpServer() {
@@ -238,29 +263,37 @@ namespace Fei::Http {
 			}
 		}
 		else {
-			int h2ConnIdleMulti = 2;
 			bool firstTimeOut = false;
-			if (mHttpRequestWaitTime >= 0 && now - connData->hasSurvivedTime > mHttpRequestWaitTime * h2ConnIdleMulti) {
+			auto& h2 = connData->http2Ctx;
+
+			if (mHttpRequestWaitTime >= 0 && now - connData->hasSurvivedTime > mHttpRequestWaitTime) {
 				firstTimeOut = true;
 			}
 
-			if (mHttpConnectionTimeout >= 0 && now - connData->hasSurvivedTime > mHttpConnectionTimeout * h2ConnIdleMulti) {
+			if (mHttpConnectionTimeout >= 0 && now - connData->hasSurvivedTime > std::min(mHttpConnectionTimeout, mHttp2DrainTimeOut)) {
 				isTimeOut = true;
 			}
 
-			if (isTimeOut) {
-				if (isTimeOut) {
-					Logger::instance()->log(MODULE_NAME, lvl::info, "connection timeout from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+			if (firstTimeOut) {
+				if(mHttp2CloseImm){
 					ptr->forceClose();
 				}
-			}
-			else if (firstTimeOut) {
-				auto& h2 = connData->http2Ctx;
-				h2->http2SubmitGoaway();
-				auto sendNum = h2->http2SendProcess();
-				if (sendNum > 0) {
-					auto reader = h2->getSendBufferReader();
-					
+
+				if (isTimeOut) {
+					Logger::instance()->log(MODULE_NAME, lvl::info, "connection timeout from {}.{}.{}.{} : {} , send goaway(h2).", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
+					ptr->forceClose();
+				}
+				//send goaway, no more stream in
+				if(!isTimeOut){
+					h2->http2SubmitGoaway();
+					auto sendNum = h2->http2SendProcess();
+					if (sendNum > 0) {
+						auto reader = h2->getSendBufferReader();
+						int peakSize= 0;
+						auto dataPtr = reader.peekAll(peakSize);
+						ptr->send((const char*)dataPtr,peakSize);
+						reader.expireSize(peakSize);	
+					}
 				}
 			}
 		}
@@ -319,9 +352,6 @@ namespace Fei::Http {
 	void FHttpServer::http1Process(const FTcpConnPtr& ptr, FBufferReader& reader)
 	{
 		auto http_data = getDataFromTcpConn(ptr);
-		if (http_data->hasSurvivedTime == 0) {
-			http_data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-		}
 		bool isParseDone = http_data->parser.parse(reader);
 
 		if (!isParseDone) {
@@ -346,9 +376,6 @@ namespace Fei::Http {
 
 		//1. process data
 		auto http_data = getDataFromTcpConn(ptr);
-		if (http_data->hasSurvivedTime == 0) {
-			http_data->hasSurvivedTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-		}
 		auto& http2Ctx = http_data->http2Ctx;
 		http2Ctx->http2RecvProcess(reader);
 

@@ -22,7 +22,7 @@
 
 
 #include "Http/FHttp2Helper.h"
-
+#include "FConfigReader.h"
 #define MODULE_NAME "SSLHelper"
 
 static int alpn_select_proto_cb(SSL* ssl, const unsigned char** out,
@@ -31,7 +31,10 @@ static int alpn_select_proto_cb(SSL* ssl, const unsigned char** out,
     int rv;
 
     rv = Fei::Http::FHttp2Context::select_alpn(out, outlen, in, inlen);
-
+    auto sslEnv = Fei::FSSLEnv::instance();
+    if(!sslEnv->preferH2()){
+        return SSL_TLSEXT_ERR_NOACK;
+    }
     if (rv == -1) {
         return SSL_TLSEXT_ERR_NOACK;
     }
@@ -67,8 +70,19 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   SSL_CTX_set_min_proto_version((SSL_CTX*)SSLContext, TLS1_2_VERSION);
   // optional: SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
   SSL_CTX_set_options((SSL_CTX*)SSLContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+  
+	const auto cfg = FConfigReader::instance();
+			auto httpPreference = cfg->getCfg("ALPNPreference");
+			if(httpPreference.has_value()){
+        if(httpPreference == "http2"){
+					this->mPreferH2 = true;
+				}
+      }
+
   SSL_CTX_set_alpn_select_cb((SSL_CTX*)SSLContext, alpn_select_proto_cb, NULL);
   loadCertFiles(certificateFile, privateKeyFile);
+
+
 }
 
 void FSSLEnv::loadCertFiles(const std::string &certificateFile,
@@ -118,7 +132,7 @@ public:
   BIO *rbio = 0;
   BIO *wbio = 0;
   bool mIsH2 = false;
-  bool mSelectedH2 = false;
+  bool mProtocalHasSelected = false;
 };
 
 FSSLHelper::~FSSLHelper() {
@@ -285,7 +299,7 @@ FBufferReader FSSLHelper::DecryptRecvingData(FBufferReader &reader) {
 bool FSSLHelper::isHttp2() const
 {
   SSL *ssl = dp->sslHandler;
-  if(!dp->mSelectedH2)
+  if(!dp->mProtocalHasSelected)
   {
       const unsigned char* alpn = NULL;
       unsigned int alpnlen = 0;
@@ -293,7 +307,7 @@ bool FSSLHelper::isHttp2() const
       if (alpn && alpnlen == 2 && memcmp("h2", alpn, 2) == 0) {
           dp->mIsH2 = true;
       }
-      dp->mSelectedH2 = true;
+      dp->mProtocalHasSelected = true;
   }
   return dp->mIsH2;
 }
