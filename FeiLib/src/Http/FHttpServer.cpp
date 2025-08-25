@@ -372,6 +372,11 @@ namespace Fei::Http {
 		request.setAddrHost(ptr->getAddrAccept());
 		auto response = httpHandle(ptr, request);
 		ptr->send(std::move(response.toString()));
+		//This connection can be reuse.
+		if (http_data->shouldKeepAlive)
+		{
+			http_data->parser = FHttpParser();//reset
+		}
 	}
 
 	void FHttpServer::http2Process(const FTcpConnPtr& ptr, FBufferReader& reader)
