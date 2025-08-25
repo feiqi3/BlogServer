@@ -1,6 +1,11 @@
 #include "Http/FHttp2Helper.h"
+#include "Http/FHttpDef.h"
+#include "Http/FHttpRequest.h"
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
+#include <fstream>
 #ifdef _WIN32
 #define NGHTTP2_NO_SSIZE_T
 #endif
@@ -14,6 +19,23 @@
 
 #define MODULE_NAME "[Http2]"
 
+
+
+/*
+
+/index {
+    xxx.css,
+    xxx.js,
+}
+
+*/
+using PushRequestMap = std::unordered_map<std::string, std::vector<Fei::Http::FHttpRequest>>;
+using PushMap = std::unordered_map<std::string, std::vector<std::string>>;
+
+PushRequestMap parse_push_map_file(const std::string &filename);
+
+PushRequestMap s_pushRequestMap;
+std::vector<Fei::Http::FHttpRequest> s_emptyPushVec;
 bool s_enablePush = true;
 uint32_t s_maxConcurrentStream = 5;
 namespace Fei{
@@ -139,10 +161,10 @@ namespace Fei{
         }
 
         //(optional) for push promise, there should have a pre-send header frame contains persudo headers
-        void generatePushPromiseHeaderFromRequestBuilder(const Http::FHttpRequestBuilder& builder, const std::string& host, std::vector<uint8_t>& headerStringDataOut, std::vector< nghttp2_nv>& nva) {
+        void generatePushPromiseHeaderFromRequest(const Http::FHttpRequest& requset, const std::string& host, std::vector<uint8_t>& headerStringDataOut, std::vector< nghttp2_nv>& nva) {
             //1. method = ...      
             {
-                auto method = builder.getMethod();
+                auto method = requset.getMethod();
                 auto methodStr = Http::methodToStr(method);
                 auto methodLen = strlen(methodStr);
                 makeNVPair(":method", 7, Http::methodToStr(method), methodLen, headerStringDataOut, nva);
@@ -159,14 +181,14 @@ namespace Fei{
             }
             //4. path = ...    
             {
-                makeNVPair(":path", 5, builder.getUrl().c_str(), builder.getUrl().size(), headerStringDataOut, nva);
+                makeNVPair(":path", 5, requset.getPath().c_str(), requset.getPath().size(), headerStringDataOut, nva);
             }
 
             auto toHeadersHttp2 = [&headerStringDataOut, &nva](const std::pair<std::string, std::string>& pair) {
                 makeNVPairToLower(pair.first.c_str(), pair.first.size(), pair.second.c_str(), pair.second.size(), headerStringDataOut, nva);
                 return true;
             };
-            builder.traversalHeaders(toHeadersHttp2);
+            requset.traverseHeaders(toHeadersHttp2);
             collectAndReasignNva(headerStringDataOut.data(), nva);
         }
     }
@@ -534,6 +556,17 @@ namespace Fei::Http {
         Logger::instance()->log(lvl::info, MODULE_NAME"Load Config: H2EnablePush={}, H2MaxStreamNum={}", s_enablePush ? 1 : 0, s_maxConcurrentStream);
     }
 
+    void FHttp2Context::loadPushPromiseData(const std::string& path){
+        s_pushRequestMap = parse_push_map_file(path);
+    }
+
+    const std::vector<Fei::Http::FHttpRequest>& FHttp2Context::getPushPromise(const std::string& getPushPromisePath){
+        auto itor = s_pushRequestMap.find(getPushPromisePath);
+        if(itor != s_pushRequestMap.end()){
+            return itor->second;
+        }
+        return s_emptyPushVec;
+    }
 
     FHttp2Context::FHttp2Context(FSocketAddr addr):mDp(new FHttp2Private(1024,addr)){
     }
@@ -565,7 +598,7 @@ namespace Fei::Http {
         }
     }
 
-    void FHttp2Context::http2SubmitPushPromise(uint32_t streamId, FHttpRequestBuilder& pushRequest, FHttpResponse& pushResponse, bool autoHostSet)
+    void FHttp2Context::http2SubmitPushPromise(uint32_t streamId, FHttpRequest& pushRequest, FHttpResponse& pushResponse, bool autoHostSet)
     {
         Http2SessionData& sessionData = mDp->sessionData;
         if(!sessionData.settings.enablePush || !s_enablePush){
@@ -594,13 +627,13 @@ namespace Fei::Http {
             }
         }
         else {
-            pushRequestNew.findHeader(":authority", hostVal);
-            pushRequestNew.removeHeader(":authority");
+            pushRequestNew.getHeader(":authority", hostVal);
+            pushRequestNew.eraseHeader(":authority");
         }
         std::unique_ptr<FHttp2PushPromise> pushPromise = std::make_unique<FHttp2PushPromise>();
 
         auto& pushPromiseHeader = pushPromise->pushPromiseHeader;
-        generatePushPromiseHeaderFromRequestBuilder(pushRequest, hostVal, pushPromiseHeader.mOutDataString, pushPromiseHeader.mNghttp2NVA);
+        generatePushPromiseHeaderFromRequest(pushRequest, hostVal, pushPromiseHeader.mOutDataString, pushPromiseHeader.mNghttp2NVA);
         auto newStreamId = nghttp2_submit_push_promise(session, NGHTTP2_FLAG_END_HEADERS, parStreamData->streamId, pushPromiseHeader.mNghttp2NVA.data(), pushPromiseHeader.mNghttp2NVA.size(), 0);
         if (newStreamId > 0) {
             streamUD = (Http2StreamData*)nghttp2_session_get_stream_user_data(session, newStreamId);
@@ -632,6 +665,9 @@ namespace Fei::Http {
     uint32_t FHttp2Context::getOpenedStreams() const
     {
         return mDp->sessionData.openedStreams;
+    }
+    bool FHttp2Context::enablePush()const{
+        return s_enablePush && mDp->sessionData.settings.enablePush;
     }
 
     void FHttp2Context::http2SubmitGoaway()
@@ -738,4 +774,122 @@ namespace Fei::Http {
         return mHeaderFinish && mDataFinish;
     }
 
+}
+
+// Trim helpers
+static inline std::string trim(const std::string &s) {
+    size_t a = 0, b = s.size();
+    while (a < b && std::isspace((unsigned char)s[a])) ++a;
+    while (b > a && std::isspace((unsigned char)s[b-1])) --b;
+    return s.substr(a, b-a);
+}
+
+static inline std::string strip_quotes(const std::string &s) {
+    if (s.size() >= 2) {
+        if ((s.front() == '"' && s.back() == '"') || (s.front() == '\'' && s.back() == '\'')) {
+            return s.substr(1, s.size() - 2);
+        }
+    }
+    return s;
+}
+
+static inline void split_comma_separated(const std::string &line, std::vector<std::string> &out) {
+    std::string cur;
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        if (c == ',') {
+            std::string t = trim(cur);
+            if (!t.empty()) out.push_back(strip_quotes(t));
+            cur.clear();
+        } else {
+            cur.push_back(c);
+        }
+    }
+    // last token (may not end with comma)
+    std::string t = trim(cur);
+    if (!t.empty()) out.push_back(strip_quotes(t));
+}
+
+PushRequestMap parse_push_map_file(const std::string &filename) {
+    PushMap map;
+    std::ifstream ifs(filename);
+    if (!ifs) throw std::runtime_error("cannot open file: " + filename);
+
+    std::string line;
+    std::string currentRequest;
+    bool inBlock = false;
+
+    while (std::getline(ifs, line)) {
+        std::string raw = line;
+        std::string s = trim(line);
+        if (s.empty()) continue;
+        if (s[0] == '#') continue; // comment
+
+        // If not currently in a block, look for "requestPath {"
+        if (!inBlock) {
+            // find '{' in the line
+            auto posBrace = s.find('{');
+            if (posBrace == std::string::npos) {
+                // ignore malformed lines (or could log a warning)
+                continue;
+            }
+            // requestPath is everything before '{'
+            std::string req = trim(s.substr(0, posBrace));
+            req = strip_quotes(req);
+            currentRequest = req;
+            inBlock = true;
+
+            // There might be content after '{' on the same line (e.g. "/req { /a, /b }")
+            std::string after = s.substr(posBrace + 1);
+            // If after contains '}', process tokens before '}' and close block immediately
+            auto posClose = after.find('}');
+            if (posClose != std::string::npos) {
+                std::string tokenPart = after.substr(0, posClose);
+                std::vector<std::string> tokens;
+                split_comma_separated(tokenPart, tokens);
+                for (auto &t : tokens) {
+                    if (!t.empty()) map[currentRequest].push_back(t);
+                }
+                inBlock = false;
+                currentRequest.clear();
+            } else {
+                // process tokens in 'after' (could be empty) but stay in block
+                std::vector<std::string> tokens;
+                split_comma_separated(after, tokens);
+                for (auto &t : tokens) if (!t.empty()) map[currentRequest].push_back(t);
+            }
+            continue;
+        }
+
+        // inBlock == true: expect push paths or closing brace
+        // allow lines like "  /a, /b," or "  /a," or "}" or "/a, }"
+        auto posClose = s.find('}');
+        if (posClose != std::string::npos) {
+            // there's a close brace on this line. handle portion before '}' and finish block.
+            std::string before = s.substr(0, posClose);
+            std::vector<std::string> tokens;
+            split_comma_separated(before, tokens);
+            for (auto &t : tokens) if (!t.empty()) map[currentRequest].push_back(t);
+            inBlock = false;
+            currentRequest.clear();
+            continue;
+        } else {
+            // normal line inside block: may contain commas or single token
+            std::vector<std::string> tokens;
+            split_comma_separated(s, tokens);
+            for (auto &t : tokens) if (!t.empty()) map[currentRequest].push_back(t);
+        }
+    }
+    PushRequestMap requestMap;
+    for(auto& [requestPath, pushPaths]: map){
+        std::vector<Fei::Http::FHttpRequest> pushRequests;
+        for(auto& path : pushPaths){
+            Fei::Http::FHttpRequestBuilder builder;
+            builder.setMethod(Fei::Http::Method::GET);
+            builder.setUrl(path);
+            pushRequests.push_back(Fei::Http::FHttpRequest(builder));
+        }
+        requestMap[requestPath] = std::move(pushRequests);
+    }
+    return requestMap;
 }

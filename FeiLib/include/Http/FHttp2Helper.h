@@ -8,6 +8,8 @@
 #include "FHttpRequest.h"
 #include "FBufferReader.h"
 #include <functional>
+#include <string>
+#include <vector>
 
 #define HTTP2_DEBUG
 
@@ -87,12 +89,16 @@ namespace Fei::Http {
         : enable server push or not
         */
         static void loadConfig();
-	public:
+        static void loadPushPromiseData(const std::string& path);
+        static const std::vector<Fei::Http::FHttpRequest>& getPushPromise(const std::string& getPushPromisePath);
+	
+    public:
         FHttp2Context(FSocketAddr addr);
         ~FHttp2Context();
         FBufferReader getSendBufferReader();
+        bool enablePush()const;
         void http2SubmitResponseStream(uint32_t streamId,FHttpResponse& response, bool closeStream);
-        void http2SubmitPushPromise(uint32_t streamId, FHttpRequestBuilder& pushRequest, FHttpResponse& pushResponse,bool autoHostSet = true);
+        void http2SubmitPushPromise(uint32_t streamId, FHttpRequest& pushRequest, FHttpResponse& pushResponse,bool autoHostSet = true);
         void http2SubmitGoaway();
         uint32_t http2SendProcess();
         uint32_t http2RecvProcess(FBufferReader& reader);
@@ -100,7 +106,6 @@ namespace Fei::Http {
         uint32_t getOpenedStreams()const;
         void endStream(uint32_t streamID,H2StreamErr err);
         void traversalFinishedStreams(std::function<bool(const FHttpRequest&,uint32)>func);
-
     private:
 
         std::unique_ptr<FHttp2Private> mDp;

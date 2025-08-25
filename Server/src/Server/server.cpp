@@ -26,7 +26,7 @@
 const std::string ResourceDir =  SERVER_RESOURCE_DIR;
 const std::string WebDir = ResourceDir + "web/";
 const std::string SSLFileDir = ResourceDir + "SSL/";
-
+const std::string PushPromiseCfgPath = ResourceDir + "config/h2PushPromise.cfg";
 Blog::Server::Server()
 {
 	Fei::FeiLibInit(ResourceDir + "config/" + "server.cfg" );
@@ -56,6 +56,7 @@ Blog::Server::Server()
 	new AdminLogin();
 	new TemplateRender;
 	server = new Fei::Http::FHttpServer(10);
+	server->loadPushPromiseList(PushPromiseCfgPath);
 	server->addListenPort(80);
 	server->addSSLPort(443);
 }
