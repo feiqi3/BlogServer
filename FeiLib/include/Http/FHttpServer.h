@@ -28,6 +28,7 @@ public:
 	~FHttpServer();
 	static void initSSLenv(const std::string& certFile,const std::string& privateKey);
 	static void deinitSSLenv();
+	static void loadPushPromiseList(const std::string& path);
 	void addListenPort(uint32 port);
 	void addSSLPort(uint32 port);
 	void removeListenPort(uint32 port);

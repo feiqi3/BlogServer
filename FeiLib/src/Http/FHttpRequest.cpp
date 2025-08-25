@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace Fei::Http {
 FHttpRequest::FHttpRequest(FHttp2Parser& parser)
@@ -30,6 +31,18 @@ FHttpRequest::FHttpRequest( FHttpParser& parser)
   }
   mHttpCtx = std::move(parser.getContext());
 }
+
+FHttpRequest::FHttpRequest(const FHttpRequestBuilder& builder){
+    auto headersBuild = [this](const std::pair<std::string, std::string>& headerPair){
+        mHttpCtx.mHeaders.insert(headerPair);
+        return true;
+    };
+    builder.traversalHeaders(headersBuild);
+    mHttpCtx.mMethod = builder.getMethod();
+    mHttpCtx.mRequestPath = builder.getUrl();
+    mHttpCtx.mHttpVersion = Version::Http2;
+}
+
 
 int FHttpRequest::getCookieSize() const {
   return mHttpCtx.getCookies().size();

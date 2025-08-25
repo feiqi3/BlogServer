@@ -83,6 +83,10 @@ namespace Fei::Http {
 		FTcpServer::deinitGlobalSSLEnv();		
 	}
 
+	void FHttpServer::loadPushPromiseList(const std::string& path){
+		FHttp2Context::loadPushPromiseData(path);
+	}
+
 	FHttpServer::FHttpServer(uint32 threadNums) : mTcpServer(std::make_unique<FTcpServer>(threadNums))
 	{
 		if (!FRouter::valid()) {
@@ -387,6 +391,36 @@ namespace Fei::Http {
 		auto perStream = [&ptr,this,&http_data](const FHttpRequest& request,uint32_t streamID) {
 			auto response = httpHandle(ptr, request);
 			http_data->http2Ctx->http2SubmitResponseStream(streamID,response,true);
+			if(http_data->http2Ctx->enablePush())
+			{
+				//Handle push promise   
+				bool notMatchError = false;
+				auto pushPromiseRequests = FHttp2Context::getPushPromise(request.getPath());
+				for (auto& pushRequest : pushPromiseRequests) {
+					FHttpResponse promiseResponse;
+					auto routeResult = FRouter::instance()->route(request.getMethod(), request.getPath());
+					if (!routeResult.isvalid()) {
+						notMatchError = true;
+					}
+					if (notMatchError) {
+						routeResult = FRouter::instance()->route(Method::GET, ERROR_ROUTE_PATH);
+						if (!routeResult.isvalid()) {
+							if (mRouteNotMatchCallback) {
+								mRouteNotMatchCallback(request, promiseResponse);
+							}
+							else {
+								defaultHandleRouterMismatchFunc(request, promiseResponse);
+							}
+						}
+						else {
+							promiseResponse = routeResult.controllerFunc(request, routeResult.pathVariable);
+						}
+					}else{
+						promiseResponse = routeResult.controllerFunc(request, routeResult.pathVariable);
+					}
+					http_data->http2Ctx->http2SubmitPushPromise(streamID, pushRequest,promiseResponse);
+				}
+			}
 			return true;
 		};
 		http2Ctx->traversalFinishedStreams(perStream);
@@ -476,11 +510,11 @@ const std::unordered_map<std::string, std::string> extensionToContentType =
 {"htm","text/html"},
 {"shtml","text/html"},
 {"css","text/css"},
+{"js","application/x-javascript"},
 {"xml","text/xml"},
 {"gif","image/gif"},
 {"jpeg","image/jpeg"},
 {"jpg","image/jpeg"},
-{"js","application/x-javascript"},
 {"atom","application/atom+xml"},
 {"rss","application/rss+xml"},
 {"mml","text/mathml"},

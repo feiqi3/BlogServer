@@ -2,11 +2,16 @@
 #define FHTTPBUILDER_H_
 
 #include "FHttpDef.h"
-#include "FHttpDef.h"
+#include <functional>
 #include <sstream>
 namespace Fei::Http{
     class FHttpRequestBuilder{
     public:
+        inline FHttpRequestBuilder& setVersion(Version ver) {
+            httpVer = ver;
+            return *this;
+        }
+
         inline FHttpRequestBuilder& setMethod(Method method) {
             method_ = method;
             return *this;
@@ -71,6 +76,7 @@ namespace Fei::Http{
         }
 
     private:
+        Version httpVer = Version::Http11;
         Method method_;
         std::string url_;
         std::map<std::string, std::string> headers_;
