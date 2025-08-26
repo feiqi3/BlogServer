@@ -47,17 +47,19 @@ namespace Fei::Http {
             return mMethod != Method::Invalid;
         }
 
+        void setDataLength(uint32_t len) {
+            mDataLength = len;
+        }
+
         void appendData(char* data,int len) {
             if (mData.empty()) {
                 mData.reserve(mDataLength);
             }
-            if (mData.size() >= mDataLength) {
-                mDataFinish = true;
-                return;
-            }
             mData.append(data, len);
-            if (mData.size() > mDataLength) {
+            
+            if (mData.size() >= mDataLength) {
                 mData.resize(mDataLength);
+                mDataFinish = true;
             }
         }
 
