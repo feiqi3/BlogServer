@@ -387,11 +387,7 @@ namespace Fei::Http {
 		auto http_data = getDataFromTcpConn(ptr);
 		auto& http2Ctx = http_data->http2Ctx;
 		http2Ctx->http2RecvProcess(reader);
-
-		if (http2Ctx->isConnEnd()) {
-			ptr->forceClose();
-			return;
-		}
+		auto sendNum1 = http2Ctx->http2SendProcess();
 
 		auto perStream = [&ptr,this,&http_data](const FHttpRequest& request,uint32_t streamID) {
 			auto response = httpHandle(ptr, request);
@@ -429,7 +425,8 @@ namespace Fei::Http {
 			return true;
 		};
 		http2Ctx->traversalFinishedStreams(perStream);
-		auto sendNum = http2Ctx->http2SendProcess();
+		auto sendNum2 = http2Ctx->http2SendProcess();
+		auto sendNum = sendNum1 + sendNum2;
 		if (sendNum == 0)return; //Window control?
 		auto sreader = http2Ctx->getSendBufferReader();
 		int dataSize = 0;

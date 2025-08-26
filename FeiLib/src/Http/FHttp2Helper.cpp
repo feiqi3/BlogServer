@@ -276,7 +276,7 @@ namespace Fei{
         Fei::Http::FHttp2Parser parser;
         std::unique_ptr<FHttp2Response> returnResponse = 0;
         std::unique_ptr<FHttp2PushPromise> pushPromise = 0;
-        bool isEnd = false;
+        bool isStreamRecvFinish = false;
         bool isServerOpen = false;
         bool processed = false;
         uint32_t parentStreamId = 0;
@@ -288,6 +288,7 @@ namespace Fei{
             lastStreamId = 2 * s_maxConcurrentStream - 1; //For client initiated streams, they are odd numbers
         }
         Fei::FBuffer mOutDataBuffer;
+        bool mFirstFrame = true;
         bool mHasGoawaySent = false;
         uint32_t openedStreams = 0;
         uint32_t lastStreamId = 0;
@@ -320,6 +321,18 @@ namespace Fei{
                 frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
                 return 0;
             }
+            auto stream_id = frame->hd.stream_id;
+            if(stream_id > session_data->lastStreamId){
+                if(!session_data->mHasGoawaySent){
+                    uint32_t last = nghttp2_session_get_last_proc_stream_id(session);
+                    session_data->lastStreamId = std::min(last, session_data->lastStreamId);
+                    nghttp2_submit_goaway(session, 0,session_data->lastStreamId , NGHTTP2_NO_ERROR, NULL, 0);
+                    session_data->mHasGoawaySent = true;
+                }
+                nghttp2_submit_rst_stream(session, 0, stream_id, NGHTTP2_REFUSED_STREAM);
+                //ignore all headers after goaway sent
+                return 0;
+            }
 
             //if (session_data->openedStreams >= 4) {
             //    /* send RST_STREAM to refuse. REFUSED_STREAM means server refuse to serve. */
@@ -350,20 +363,15 @@ namespace Fei{
         static int on_data_chunk_recv_callback(nghttp2_session* session, uint8_t flags, int32_t stream_id, const uint8_t* data, size_t len, void* user_data) {
             Http2StreamData* streamUD = getStreamUserData(session, stream_id);
             Http2SessionData* sessionData = (Http2SessionData*)user_data;
-            if(stream_id > sessionData->lastStreamId){
-                if(!sessionData->mHasGoawaySent){
-                    nghttp2_submit_goaway(session, 0,sessionData->lastStreamId , NGHTTP2_NO_ERROR, NULL, 0);
-                    sessionData->mHasGoawaySent = true;
-                }
-                //ignore all headers after goaway sent
-                nghttp2_submit_rst_stream(session, 0, stream_id, NGHTTP2_REFUSED_STREAM);
+            
+            if(!streamUD){
                 return 0;
             }
             
             auto& parser = streamUD->parser;
             parser.appendData((char*)data, len);
             if (flags & NGHTTP2_FLAG_END_STREAM) {
-                streamUD->isEnd = true;
+                streamUD->isStreamRecvFinish = true;
             }
             return 0;
         }
@@ -386,18 +394,9 @@ namespace Fei{
         {
             auto streamId = frame->hd.stream_id;
             auto sessionData = (Http2SessionData*)user_data;
-            if(streamId > sessionData->lastStreamId){
-
-                if(!sessionData->mHasGoawaySent){
-                    nghttp2_submit_goaway(session, 0,sessionData->lastStreamId , NGHTTP2_NO_ERROR, NULL, 0);
-                    sessionData->mHasGoawaySent = true;
-                }
-
-                //ignore all headers after goaway sent
-                nghttp2_submit_rst_stream(session, 0, streamId, NGHTTP2_REFUSED_STREAM);
-                return 0;
-            }
             Http2StreamData* streamUD = getStreamUserData(session, streamId);
+            if(!streamUD)return 0;
+
             auto& parser = streamUD->parser;
             parser.addHeader(std::string((char*)name, namelen), std::string((char*)value, valuelen));
             
@@ -439,14 +438,20 @@ namespace Fei{
         //When header/data frames are fully received
         static int on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data) {
             Http2SessionData* sessionData = (Http2SessionData*)user_data;
+            Http2StreamData* streamUD = getStreamUserData(session, frame->hd.stream_id);
 
             if(frame->hd.type == NGHTTP2_SETTINGS){
                 on_settings(sessionData,frame->settings);
                 return 0;
             }
 
+            if(!streamUD){
+                return 0;
+            }
+
+
+
             auto streamId = frame->rst_stream.hd.stream_id;
-            Http2StreamData* streamUD = getStreamUserData(session, streamId);
             auto& parser = streamUD->parser;
             auto frameType = frame->hd.type;
 
@@ -685,6 +690,14 @@ namespace Fei::Http {
     {
         auto session = mDp->session;
         uint32_t recvLen = 0;
+        
+        auto& sessionData = mDp->sessionData;
+        
+        if(sessionData.mFirstFrame){
+            //do some thing?
+            sessionData.mFirstFrame = false;
+        }
+
         while(nghttp2_session_want_read(session) ){
             int peakNum = 0;
             auto dataPtr = reader.peekAll(peakNum);
@@ -760,7 +773,7 @@ namespace Fei::Http {
             mHeaders.erase(itor);
         }
 
-        itor = mHeaders.find("content_length");
+        itor = mHeaders.find("content-length");
         if (itor != mHeaders.end()) {
             mDataLength = std::stoul(itor->second);
         }

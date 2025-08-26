@@ -91,7 +91,17 @@ bool FCookie::hasAttribute(const std::string &attr, std::string &val) const {
 std::string FCookie::outSetCookieNoHeader() const {
   std::stringstream ssOut;
   // SetCookie header.
-  auto size = mMap.size();
+  auto size = mMap.size() + mValueMap.size();
+  //RFC 6265
+  for (auto &&[key, val] : mValueMap) {
+    ssOut << key;
+    if (val.size() != 0) {
+      ssOut << "=" << val;
+    }
+    if (--size != 0) {
+      ssOut << ";";
+    }
+  }
   for (auto &&[key, val] : mMap) {
     ssOut << key;
     if (val.size() != 0) {
