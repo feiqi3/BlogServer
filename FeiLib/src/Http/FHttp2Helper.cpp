@@ -16,9 +16,53 @@
 #include "Http/FHttpRequestBuilder.h"
 
 #include "FConfigReader.h"
-
 #define MODULE_NAME "[Http2]"
 
+const char* nghttp2FrameTypeStr(nghttp2_frame_type type) {
+    switch (type) {
+
+    case NGHTTP2_DATA:
+        return "DATA";
+        break;
+    case NGHTTP2_HEADERS:
+        return "HEADER";
+        break;
+    case NGHTTP2_PRIORITY:
+        return "PRIORITY";
+        break;
+    case NGHTTP2_RST_STREAM:
+        return "RST_STREAM";
+        break;
+    case NGHTTP2_SETTINGS:
+        return "SETTINGS";
+        break;
+    case NGHTTP2_PUSH_PROMISE:
+        return "PUSH_PROMISE";
+        break;
+    case NGHTTP2_PING:
+        return "PING";
+        break;
+    case NGHTTP2_GOAWAY:
+        return "GOAWAY";
+        break;
+    case NGHTTP2_WINDOW_UPDATE:
+        return "WINDOW_UPDATE";
+        break;
+    case NGHTTP2_CONTINUATION:
+        return "CONTINUATION";
+        break;
+    case NGHTTP2_ALTSVC:
+        return "ALTSVC";
+        break;
+    case NGHTTP2_ORIGIN:
+        return "ORIGIN";
+        break;
+    case NGHTTP2_PRIORITY_UPDATE:
+        return "PRIORITY_UPDATE";
+        break;
+    }
+    return "UNKNOWN";
+}
 
 
 /*
@@ -285,13 +329,13 @@ namespace Fei{
 
     struct Http2SessionData {
         Http2SessionData(uint32_t bufferSize):mOutDataBuffer(bufferSize) {
-            lastStreamId = 2 * s_maxConcurrentStream - 1; //For client initiated streams, they are odd numbers
+            settings.enablePush = s_enablePush;
+            settings.maxConcurrentStreams = s_maxConcurrentStream;
         }
         Fei::FBuffer mOutDataBuffer;
         bool mFirstFrame = true;
         bool mHasGoawaySent = false;
         uint32_t openedStreams = 0;
-        uint32_t lastStreamId = 0;
         std::map<uint32_t, Http2StreamData> mStreamDataMap;
         Http2SessionSettings settings;
 #ifdef HTTP2_DEBUG
@@ -322,11 +366,10 @@ namespace Fei{
                 return 0;
             }
             auto stream_id = frame->hd.stream_id;
-            if(stream_id > session_data->lastStreamId){
+            if(session_data->openedStreams > session_data->settings.maxConcurrentStreams){
                 if(!session_data->mHasGoawaySent){
                     uint32_t last = nghttp2_session_get_last_proc_stream_id(session);
-                    session_data->lastStreamId = std::min(last, session_data->lastStreamId);
-                    nghttp2_submit_goaway(session, 0,session_data->lastStreamId , NGHTTP2_NO_ERROR, NULL, 0);
+                    nghttp2_submit_goaway(session, 0,last , NGHTTP2_NO_ERROR, NULL, 0);
                     session_data->mHasGoawaySent = true;
                 }
                 nghttp2_submit_rst_stream(session, 0, stream_id, NGHTTP2_REFUSED_STREAM);
@@ -410,23 +453,23 @@ namespace Fei{
                 auto settingId = settingsFrame.iv[i].settings_id;
                 auto settingVal = settingsFrame.iv[i].value;
                 switch (settingId) {
-                case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
-                    settings->headerTableSize = settingVal;
-                    break;
                 case NGHTTP2_SETTINGS_ENABLE_PUSH:
-                    settings->enablePush = settingVal;
+                    settings->enablePush = settingVal != 0 ? true : false;
                     break;
                 case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
-                    settings->maxConcurrentStreams = settingVal;
+                    settings->maxConcurrentStreams =std::min(settingVal,s_maxConcurrentStream);
                     break;
-                case NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE:
-                    settings->initialWindowSize = settingVal;
-                    break;
-                case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
-                    settings->maxFrameSize = settingVal;
-                    break;
-                case NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE:
-                    break;
+                //case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
+                //    settings->headerTableSize = settingVal;
+                //    break;
+                //case NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE:
+                //    settings->initialWindowSize = settingVal;
+                //    break;
+                //case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
+                //    settings->maxFrameSize = settingVal;
+                //    break;
+                //case NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE:
+                //    break;
                 default:
                     break;
                 }
@@ -435,46 +478,69 @@ namespace Fei{
         }
 
 
-        //When header/data frames are fully received
+        static int submit_settings(nghttp2_session* session, Http2SessionSettings& settings) {
+            std::vector<nghttp2_settings_entry> iv;
+
+            iv.push_back({ NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, settings.maxConcurrentStreams });
+            iv.push_back({ NGHTTP2_SETTINGS_ENABLE_PUSH, settings.enablePush });
+
+            return nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, iv.data(), (size_t)iv.size());
+        }
+
         static int on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data) {
             Http2SessionData* sessionData = (Http2SessionData*)user_data;
             Http2StreamData* streamUD = getStreamUserData(session, frame->hd.stream_id);
-
-            if(frame->hd.type == NGHTTP2_SETTINGS){
-                on_settings(sessionData,frame->settings);
-                return 0;
-            }
-
-            if(!streamUD){
-                return 0;
-            }
-
-
-
-            auto streamId = frame->rst_stream.hd.stream_id;
-            auto& parser = streamUD->parser;
             auto frameType = frame->hd.type;
+            auto streamId = frame->rst_stream.hd.stream_id;
 
-#ifdef HTTP2_DEBUG
-            char addrChar[IPV6_ADDR_CH_LEN] = {};
-            sessionData->addr.toHumanFriendyType(addrChar, IPV6_ADDR_CH_LEN, 0);
-#endif
+            if(frame->hd.type == NGHTTP2_SETTINGS && !frame->settings.hd.flags & NGHTTP2_FLAG_ACK){
+                on_settings(sessionData,frame->settings);
+                submit_settings(session, sessionData->settings);
 
-            if (frameType == NGHTTP2_HEADERS) {
+            }
+            else if(!streamUD){
+                
+            }
+            else if (frameType == NGHTTP2_HEADERS) {
+                auto& parser = streamUD->parser;
                 //End of Header Frame
                 parser.mHeaderFinish = true;
                 parser.onHeaderFinish();
-
-            }
-            
-            if (frameType == NGHTTP2_DATA) {
+            }else if (frameType == NGHTTP2_DATA) {
+                auto& parser = streamUD->parser;
                 if (parser.mData.size() != parser.mDataLength) {
-                    Logger::instance()->log(lvl::warn, MODULE_NAME"Stream {}: Data recv size mismatch with content_length", addrChar);
+                    Logger::instance()->log(lvl::warn, MODULE_NAME"Stream {}: Data recv size mismatch with content_length",streamId);
                 }
             }
 
+#ifdef HTTP2_DEBUG
+            char addrChar[IPV6_ADDR_CH_LEN] = {};
+            uint16_t port = 0;
+            sessionData->addr.toHumanFriendyType(addrChar, IPV6_ADDR_CH_LEN, &port);
+            auto frameName = nghttp2FrameTypeStr((nghttp2_frame_type)frame->hd.type);
+            std::string frameInfo;
+            std::string frameTypeInfo = fmt::format("{}[{}]", frameName,streamId);
+            if(frameType == NGHTTP2_HEADERS){
+                if(streamUD){
+                    frameInfo =std::string(Http::methodToStr(streamUD->parser.mMethod)) + " : " + streamUD->parser.mPath;
+                }else{
+                    frameInfo = "<refused due to max stream>";
+                }
+            }
+            else if(frameType == NGHTTP2_DATA){
+                if(frame->hd.flags & NGHTTP2_FLAG_END_STREAM){
+                    frameInfo = fmt::format("END_STREAM",streamId);
+                }
+                else{
+                    frameInfo = fmt::format("Partial",streamId);
+                }
+            }
+            Logger::instance()->log(lvl::err, MODULE_NAME"{}:{} | {} -> {}", addrChar,port,frameTypeInfo,frameInfo);
+#endif
+
             return 0;
         }
+
 
         static nghttp2_ssize submit_data_read_callback(
             nghttp2_session* session, int32_t stream_id, uint8_t* buf, size_t length,
@@ -681,7 +747,6 @@ namespace Fei::Http {
         auto sessionData = &mDp->sessionData;
         if(sessionData->mHasGoawaySent)return;
         uint32_t last = nghttp2_session_get_last_proc_stream_id(session);
-        sessionData->lastStreamId = std::min(last, sessionData->lastStreamId);
         nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, last, NGHTTP2_NO_ERROR, NULL, 0);
         sessionData->mHasGoawaySent = true;
     }
@@ -695,6 +760,11 @@ namespace Fei::Http {
         
         if(sessionData.mFirstFrame){
             //do some thing?
+            //https://www.rfc-editor.org/rfc/rfc7540#section-3.5
+            //TLDR;  The server connection preface consists of a potentially empty
+            //SETTINGS frame (Section 6.5) that MUST be the first frame the server
+            //sends in the HTTP/2 connection.
+            Http2Callbacks::submit_settings(session, sessionData.settings);
             sessionData.mFirstFrame = false;
         }
 
