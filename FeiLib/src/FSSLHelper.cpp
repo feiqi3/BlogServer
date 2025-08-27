@@ -15,11 +15,12 @@
 #include "FTCPConnection.h"
 
 #include "openssl/opensslv.h"
-
+#include <openssl/err.h>
 #include "openssl/rand.h"
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 
+#include <stdio.h>
 
 #include "Http/FHttp2Helper.h"
 #include "FConfigReader.h"
@@ -41,6 +42,60 @@ static int alpn_select_proto_cb(SSL* ssl, const unsigned char** out,
 
     return SSL_TLSEXT_ERR_OK;
 }
+
+/* 打印前 n 字节的 hex（方便对比 wireshark） */
+static void print_hex_prefix(const unsigned char *buf, size_t len, size_t n) {
+    size_t m = (len < n) ? len : n;
+    for (size_t i = 0; i < m; ++i) {
+        printf("%02x ", buf[i]);
+    }
+    if (m == 0) printf("(empty)");
+}
+
+/* msg callback：会在每次 OpenSSL 生成/接收 protocol message 时被调用
+   write_p: 1 表示这是发送方向产生的数据，0 表示接收方向
+   version: 协议版本（如 TLS1.2 -> 0x0303）
+   content_type: record content type（20=CCS,22=Handshake,23=AppData）
+   buf/len: 指向消息体（callback 提供的 buf），len 是长度
+   ssl: SSL* 对象
+   arg: 通过 SSL_CTX_set_msg_callback_arg 传入的用户指针（可为 NULL）
+*/
+static void my_msg_callback(int write_p, int version, int content_type,
+                            const void *buf, size_t len, SSL *ssl, void *arg)
+{
+    const char *dir = write_p ? "send" : "recv";
+    unsigned short ver = (unsigned short)version;
+    printf("[msg_cb] %s ver=0x%04x content_type=%d len=%zu ssl=%p\n",
+           dir, ver, content_type, len, (void*)ssl);
+
+    /* 打印前 16 字节，便于与 wireshark 二进制对比 */
+    print_hex_prefix((const unsigned char*)buf, len, 16);
+    printf("\n");
+
+    /* 如果是 handshake message（content_type == 22），可以打印 handshake type（buf[0]） */
+    if (content_type == 22 && len > 0) {
+        unsigned char hs_type = ((const unsigned char*)buf)[0];
+        printf("  -> handshake msg type = %u\n", (unsigned)hs_type);
+    }
+}
+
+/* info callback：观察高层 SSL 状态变化（例如握手开始/完成） */
+static void my_info_callback(const SSL *s, int where, int ret)
+{
+    const char *state = SSL_state_string_long(s);
+    if (where & SSL_CB_HANDSHAKE_START) {
+        printf("[info_cb] handshake start: state=%s ssl=%p\n", state, (void*)s);
+    } else if (where & SSL_CB_HANDSHAKE_DONE) {
+        printf("[info_cb] handshake done: state=%s ssl=%p\n", state, (void*)s);
+    } else if (where & SSL_CB_LOOP) {
+        printf("[info_cb] loop: state=%s\n", state);
+    } else {
+        /* 其他事件也可打印 */
+        printf("[info_cb] where=0x%x state=%s ret=%d\n", where, state, ret);
+    }
+}
+
+
 
 class SSLNotPreparedException : public Fei::FException {
 public:
@@ -70,14 +125,22 @@ FSSLEnv::FSSLEnv(const std::string &certificateFile,
   SSL_CTX_set_min_proto_version((SSL_CTX*)SSLContext, TLS1_2_VERSION);
   // optional: SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
   SSL_CTX_set_options((SSL_CTX*)SSLContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
-  
-	const auto cfg = FConfigReader::instance();
-			auto httpPreference = cfg->getCfg("ALPNPreference");
-			if(httpPreference.has_value()){
-        if(httpPreference == "http2"){
-					this->mPreferH2 = true;
-				}
-      }
+  #ifdef OPEN_SSL_DEBUG
+  /* 注册 msg callback */
+  SSL_CTX_set_msg_callback((SSL_CTX*)SSLContext, my_msg_callback);
+    /* 如果你想通过 arg 传入上下文，可以调用 SSL_CTX_set_msg_callback_arg(ctx, ptr) */
+  SSL_CTX_set_msg_callback_arg((SSL_CTX*)SSLContext, NULL);
+
+    /* 注册 info callback（观察握手生命周期） */
+  SSL_CTX_set_info_callback((SSL_CTX*)SSLContext, my_info_callback);
+	#endif
+  const auto cfg = FConfigReader::instance();
+	auto httpPreference = cfg->getCfg("ALPNPreference");
+	if(httpPreference.has_value()){
+    if(httpPreference == "http2"){
+			this->mPreferH2 = true;
+		}
+  }
 
   SSL_CTX_set_alpn_select_cb((SSL_CTX*)SSLContext, alpn_select_proto_cb, NULL);
   loadCertFiles(certificateFile, privateKeyFile);
@@ -133,6 +196,7 @@ public:
   BIO *wbio = 0;
   bool mIsH2 = false;
   bool mProtocalHasSelected = false;
+  bool mHasPending = false;
 };
 
 FSSLHelper::~FSSLHelper() {
@@ -157,6 +221,9 @@ FSSLHelper::FSSLHelper() : dp(new _FSSLHelperPrivate) {
 }
 
 bool FSSLHelper::hasShakeHandFin() const {
+  if(dp->mHasPending){
+      return false;
+  }
   SSL *ssl = dp->sslHandler;
   return SSL_is_init_finished(ssl);
 }
@@ -181,12 +248,22 @@ bool FSSLHelper::shakeHand(FTcpConnection *ptr, FBufferReader &reader) {
   }
 
   r = SSL_do_handshake(ssl);
-  if (r < 0) {
-    auto pending = BIO_ctrl_pending(out_bio);
     std::string dataToSend;
-    dataToSend.resize(pending);
-    pending = BIO_read(out_bio, dataToSend.data(), dataToSend.size());
+  while(1){
+    auto pending = BIO_ctrl_pending(out_bio);
+    if(pending <= 0)break;
+    auto oldSize = dataToSend.size();
+    dataToSend.resize(oldSize + pending);
+    pending = BIO_read(out_bio, (void *)(dataToSend.data() + oldSize), pending);
+  }
+  if(dataToSend.size() > 0)
+  {
+    dp->mHasPending = true;
     ptr->send(std::move(dataToSend));
+    dp->mHasPending = false;
+  }
+  if (r < 0) {
+
   } else {
     SSL_read(ssl, 0, 0);
     if (SSL_pending(ssl) > 0) {
