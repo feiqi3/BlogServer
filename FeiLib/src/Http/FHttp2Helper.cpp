@@ -773,6 +773,10 @@ namespace Fei::Http {
             auto dataPtr = reader.peekAll(peakNum);
             if(peakNum == 0)break;
             auto curRecvLen = nghttp2_session_mem_recv2(mDp->session,(uint8_t*)dataPtr, peakNum);
+            if (curRecvLen < 0) {
+                Logger::instance()->log(lvl::err, MODULE_NAME "Http2 Recv Process Error: {}", nghttp2_strerror(curRecvLen));
+                break;
+            }
             recvLen += curRecvLen;
             reader.expireSize(curRecvLen);
         }

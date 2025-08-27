@@ -11,10 +11,6 @@
 #include <string>
 #include <vector>
 
-#define HTTP2_DEBUG
-
-
-
 namespace Fei::Http {
     class FHttpRequestBuilder;
     class FHttpResponse;
