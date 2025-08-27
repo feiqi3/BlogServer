@@ -493,10 +493,8 @@ namespace Fei{
             auto frameType = frame->hd.type;
             auto streamId = frame->rst_stream.hd.stream_id;
 
-            if(frame->hd.type == NGHTTP2_SETTINGS && !frame->settings.hd.flags & NGHTTP2_FLAG_ACK){
+            if(frame->hd.type == NGHTTP2_SETTINGS  && !(frame->settings.hd.flags & NGHTTP2_FLAG_ACK)){
                 on_settings(sessionData,frame->settings);
-                submit_settings(session, sessionData->settings);
-
             }
             else if(!streamUD){
                 
@@ -534,6 +532,8 @@ namespace Fei{
                 else{
                     frameInfo = fmt::format("Partial",streamId);
                 }
+            }else{
+                frameInfo = "Nothing";
             }
             Logger::instance()->log(lvl::err, MODULE_NAME"{}:{} | {} -> {}", addrChar,port,frameTypeInfo,frameInfo);
 #endif
