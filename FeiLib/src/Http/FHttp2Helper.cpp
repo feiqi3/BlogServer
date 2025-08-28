@@ -360,7 +360,7 @@ namespace Fei{
                 return 0;
             }
             auto stream_id = frame->hd.stream_id;
-            if(session_data->openedStreams > session_data->settings.maxConcurrentStreams){
+            if(session_data->openedStreams > s_maxConcurrentStream){
                 if(!session_data->mHasGoawaySent){
                     uint32_t last = nghttp2_session_get_last_proc_stream_id(session);
                     nghttp2_submit_goaway(session, 0,last , NGHTTP2_NO_ERROR, NULL, 0);
@@ -447,6 +447,7 @@ namespace Fei{
 
         }
 
+        //Sender's abillity
         static int on_settings(Http2SessionData* sessionData,const nghttp2_settings& settingsFrame) {
             auto settings = &sessionData->settings;
             for (size_t i = 0; i < settingsFrame.niv; ++i) {
@@ -457,7 +458,7 @@ namespace Fei{
                     settings->enablePush = settingVal != 0 ? true : false;
                     break;
                 case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
-                    settings->maxConcurrentStreams =std::min(settingVal,s_maxConcurrentStream);
+                    settings->maxConcurrentStreams = settingVal;
                     break;
                     //case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
                     //    settings->headerTableSize = settingVal;
@@ -481,7 +482,8 @@ namespace Fei{
         static int submit_settings(nghttp2_session* session, Http2SessionSettings& settings) {
             std::vector<nghttp2_settings_entry> iv;
 
-            iv.push_back({ NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, settings.maxConcurrentStreams });
+            iv.push_back({ NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, s_maxConcurrentStream });
+            //No real use.
             iv.push_back({ NGHTTP2_SETTINGS_ENABLE_PUSH, settings.enablePush });
 
             return nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, iv.data(), (size_t)iv.size());
@@ -819,7 +821,7 @@ namespace Fei::Http {
     void FHttp2Context::traversalFinishedStreams(std::function<bool(const FHttpRequest& ,uint32_t)> func)
     {
         for (auto& [streamID, streamData] : mDp->sessionData.mStreamDataMap) {
-            if (streamData.parser.isFinish() && !streamData.processed) {
+            if (!streamData.isServerOpen && streamData.parser.isFinish() && !streamData.processed) {
                 FHttpRequest request(streamData.parser);
                 bool shouldCon = func(request, streamID);
                 streamData.processed = true;
