@@ -335,6 +335,7 @@ namespace Fei{
         bool mFirstFrame = true;
         bool mHasGoawaySent = false;
         uint32_t openedStreams = 0;
+        uint32_t serverOpenedStreams = 0;
         std::map<uint32_t, Http2StreamData> mStreamDataMap;
         Http2SessionSettings settings;
 #ifdef HTTP2_DEBUG
@@ -419,8 +420,14 @@ namespace Fei{
             if (stream_data) {
                 stream_data->returnResponse= 0;
                 stream_data->pushPromise = 0;
+                if (stream_data->isServerOpen)
+                {
+                    session_data->serverOpenedStreams--;
+                }
+                else {
+                    session_data->openedStreams--;
+                }
                 session_data->mStreamDataMap.erase(stream_id);
-                session_data->openedStreams--;
             }
             return 0;
         }
@@ -696,12 +703,25 @@ namespace Fei::Http {
         std::unique_ptr<FHttp2PushPromise> pushPromise = std::make_unique<FHttp2PushPromise>();
 
         auto& pushPromiseHeader = pushPromise->pushPromiseHeader;
-        generatePushPromiseHeaderFromRequest(pushRequest, hostVal, pushPromiseHeader.mOutDataString, pushPromiseHeader.mNghttp2NVA);
+        generatePushPromiseHeaderFromRequest(pushRequestNew, hostVal, pushPromiseHeader.mOutDataString, pushPromiseHeader.mNghttp2NVA);
         auto newStreamId = nghttp2_submit_push_promise(session, NGHTTP2_FLAG_END_HEADERS, parStreamData->streamId, pushPromiseHeader.mNghttp2NVA.data(), pushPromiseHeader.mNghttp2NVA.size(), 0);
         if (newStreamId > 0) {
             streamUD = (Http2StreamData*)nghttp2_session_get_stream_user_data(session, newStreamId);
+            if (!streamUD) {
+                auto& sessionData = mDp->sessionData;
+                auto itor = sessionData.mStreamDataMap.find(newStreamId);
+                if (itor == sessionData.mStreamDataMap.end()) {
+                    auto newIt = sessionData. mStreamDataMap.insert({ newStreamId, Http2StreamData{} });
+                    streamUD = &newIt.first->second;
+                    sessionData.serverOpenedStreams++;
+                }
+                else {
+                    streamUD = &itor->second;
+                }
+            }
             streamUD->pushPromise = std::move(pushPromise);
             streamUD->isServerOpen = true;
+            streamUD->parentStreamId = streamId;
             http2SubmitResponseStream(newStreamId, pushResponse, true);
         }
     }
