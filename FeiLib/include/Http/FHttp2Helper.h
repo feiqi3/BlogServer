@@ -4,6 +4,7 @@
 #include "FDef.h"
 #include "FException.h"
 #include "FHttpDef.h"
+#include "FCallBackDef.h"
 #include "FHttpParserHelper.h"
 #include "FHttpRequest.h"
 #include "FBufferReader.h"
@@ -93,12 +94,11 @@ namespace Fei::Http {
     public:
         FHttp2Context(FSocketAddr addr);
         ~FHttp2Context();
-        FBufferReader getSendBufferReader();
         bool enablePush()const;
         void http2SubmitResponseStream(uint32_t streamId,FHttpResponse& response, bool closeStream);
         void http2SubmitPushPromise(uint32_t streamId, FHttpRequest& pushRequest, FHttpResponse& pushResponse,bool autoHostSet = true);
         void http2SubmitGoaway();
-        uint32_t http2SendProcess();
+        void http2SendProcess(const FTcpConnPtr& ptr);
         uint32_t http2RecvProcess(FBufferReader& reader);
         bool isConnEnd()const;
         uint32_t getOpenedStreams()const;
