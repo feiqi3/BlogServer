@@ -14,7 +14,7 @@
 #include "FBuffer.h"
 #include "Http/FHttpResponse.h"
 #include "Http/FHttpRequestBuilder.h"
-
+#include "FTCPConnection.h"
 #include "FConfigReader.h"
 #define MODULE_NAME "[Http2]"
 
@@ -231,7 +231,7 @@ namespace Fei{
             auto toHeadersHttp2 = [&headerStringDataOut, &nva](const std::pair<std::string, std::string>& pair) {
                 makeNVPairToLower(pair.first.c_str(), pair.first.size(), pair.second.c_str(), pair.second.size(), headerStringDataOut, nva);
                 return true;
-            };
+                };
             requset.traverseHeaders(toHeadersHttp2);
             collectAndReasignNva(headerStringDataOut.data(), nva);
         }
@@ -265,7 +265,7 @@ namespace Fei{
             auto storeInToData = [this](const std::pair<std::string, std::string>& pair) {
                 makeNVPairToLower(pair.first.c_str(), pair.first.size(), pair.second.c_str(), pair.second.size(), mOutDataString, mNghttp2NVA);
                 return true;
-            };
+                };
             response.traversalHeader(storeInToData);
             setContentLength(response);
         }
@@ -295,9 +295,9 @@ namespace Fei{
         std::vector<nghttp2_nv> mNghttp2NVA;
 
         std::string mBody;
-        public:
-            nghttp2_data_provider2 dataProvider;
-        };
+    public:
+        nghttp2_data_provider2 dataProvider;
+    };
 
     class FHttp2PushPromise {
     public:
@@ -328,11 +328,10 @@ namespace Fei{
     };
 
     struct Http2SessionData {
-        Http2SessionData(uint32_t bufferSize):mOutDataBuffer(bufferSize) {
+        Http2SessionData(){
             settings.enablePush = s_enablePush;
             settings.maxConcurrentStreams = s_maxConcurrentStream;
         }
-        Fei::FBuffer mOutDataBuffer;
         bool mFirstFrame = true;
         bool mHasGoawaySent = false;
         uint32_t openedStreams = 0;
@@ -343,17 +342,11 @@ namespace Fei{
 #endif
     };
 
-	class Http2Callbacks {
-	public:
+    class Http2Callbacks {
+    public:
         static Http2StreamData* getStreamUserData(nghttp2_session* s, int32_t streamId) {
             Http2StreamData* ret = (Http2StreamData*)nghttp2_session_get_stream_user_data(s, streamId);
             return ret;
-        }
-
-        static nghttp2_ssize send_callback(nghttp2_session* s, const uint8_t* data, size_t len, int f, void* ud) {
-            Http2SessionData* sd = (Http2SessionData*)ud;
-            sd->mOutDataBuffer.Append((const char*)data, len);
-            return (nghttp2_ssize)len;
         }
 
         static int on_begin_headers_callback(nghttp2_session* session,
@@ -406,11 +399,11 @@ namespace Fei{
         static int on_data_chunk_recv_callback(nghttp2_session* session, uint8_t flags, int32_t stream_id, const uint8_t* data, size_t len, void* user_data) {
             Http2StreamData* streamUD = getStreamUserData(session, stream_id);
             Http2SessionData* sessionData = (Http2SessionData*)user_data;
-            
+
             if(!streamUD){
                 return 0;
             }
-            
+
             auto& parser = streamUD->parser;
             parser.appendData((char*)data, len);
             if (flags & NGHTTP2_FLAG_END_STREAM) {
@@ -442,7 +435,7 @@ namespace Fei{
 
             auto& parser = streamUD->parser;
             parser.addHeader(std::string((char*)name, namelen), std::string((char*)value, valuelen));
-            
+
             return 0;
 
         }
@@ -459,17 +452,17 @@ namespace Fei{
                 case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
                     settings->maxConcurrentStreams =std::min(settingVal,s_maxConcurrentStream);
                     break;
-                //case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
-                //    settings->headerTableSize = settingVal;
-                //    break;
-                //case NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE:
-                //    settings->initialWindowSize = settingVal;
-                //    break;
-                //case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
-                //    settings->maxFrameSize = settingVal;
-                //    break;
-                //case NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE:
-                //    break;
+                    //case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
+                    //    settings->headerTableSize = settingVal;
+                    //    break;
+                    //case NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE:
+                    //    settings->initialWindowSize = settingVal;
+                    //    break;
+                    //case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
+                    //    settings->maxFrameSize = settingVal;
+                    //    break;
+                    //case NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE:
+                    //    break;
                 default:
                     break;
                 }
@@ -497,7 +490,7 @@ namespace Fei{
                 on_settings(sessionData,frame->settings);
             }
             else if(!streamUD){
-                
+
             }
             else if (frameType == NGHTTP2_HEADERS) {
                 auto& parser = streamUD->parser;
@@ -544,7 +537,7 @@ namespace Fei{
 
         static nghttp2_ssize submit_data_read_callback(
             nghttp2_session* session, int32_t stream_id, uint8_t* buf, size_t length,
-            uint32_t* data_flags, nghttp2_data_source* source, void* user_data) 
+            uint32_t* data_flags, nghttp2_data_source* source, void* user_data)
         {
             auto streamUD = getStreamUserData(session, stream_id);
             auto& response = *(streamUD->returnResponse);
@@ -563,15 +556,14 @@ namespace Fei{
             response.peakDataSize(toSendDataSize);
             return toSendDataSize;
         }
-	};
+    };
 }
 
 namespace Fei::Http {
     class FHttp2Private {
     public:
-        FHttp2Private(int sendBufferSize, FSocketAddr addr) :sessionData(sendBufferSize) {
+        FHttp2Private(FSocketAddr addr) :sessionData() {
             nghttp2_session_callbacks_new(&cb);
-            nghttp2_session_callbacks_set_send_callback2(cb, Http2Callbacks::send_callback);
             nghttp2_session_callbacks_set_on_frame_recv_callback(cb, Http2Callbacks::on_frame_recv_callback);
             nghttp2_session_callbacks_set_on_header_callback(cb, Http2Callbacks::on_header_callback);
             nghttp2_session_callbacks_set_on_stream_close_callback(cb, Http2Callbacks::on_stream_close_callback);
@@ -611,7 +603,7 @@ namespace Fei::Http {
                 s_enablePush = true;
             }
         }
-        
+
         auto maxStreamNum = config->getCfg("H2MaxStreamNum");
         if(maxStreamNum.has_value()){
             try{
@@ -639,7 +631,7 @@ namespace Fei::Http {
         return s_emptyPushVec;
     }
 
-    FHttp2Context::FHttp2Context(FSocketAddr addr):mDp(new FHttp2Private(1024,addr)){
+    FHttp2Context::FHttp2Context(FSocketAddr addr):mDp(new FHttp2Private(addr)){
     }
 
     FHttp2Context::~FHttp2Context()
@@ -677,7 +669,7 @@ namespace Fei::Http {
             return;
         }
         Http2StreamData* streamUD = 0;
-        
+
         auto session = mDp->session;
         //1. find a parent stream
         const Http2StreamData* parStreamData = 0;
@@ -714,23 +706,24 @@ namespace Fei::Http {
         }
     }
 
-    uint32_t FHttp2Context::http2SendProcess()
+    void FHttp2Context::http2SendProcess(const FTcpConnPtr& ptr)
     {
         uint32_t needToSendSize = 0;
         auto session = mDp->session;
         while(nghttp2_session_want_write(session)){
 
             const uint8_t* dataPtr = 0;
-            auto curNeedToSend = nghttp2_session_mem_send2(mDp->session,& dataPtr);
-            needToSendSize += curNeedToSend;
-            this->mDp->sessionData.mOutDataBuffer.Append((char*)dataPtr, curNeedToSend);
+            auto curNeedToSend = nghttp2_session_mem_send2(mDp->session, &dataPtr);
+            if (curNeedToSend > 0)
+            {
+                ptr->send((const char*)dataPtr, curNeedToSend);
+            }
+            else {
+                if (curNeedToSend < 0) {
+                    Logger::instance()->log(lvl::err, MODULE_NAME "Http2 Recv Process Error: {}", nghttp2_strerror(curNeedToSend));
+                }
+            }
         }
-        return needToSendSize;
-    }
-
-    FBufferReader FHttp2Context::getSendBufferReader()
-    {
-        return FBufferReader(mDp->sessionData.mOutDataBuffer);
     }
 
     uint32_t FHttp2Context::getOpenedStreams() const
@@ -755,9 +748,9 @@ namespace Fei::Http {
     {
         auto session = mDp->session;
         uint32_t recvLen = 0;
-        
+
         auto& sessionData = mDp->sessionData;
-        
+
         if(sessionData.mFirstFrame){
             //do some thing?
             //https://www.rfc-editor.org/rfc/rfc7540#section-3.5
@@ -773,6 +766,10 @@ namespace Fei::Http {
             auto dataPtr = reader.peekAll(peakNum);
             if(peakNum == 0)break;
             auto curRecvLen = nghttp2_session_mem_recv2(mDp->session,(uint8_t*)dataPtr, peakNum);
+            if (curRecvLen < 0) {
+                Logger::instance()->log(lvl::err, MODULE_NAME "Http2 Recv Process Error: {}", nghttp2_strerror(curRecvLen));
+                break;
+            }
             recvLen += curRecvLen;
             reader.expireSize(curRecvLen);
         }

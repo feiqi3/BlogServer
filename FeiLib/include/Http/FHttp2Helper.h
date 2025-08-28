@@ -4,6 +4,7 @@
 #include "FDef.h"
 #include "FException.h"
 #include "FHttpDef.h"
+#include "FCallBackDef.h"
 #include "FHttpParserHelper.h"
 #include "FHttpRequest.h"
 #include "FBufferReader.h"
@@ -34,11 +35,11 @@ namespace Fei::Http {
         void addHeader(const std::string& name, const std::string& val) {
             mHeaders.insert({ name,val });
         }
-        
+
         bool hasPath() const {
             return mPath.empty();
         }
-        
+
         bool hasMethod() const{
             return mMethod != Method::Invalid;
         }
@@ -52,7 +53,7 @@ namespace Fei::Http {
                 mData.reserve(mDataLength);
             }
             mData.append(data, len);
-            
+
             if (mData.size() >= mDataLength) {
                 mData.resize(mDataLength);
                 mDataFinish = true;
@@ -75,13 +76,13 @@ namespace Fei::Http {
 
         virtual std::string reason()const { return"Http2 Error"; }
     };
-	class FHttp2Context {
-	public:
+    class FHttp2Context {
+    public:
         static int select_alpn(const unsigned char** out, unsigned char* outlen,
             const unsigned char* in, unsigned int inlen);
         /*
-        
-        H2MaxStreamNum: default 5    
+
+        H2MaxStreamNum: default 5
         : max stream to handle concurrently
         H2EnablePush: default 1
         : enable server push or not
@@ -89,16 +90,15 @@ namespace Fei::Http {
         static void loadConfig();
         static void loadPushPromiseData(const std::string& path);
         static const std::vector<Fei::Http::FHttpRequest>& getPushPromise(const std::string& getPushPromisePath);
-	
+
     public:
         FHttp2Context(FSocketAddr addr);
         ~FHttp2Context();
-        FBufferReader getSendBufferReader();
         bool enablePush()const;
         void http2SubmitResponseStream(uint32_t streamId,FHttpResponse& response, bool closeStream);
         void http2SubmitPushPromise(uint32_t streamId, FHttpRequest& pushRequest, FHttpResponse& pushResponse,bool autoHostSet = true);
         void http2SubmitGoaway();
-        uint32_t http2SendProcess();
+        void http2SendProcess(const FTcpConnPtr& ptr);
         uint32_t http2RecvProcess(FBufferReader& reader);
         bool isConnEnd()const;
         uint32_t getOpenedStreams()const;

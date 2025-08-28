@@ -290,14 +290,7 @@ namespace Fei::Http {
 				//send goaway, no more stream in
 				if(!isTimeOut){
 					h2->http2SubmitGoaway();
-					auto sendNum = h2->http2SendProcess();
-					if (sendNum > 0) {
-						auto reader = h2->getSendBufferReader();
-						int peakSize= 0;
-						auto dataPtr = reader.peekAll(peakSize);
-						ptr->send((const char*)dataPtr,peakSize);
-						reader.expireSize(peakSize);	
-					}
+					h2->http2SendProcess(ptr);
 				}
 			}
 		}
@@ -387,7 +380,7 @@ namespace Fei::Http {
 		auto http_data = getDataFromTcpConn(ptr);
 		auto& http2Ctx = http_data->http2Ctx;
 		http2Ctx->http2RecvProcess(reader);
-		auto sendNum1 = http2Ctx->http2SendProcess();
+		http2Ctx->http2SendProcess(ptr);
 
 		auto perStream = [&ptr,this,&http_data](const FHttpRequest& request,uint32_t streamID) {
 			auto response = httpHandle(ptr, request);
@@ -425,14 +418,7 @@ namespace Fei::Http {
 			return true;
 		};
 		http2Ctx->traversalFinishedStreams(perStream);
-		auto sendNum2 = http2Ctx->http2SendProcess();
-		auto sendNum = sendNum1 + sendNum2;
-		if (sendNum == 0)return; //Window control?
-		auto sreader = http2Ctx->getSendBufferReader();
-		int dataSize = 0;
-		auto dataPtr = sreader.peekAll(dataSize);
-		ptr->send((const char*)dataPtr,dataSize);
-		sreader.expireSize(dataSize);
+		http2Ctx->http2SendProcess(ptr);
 	}
 
 	FHttpResponse FHttpServer::httpHandle(const FTcpConnPtr& ptr,const FHttpRequest& request)
