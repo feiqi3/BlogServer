@@ -19,9 +19,9 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
     auto pageNum = var.get("page");
     int page = 0;
     if(!pageNum.empty() && Digital::isNumber(pageNum)){
-        page = std::min(std::stoi(pageNum)  ,0);
+        page = std::max(std::stoi(pageNum),0);
     }
-    auto postVec = DAO::PostQuery::QueryPostDataProfile(page );
+    auto postVec = DAO::PostQuery::QueryPostDataProfile(page -1  );
     struct BlogProfile{
         uint64_t id;
         std::string title;
