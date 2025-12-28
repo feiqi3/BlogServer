@@ -103,11 +103,11 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
     auto& cateName = (cate.name);
 
     auto pageNum = var.get("page");
-    int page = 0;
+    int page = 1;
     if(!pageNum.empty() && Digital::isNumber(pageNum)){
-        page = std::min(std::stoi(pageNum)  ,0);
+        page = std::max(std::stoi(pageNum)  ,0);
     }
-    auto postVec = DAO::PostQuery::QueryPostDataProfileByCategoryId(cate.id,page );
+    auto postVec = DAO::PostQuery::QueryPostDataProfileByCategoryId(cate.id,page - 1);
     struct BlogProfile{
         uint64_t id;
         std::string title;

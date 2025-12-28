@@ -17,7 +17,7 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
         catesMap.insert({std::get<0>(i),std::move(std::get<1>(i))});
     }
     auto pageNum = var.get("page");
-    int page = 0;
+    int page = 1;
     if(!pageNum.empty() && Digital::isNumber(pageNum)){
         page = std::max(std::stoi(pageNum),0);
     }
