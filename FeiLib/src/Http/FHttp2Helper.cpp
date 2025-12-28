@@ -915,7 +915,11 @@ static inline void split_comma_separated(const std::string &line, std::vector<st
 PushRequestMap parse_push_map_file(const std::string &filename) {
     PushMap map;
     std::ifstream ifs(filename);
-    if (!ifs) throw std::runtime_error("cannot open file: " + filename);
+
+    if (!ifs) {
+        Fei::Logger::instance()->log(Fei::lvl::warn, "Http2 Push promise map file not found.");
+        return {};
+    }
 
     std::string line;
     std::string currentRequest;
