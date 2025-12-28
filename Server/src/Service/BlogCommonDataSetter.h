@@ -5,8 +5,8 @@
 namespace Blog{
         //currentPage: 0 to n
         inline void setPageData(TemplateRenderData& data,int currentPage,int maxPage,int radius){
-            int lastPage = std::max(0,currentPage - 1);
-            int nextPage = std::min(maxPage ,currentPage + 1);
+            int lastPage = std::max(1,currentPage - 1);
+            int nextPage = std::min(maxPage ,lastPage + 2);
             data.setData("pageForward",lastPage);
             data.setData("pageNext",nextPage);
             data.setData("radius",radius);
