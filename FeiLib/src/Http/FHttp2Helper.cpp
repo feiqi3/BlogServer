@@ -716,6 +716,7 @@ namespace Fei::Http {
                     auto newIt = sessionData. mStreamDataMap.insert({ newStreamId, Http2StreamData{} });
                     streamUD = &newIt.first->second;
                     sessionData.serverOpenedStreams++;
+                    nghttp2_session_set_stream_user_data(session, newStreamId, streamUD);
                 }
                 else {
                     streamUD = &itor->second;
