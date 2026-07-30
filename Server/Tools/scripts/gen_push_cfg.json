@@ -1,0 +1,14 @@
+{
+  "dist_dir": "../../../../blogweb/dist",
+  "output": "../../resources/config/h2PushPromise.cfg",
+  "rules": [
+    {
+      "route": "/",
+      "push": ["main.css", "indexpage.css", "main.js"]
+    },
+    {
+      "route": "/post/",
+      "push": ["main.css", "article.css", "marked.min.js"]
+    }
+  ]
+}
