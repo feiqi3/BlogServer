@@ -38,9 +38,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/3r
 add_subdirectory(3rd/json)
 target_link_libraries(${PROJECT_NAME} PUBLIC nlohmann_json::nlohmann_json)
 
-set(INJA_USE_EMBEDDED_JSON OFF)
-set(INJA_BUILD_TESTS OFF)
-set(BUILD_BENCHMARK OFF)
+set(INJA_USE_EMBEDDED_JSON OFF CACHE BOOL "" FORCE )
+set(INJA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_BENCHMARK OFF CACHE BOOL "" FORCE)
 add_subdirectory(3rd/inja)
 target_link_libraries(${PROJECT_NAME} PUBLIC inja)
 
