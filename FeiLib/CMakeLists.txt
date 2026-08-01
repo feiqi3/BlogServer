@@ -18,6 +18,11 @@ file(GLOB_RECURSE HEADERS "include/*.h")
 # Create library
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
 
+# Use clang-cl toolset for FeiLib target (VS generator only)
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    set_target_properties(${PROJECT_NAME} PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
+endif()
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -76,6 +81,15 @@ add_custom_command(
         $<TARGET_FILE:TBB::tbb>
         $<TARGET_FILE_DIR:${PROJECT_NAME}>
     COMMENT "Copying TBB $<TARGET_FILE:TBB::tbb> to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+)
+
+# Copy nghttp2 DLL to FeiLib output dir (Bin/<Config>) for redistribution
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:nghttp2>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying nghttp2 to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )
 
 set(ENABLE_LIB_ONLY ON)
@@ -171,6 +185,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     # Copy DLL files
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:${PROJECT_NAME}>
+        ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/bin/$<CONFIG>/
+
+    # Copy dependency DLLs to distribution
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:${tbb_target}>
+        ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/bin/$<CONFIG>/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:nghttp2>
         ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/bin/$<CONFIG>/
 
     # Copy LIB files

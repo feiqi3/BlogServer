@@ -16,6 +16,18 @@ file(GLOB_RECURSE SOURCES "src/*.cpp"  "src/*.h")
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+# Use clang-cl toolset for Server target (VS generator only)
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    set_target_properties(${PROJECT_NAME} PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
+endif()
+
+# Keep Server.exe in its own output dir (debug/release); runtime DLLs are
+# staged in Bin/<Config> and copied over by the POST_BUILD below.
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/debug"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/release"
+)
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -88,10 +100,18 @@ collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Service Service SRC_SOURCE)
 collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Utils Utils SRC_SOURCE)
 collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Server Server SRC_SOURCE)
 
+# Copy all DLLs from FeiLib's Bin/<Config> (FeiLib + TBB + nghttp2)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        $<TARGET_FILE:FeiLib>
-        $<TARGET_FILE_DIR:${PROJECT_NAME} 
-    COMMENT "Copying Dependency"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_BINARY_DIR}/Bin/$<CONFIG>"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    COMMENT "Copying runtime DLLs from Bin/$<CONFIG>"
+)
+# Copy sqlite3 (Server's own 3rd-party, NOT under FeiLib)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:sqlite3>"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    COMMENT "Copying sqlite3 runtime"
 )
 
