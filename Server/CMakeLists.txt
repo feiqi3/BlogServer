@@ -100,12 +100,13 @@ collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Service Service SRC_SOURCE)
 collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Utils Utils SRC_SOURCE)
 collect_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/Server Server SRC_SOURCE)
 
-# Copy all DLLs from FeiLib's Bin/<Config> (FeiLib + TBB + nghttp2)
+# Copy all runtime deps from FeiLib's Bin/<Config> (FeiLib + TBB + nghttp2)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/Bin/$<CONFIG>"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_BINARY_DIR}/Bin/$<CONFIG>"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-    COMMENT "Copying runtime DLLs from Bin/$<CONFIG>"
+    COMMENT "Copying runtime deps from Bin/$<CONFIG>"
 )
 # Copy sqlite3 (Server's own 3rd-party, NOT under FeiLib)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
