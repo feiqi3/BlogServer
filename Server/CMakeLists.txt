@@ -16,6 +16,9 @@ file(GLOB_RECURSE SOURCES "src/*.cpp"  "src/*.h")
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+# Third-party: miniz (gzip inflate) - single .c implementation TU
+target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/3rd/miniz/miniz.c)
+
 # Use clang-cl toolset for Server target (VS generator only)
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     set_target_properties(${PROJECT_NAME} PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
@@ -30,9 +33,20 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/3rd/stb ${CMAKE_CURRENT_SOURCE_DIR}/3rd/miniz)
 
 #3rd
 target_link_libraries(${PROJECT_NAME} PRIVATE FeiLib)
+# OpenSSL for ImageDimReader HTTPS client (TLS_client_method)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+if(WIN32)
+    # winsock2 direct use (WSAGetLastError in ImageDimReader error paths)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+endif()
+# std::thread pool
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 #sqlite3
 add_subdirectory(3rd/sqlite3)
 target_link_libraries(${PROJECT_NAME} PRIVATE sqlite3)
