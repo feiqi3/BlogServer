@@ -20,8 +20,11 @@
 #include <thread>
 #include "Core/ServerBasicDef.h"
 #include "DAO/DataBaseOperation.h"
+#include "DAO/PhotoQuery.h"
 #include "Utils/Digital.h"
 #include "Utils/FileCache.h"
+#include "Utils/ImageDimReader.h"
+#include "Utils/ThreadPool.h"
 
 const std::string ResourceDir =  SERVER_RESOURCE_DIR;
 const std::string WebDir = ResourceDir + "web/";
@@ -59,6 +62,22 @@ Blog::Server::Server()
 	server->loadPushPromiseList(PushPromiseCfgPath);
 	server->addListenPort(80);
 	server->addSSLPort(443);
+
+	// Backfill dimensions for photos created before width/height tracking.
+	auto missingDims = DAO::PhotoQuery::QueryPhotosMissingDims();
+	if (!missingDims.empty()) {
+		Fei::Logger::instance()->log(
+			Fei::lvl::info,
+			"[Server] Backfilling image dimensions for {} photos",
+			missingDims.size());
+		for (const auto& [id, url] : missingDims) {
+			Utils::imagePool().submit([id, url]() {
+				int w = 0, h = 0;
+				if (Utils::readImageDims(url, w, h))
+					DAO::PhotoQuery::UpdatePhotoDims(id, w, h);
+			});
+		}
+	}
 }
 
 void Blog::Server::run()

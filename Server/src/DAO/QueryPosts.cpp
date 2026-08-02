@@ -24,11 +24,11 @@ PostQuery::QueryPostsDataProfileSinceLastByPageDesc(uint64_t lastId,
 auto PostQuery::QueryPostDataProfile(uint64_t pageIdx,
     int perPageNum)
 -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
-uint64_t, std::string, uint64_t>>{
+uint64_t, std::string, uint64_t, uint64_t>>{
     auto getQuery = []() {
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                 FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
-                FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic) - FIELD(Model::Post,category_id));
+                FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic) - FIELD(Model::Post,category_id) - FIELD(Model::Post, view_times));
         q.From("Posts").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at)).setStaticQuery(true);
         return q;
       };
@@ -39,16 +39,30 @@ uint64_t, std::string, uint64_t>>{
 auto PostQuery::QueryPostDataProfileByCategoryId(uint64_t categoryId,uint64_t pageIdx,
     int perPageNum)
 -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
-uint64_t, std::string>>{
+uint64_t, std::string, uint64_t>>{
     auto getQuery = []() {
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                 FIELD(Model::Post, profile) - FIELD(Model::Post, created_at) -
-                FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic));
+                FIELD(Model::Post, updated_at) - FIELD(Model::Post,titlepic) - FIELD(Model::Post, view_times));
         q.From("Posts").Where(FIELD(Model::Post,category_id) == PARAM).skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,created_at)).setStaticQuery(true);
         return q;
       };
       thread_local auto query = getQuery();
       return query.exec(categoryId,perPageNum,pageIdx * perPageNum).getVector();
+}
+
+auto PostQuery::QueryPostsForArchive()
+    -> std::vector<std::tuple<uint64_t, std::string, std::string, std::string,
+                              uint64_t, uint64_t>> {
+  auto getQuery = []() {
+    Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
+            FIELD(Model::Post, profile) - FIELD(Model::Post, titlepic) -
+            FIELD(Model::Post, created_at) - FIELD(Model::Post, view_times));
+    q.From("Posts").OrderByDesc(FIELD(Model::Post, created_at)).setStaticQuery(true);
+    return q;
+  };
+  thread_local auto query = getQuery();
+  return query.exec().getVector();
 }
 
 auto PostQuery::QueryPostsBasicStatusByPage(uint64_t lastId,int perPageNum)      -> std::vector<

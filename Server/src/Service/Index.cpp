@@ -29,6 +29,7 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
         std::string blogtitlepic;
         std::string categoryName;
         uint64_t created_at;
+        uint64_t viewTimes;
     };
     std::vector<BlogProfile> prf;
     prf.reserve(postVec.size());
@@ -40,6 +41,7 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
             .blogtitlepic = std::move(std::get<5>(p)),
             .categoryName = catesMap[std::get<6>(p)],
             .created_at =  std::get<3>(p),
+            .viewTimes = std::get<7>(p),
         };
         prf.push_back(std::move(profile));
     }

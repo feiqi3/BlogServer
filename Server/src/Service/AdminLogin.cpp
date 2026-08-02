@@ -180,6 +180,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
   } else {
     // insert
     Model::Post post;
+    post.view_times = 0;
     post.title = title;
     post.profile = profile;
     post.content = content;

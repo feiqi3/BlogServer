@@ -108,4 +108,32 @@ namespace Blog{
         response.setBody(renderRes);
         return response;
     }
+
+    Fei::Http::FHttpResponse BackGroundController::AlbumPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+        bool isLogin = AdminLogin::instance()->isLogin(req);
+        if(!isLogin){
+            return Redirector::RedirectTo("/background");
+        }
+        Fei::Http::FHttpResponse res;
+        MemoryMappedFile file(BlogWebPagePath + "backyard-albums.html", Mode::ReadOnly, 0);
+        if (file.data() == nullptr) {
+            return Redirector::RedirectTo("/404");
+        }
+        res.setBody(std::string((char*)file.data(), file.size()));
+        return res;
+    }
+
+    Fei::Http::FHttpResponse BackGroundController::PhotoPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+        bool isLogin = AdminLogin::instance()->isLogin(req);
+        if(!isLogin){
+            return Redirector::RedirectTo("/background");
+        }
+        Fei::Http::FHttpResponse res;
+        MemoryMappedFile file(BlogWebPagePath + "backyard-photos.html", Mode::ReadOnly, 0);
+        if (file.data() == nullptr) {
+            return Redirector::RedirectTo("/404");
+        }
+        res.setBody(std::string((char*)file.data(), file.size()));
+        return res;
+    }
 }

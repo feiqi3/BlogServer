@@ -28,12 +28,16 @@ namespace Blog{
 */
 
 		Fei::Http::FHttpResponse LoginPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
-        Fei::Http::FHttpResponse ArticleListPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse ArticleListPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse CategoryPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse AlbumPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse PhotoPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		REGISTER_MAPPING_BEGIN("/background")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "", BackGroundController, LoginPage);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/articles", BackGroundController, ArticleListPage);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/categories", BackGroundController, CategoryPage);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/albums", BackGroundController, AlbumPage);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/photos", BackGroundController, PhotoPage);
         REGISTER_MAPPING_END
 
         private:

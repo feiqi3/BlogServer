@@ -1,4 +1,6 @@
 #include "FrontGroundController.h"
+#include "Core/ApiChangeDataDef.h"
+#include "Core/JsonTool.h"
 #include "Core/ServerBasicDef.h"
 #include "Core/TemplateRender.h"
 #include "DAO/CategoryQuery.h"
@@ -8,7 +10,9 @@
 #include "Service/Index.h"
 #include "Service/QuickRedirect.h"
 #include "Utils/Digital.h"
+#include "Utils/FileReader.h"
 #include "Utils/FileCache.h"
+#include "Utils/TimeHelper.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -59,7 +63,8 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
         .created_at = _post.created_at,
         .updated_at = _post.updated_at,
         .categoryName = std::move(cateName.value()),
-        .content = std::move(_post.content)
+        .content = std::move(_post.content),
+        .viewTimes = static_cast<uint32_t>(_post.view_times)
     };
     TemplateRenderData data;
     data.setData("post",std::move(mPost));
@@ -115,6 +120,7 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
         std::string blogtitlepic;
         std::string categoryName;
         uint64_t created_at;
+        uint64_t viewTimes;
     };
     std::vector<BlogProfile> prf;
     prf.reserve(postVec.size());
@@ -126,6 +132,7 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
             .blogtitlepic = std::move(std::get<5>(p)),
             .categoryName = cateName,
             .created_at =  std::get<3>(p),
+            .viewTimes = std::get<6>(p),
         };
         prf.push_back(std::move(profile));
     }
@@ -150,6 +157,63 @@ Fei::Http::FHttpResponse FrontGroundController::About(const Fei::Http::FHttpRequ
         return Redirector::RedirectTo("/404");
     }
     return Redirector::RedirectTo("/post/" + std::to_string(_id.value()));
+}
+
+Fei::Http::FHttpResponse FrontGroundController::Archive(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    Fei::Http::FHttpResponse res;
+    auto postVec = DAO::PostQuery::QueryPostsForArchive();
+    nlohmann::json j;
+    j["result"] = ApiOk;
+    nlohmann::json groupsArr = nlohmann::json::array();
+    // Group by year-month; std::map keeps keys ascending.
+    std::map<std::string, nlohmann::json> monthMap;
+    for (auto& p : postVec) {
+        uint64_t created_at = std::get<4>(p);
+        std::string ym = TimeHelper::toFormatTime(created_at, "%Y-%m");
+        nlohmann::json postObj;
+        postObj["id"] = std::get<0>(p);
+        postObj["title"] = std::get<1>(p);
+        postObj["profile"] = std::get<2>(p);
+        postObj["titlepic"] = std::get<3>(p);
+        postObj["createdAt"] = created_at;
+        postObj["viewTimes"] = std::get<5>(p);
+        auto it = monthMap.find(ym);
+        if (it == monthMap.end()) {
+            nlohmann::json g;
+            g["year"] = std::stoi(TimeHelper::toFormatTime(created_at, "%Y"));
+            g["month"] = std::stoi(TimeHelper::toFormatTime(created_at, "%m"));
+            g["posts"] = nlohmann::json::array();
+            it = monthMap.insert({ym, g}).first;
+        }
+        it->second["posts"].push_back(postObj);
+    }
+    // Reverse iterate for newest-first groups.
+    for (auto it = monthMap.rbegin(); it != monthMap.rend(); ++it) {
+        groupsArr.push_back(it->second);
+    }
+    j["groups"] = groupsArr;
+    res.setBody(JsonTool::ToString(j));
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::PhotosPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    Fei::Http::FHttpResponse res;
+    MemoryMappedFile file(BlogWebPagePath + "photos.html", Mode::ReadOnly, 0);
+    if (file.data() == nullptr) {
+        return Redirector::RedirectTo("/404");
+    }
+    res.setBody(std::string((char*)file.data(), file.size()));
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::ArchivePage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    Fei::Http::FHttpResponse res;
+    MemoryMappedFile file(BlogWebPagePath + "archive.html", Mode::ReadOnly, 0);
+    if (file.data() == nullptr) {
+        return Redirector::RedirectTo("/404");
+    }
+    res.setBody(std::string((char*)file.data(), file.size()));
+    return res;
 }
 
 } // namespace Blog

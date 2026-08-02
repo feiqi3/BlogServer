@@ -37,3 +37,12 @@ coverage/
 tmp/
 temp/
 .cache/
+
+# AI/agent build trees
+build-clang/
+build-vs/
+build_mingw/
+build-linux/
+
+# DB backups
+Server/resources/database/*.bak.*

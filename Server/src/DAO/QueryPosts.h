@@ -12,17 +12,22 @@ public:
       -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
                                 uint64_t, std::string, uint64_t>>;
 
-  // Id, Title, Profile, Create Time, Update Time, titlePic, categoryId
+  // Id, Title, Profile, Create Time, Update Time, titlePic, categoryId, view_times
   static auto QueryPostDataProfile(uint64_t pageIdx,
+    int perPageNum = 10)
+-> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
+uint64_t, std::string, uint64_t, uint64_t>>;
+
+  // Id, Title, Profile, Create Time, Update Time, titlePic, view_times
+  static auto QueryPostDataProfileByCategoryId(uint64_t categoryId,uint64_t pageIdx,
     int perPageNum = 10)
 -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
 uint64_t, std::string, uint64_t>>;
 
-  // Id, Title, Profile, Create Time, Update Time, titlePic
-  static auto QueryPostDataProfileByCategoryId(uint64_t categoryId,uint64_t pageIdx,
-    int perPageNum = 10)
--> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
-uint64_t, std::string>>;
+  // Returns all posts (id, title, profile, titlepic, created_at, view_times) ordered by created_at DESC.
+  static auto QueryPostsForArchive()
+      -> std::vector<std::tuple<uint64_t, std::string, std::string, std::string,
+                                uint64_t, uint64_t>>;
 
 
   // Id, Title, Create Time, Update Time

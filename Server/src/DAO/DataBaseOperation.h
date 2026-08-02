@@ -65,7 +65,11 @@ public:
        t = getFloat(col); 
       }
 
-    template <IsStringLike T> void setByCol(T& t, int col) { t = getString(col); }
+    template <IsStringLike T> void setByCol(T& t, int col) {
+        const char* str = getString(col);
+        if (!str) { t = T(); return; }
+        t = T(str);
+    }
 
     friend class DatabaseOperation;
 private:
