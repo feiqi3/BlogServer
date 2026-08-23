@@ -37,6 +37,8 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
     }
 
     struct BlogPost{
+        uint64_t id;
+        std::string profile;
         std::string titlepic;
         std::string title;
         uint64_t created_at;
@@ -61,6 +63,8 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
     }
     
     BlogPost mPost{
+        .id = _post.id,
+        .profile = std::move(_post.profile),
         .titlepic = std::move(_post.titlepic),
         .title = std::move(_post.title),
         .created_at = _post.created_at,
@@ -256,6 +260,38 @@ Fei::Http::FHttpResponse FrontGroundController::RssXml(const Fei::Http::FHttpReq
     res.setContentType("application/rss+xml; charset=utf-8");
     res.addHeader("Last-Modified", lastModified);
     res.setBody(xml);
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::RobotsTxt(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    MemoryMappedFile file(BlogWebAssetsPath + "robots.txt", Mode::ReadOnly, 0);
+    Fei::Http::FHttpResponse res;
+    res.setContentType("text/plain; charset=utf-8");
+    res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::SitemapXml(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    MemoryMappedFile file(BlogWebAssetsPath + "sitemap.xml", Mode::ReadOnly, 0);
+    Fei::Http::FHttpResponse res;
+    res.setContentType("application/xml; charset=utf-8");
+    res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::WebManifest(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    MemoryMappedFile file(BlogWebAssetsPath + "site.webmanifest", Mode::ReadOnly, 0);
+    Fei::Http::FHttpResponse res;
+    res.setContentType("application/manifest+json; charset=utf-8");
+    res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::FaviconIco(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    MemoryMappedFile file(BlogWebAssetsPath + "favicon.ico", Mode::ReadOnly, 0);
+    Fei::Http::FHttpResponse res;
+    res.setContentType("image/x-icon");
+    res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
     return res;
 }
 

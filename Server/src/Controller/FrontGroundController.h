@@ -19,6 +19,10 @@ namespace Blog{
 		Fei::Http::FHttpResponse PhotosPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse ArchivePage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse RssXml(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse RobotsTxt(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse SitemapXml(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse WebManifest(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		Fei::Http::FHttpResponse FaviconIco(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		REGISTER_MAPPING_BEGIN("")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/realIndex={page}", FrontGroundController, Articles);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/post/{id}", FrontGroundController, ArticleDetail);
@@ -31,6 +35,10 @@ namespace Blog{
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/photos", FrontGroundController, PhotosPage);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/archives", FrontGroundController, ArchivePage);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/rss.xml", FrontGroundController, RssXml);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/robots.txt", FrontGroundController, RobotsTxt);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/sitemap.xml", FrontGroundController, SitemapXml);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/site.webmanifest", FrontGroundController, WebManifest);
+			REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/favicon.ico", FrontGroundController, FaviconIco);
 			REGISTER_MAPPING_END
     };
 	REGISTER_CONTROLLER_CLASS(FrontGroundController);
