@@ -46,3 +46,6 @@ build-linux/
 
 # DB backups
 Server/resources/database/*.bak.*
+# GoatCounter credentials (plaintext secrets)
+Server/Tools/GoatCounter/gc_credentials.cfg
+Server/Tools/GoatCounter/gc_credentials.*.cfg

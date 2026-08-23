@@ -56,6 +56,11 @@ uint64_t, std::string, uint64_t>>;
 
   static int QueryPostCount();
   static int QueryPostOfCategoryCount(uint64_t id);
+
+  // Id, Title, Profile, Create Time, CategoryId — RSS feed source (allow_rss == 1)
+  static auto QueryPostsForRss()
+      -> std::vector<std::tuple<uint64_t, std::string, std::string, uint64_t,
+                                uint64_t>>;
 };
 
 } // namespace Blog::DAO

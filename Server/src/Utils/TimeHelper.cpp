@@ -24,4 +24,12 @@ namespace Blog{
         return millis;
     }
 
+    std::string TimeHelper::toRfc822(uint64_t timeFromEpochMills){
+        std::time_t seconds = (std::time_t)(timeFromEpochMills / 1000);
+        std::tm* tm_utc = std::gmtime(&seconds);
+        std::ostringstream oss;
+        oss << std::put_time(tm_utc, "%a, %d %b %Y %H:%M:%S") << " +0800";
+        return oss.str();
+    }
+
 }

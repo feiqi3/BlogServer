@@ -1,4 +1,5 @@
 #include "FrontGroundController.h"
+#include "FConfigReader.h"
 #include "Core/ApiChangeDataDef.h"
 #include "Core/JsonTool.h"
 #include "Core/ServerBasicDef.h"
@@ -9,6 +10,7 @@
 #include "DAO/QueryPosts.h"
 #include "Service/Index.h"
 #include "Service/QuickRedirect.h"
+#include "Service/RssBuilder.h"
 #include "Utils/Digital.h"
 #include "Utils/FileReader.h"
 #include "Utils/FileCache.h"
@@ -42,6 +44,7 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
         std::string categoryName;
         std::string content;
         uint32_t viewTimes;
+        int allowComment;
         
     };
 
@@ -64,12 +67,17 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
         .updated_at = _post.updated_at,
         .categoryName = std::move(cateName.value()),
         .content = std::move(_post.content),
-        .viewTimes = static_cast<uint32_t>(_post.view_times)
+        .viewTimes = static_cast<uint32_t>(_post.view_times),
+        .allowComment = _post.allow_comment
     };
     TemplateRenderData data;
     data.setData("post",std::move(mPost));
     std::string renderOut;
     setBlogCommonData(data);
+    auto gcUrl = Fei::FConfigReader::instance()->getCfg("GoatCounterUrl");
+    if (gcUrl.has_value() && !gcUrl->empty()) {
+        data.setData("goatcounter_url", gcUrl.value());
+    }
     TemplateRender::instance()->render(BlogWebPagePath + "article.html", data, renderOut);
     Fei::Http::FHttpResponse res;
     res.setBody(renderOut);
@@ -152,7 +160,21 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
 }
 
 Fei::Http::FHttpResponse FrontGroundController::About(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
-    auto _id = DAO::PostQuery::QueryPostIdByTitle("关于网站");
+    auto cfg = Fei::FConfigReader::instance();
+    auto titleOpt = cfg->getCfg("AboutPageTitle");
+    std::string title = titleOpt.value_or("关于网站");
+    auto _id = DAO::PostQuery::QueryPostIdByTitle(title.c_str());
+    if(!_id.has_value()){
+        return Redirector::RedirectTo("/404");
+    }
+    return Redirector::RedirectTo("/post/" + std::to_string(_id.value()));
+}
+
+Fei::Http::FHttpResponse FrontGroundController::Links(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    auto cfg = Fei::FConfigReader::instance();
+    auto titleOpt = cfg->getCfg("LinksPageTitle");
+    std::string title = titleOpt.value_or("友链");
+    auto _id = DAO::PostQuery::QueryPostIdByTitle(title.c_str());
     if(!_id.has_value()){
         return Redirector::RedirectTo("/404");
     }
@@ -213,6 +235,27 @@ Fei::Http::FHttpResponse FrontGroundController::ArchivePage(const Fei::Http::FHt
         return Redirector::RedirectTo("/404");
     }
     res.setBody(std::string((char*)file.data(), file.size()));
+    return res;
+}
+
+Fei::Http::FHttpResponse FrontGroundController::RssXml(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
+    Fei::Http::FHttpResponse res;
+    std::string lastModified;
+    const std::string& xml = RssBuilder::instance()->getRssXml(lastModified);
+
+    // HTTP/1.1 keeps original case; HTTP/2 header names are lowercase.
+    std::string ifModifiedSince;
+    if (!req.getHeader("If-Modified-Since", ifModifiedSince)) {
+        req.getHeader("if-modified-since", ifModifiedSince);
+    }
+    if (!ifModifiedSince.empty() && ifModifiedSince == lastModified) {
+        res.setStatusCode(Fei::Http::StatusCode::_304);
+        return res;
+    }
+
+    res.setContentType("application/rss+xml; charset=utf-8");
+    res.addHeader("Last-Modified", lastModified);
+    res.setBody(xml);
     return res;
 }
 

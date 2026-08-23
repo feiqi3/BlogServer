@@ -7,6 +7,7 @@ namespace Blog{
         public:
         static std::string toFormatTime(uint64_t timeFromEpochMills, const std::string& fmt = "%Y-%m-%d %H:%M");
         static uint64_t getCurrentTimeFromEpochMills();
+        static std::string toRfc822(uint64_t timeFromEpochMills);
     };
 }
 #endif

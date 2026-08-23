@@ -13,6 +13,7 @@
 #include "Utils/FileReader.h"
 #include "Utils/TimeHelper.h"
 #include "Utils/HtmlHelper.h"
+#include "Service/RssBuilder.h"
 #include <cstdint>
 #include <string>
 #define MODULE_NAME "[AdminLogin]"
@@ -150,6 +151,18 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
   }
 
   Model::Post post;
+  int allowComment = JsonTool::get(json, std::string("allow_comment"), 1);
+  if (allowComment != 0) {
+    allowComment = 1;
+  }
+  int allowRss = JsonTool::get(json, std::string("allow_rss"), 0);
+  if (allowRss != 0) {
+    allowRss = 1;
+  }
+  int hide = JsonTool::get(json, std::string("hide"), 0);
+  if (hide != 0) {
+    hide = 1;
+  }
   // modyify
   auto idItor = json.find("id");
   if (idItor != json.end()) {
@@ -171,11 +184,19 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.titlepic = titlepic;
     post.updated_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.category_id = categoryId;
+    // Keep existing switch when the client does not send the field.
+    post.allow_comment =
+        JsonTool::check(json, "allow_comment") ? allowComment
+                                               : postopt->allow_comment;
+    post.allow_rss = JsonTool::check(json, "allow_rss") ? allowRss
+                                                        : postopt->allow_rss;
+    post.hide = JsonTool::check(json, "hide") ? hide : postopt->hide;
     auto out = DAO::PostQuery::UpdatePostById(id, post);
     if (out.has_value()) {
       out = out.value();
       return false;
     }
+    RssBuilder::instance()->setDirty();
     return true;
   } else {
     // insert
@@ -188,11 +209,15 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.created_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.updated_at = 0;
     post.category_id = categoryId;
+    post.allow_comment = allowComment;
+    post.allow_rss = allowRss;
+    post.hide = hide;
     auto res = DAO::PostQuery::InsertPost(post);
     if (res.has_value()) {
       out = res.value();
       return false;
     }
+    RssBuilder::instance()->setDirty();
     return true;
   }
 }
@@ -233,6 +258,7 @@ bool AdminLogin::deleteBlog(uint64_t id, std::string &out) {
     out = res.value();
     return false;
   }
+  RssBuilder::instance()->setDirty();
   return true;
 }
 

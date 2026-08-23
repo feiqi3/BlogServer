@@ -15,6 +15,8 @@
 
 #include "Service/BlogData.h"
 
+#include "Service/RssBuilder.h"
+
 #include <functional>
 #include <string>
 #include <thread>
@@ -58,6 +60,7 @@ Blog::Server::Server()
 	new SessionManager();
 	new AdminLogin();
 	new TemplateRender;
+	new RssBuilder;
 	server = new Fei::Http::FHttpServer(10);
 	server->loadPushPromiseList(PushPromiseCfgPath);
 	server->addListenPort(80);
