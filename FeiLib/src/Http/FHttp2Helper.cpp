@@ -859,7 +859,14 @@ namespace Fei::Http {
 
         itor = mHeaders.find(":path");
         if (itor != mHeaders.end()) {
+            // The HTTP/2 :path pseudo-header may carry a query string
+            // (e.g. "/post/1?atk_comment=4"). Split it like the HTTP/1.1
+            // parser does (see FHttpParser::parseRequestLine): assign the
+            // full value first, because ParsePathLine leaves outPath
+            // untouched when no '?' is present, then let it carve off the
+            // query into mQuery.
             mPath = itor->second;
+            ParserUtils::ParsePathLine(itor->second, mPath, mQuery);
             mHeaders.erase(itor);
         }
 
