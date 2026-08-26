@@ -131,8 +131,9 @@ LinksPageTitle: 友链
 | `TemplateCacheTime` | `86400000` | 模板缓存过期时间（毫秒，默认 24 小时） |
 | `FileCacheHoldTime` | `3600000` | 文件缓存过期时间（毫秒，默认 1 小时） |
 | `defaultPic` | - | 创建分类时的默认图片路径 |
-| `AboutPageTitle` | `"关于网站"` | `/about` 路由按此标题查 Posts 并 redirect 到 `/post/{id}`（FrontGroundController::About） |
-| `LinksPageTitle` | `"友链"` | `/links` 路由按此标题查 Posts 并 redirect 到 `/post/{id}`（FrontGroundController::Links，2026-08-22 新增） |
+| `AboutPageTitle` | `"关于网站"` | `/about` 路由按此标题查 Posts 并渲染文章内容（保持在 `/about`，不跳转）（FrontGroundController::About） |
+| `LinksPageTitle` | `"友链"` | `/links` 路由按此标题查 Posts 并渲染文章内容（保持在 `/links`，不跳转）（FrontGroundController::Links，2026-08-22 新增） |
+| `InfoPageTitle` | `"信息"` | `/info` 路由按此标题查 Posts 并渲染文章内容（保持在 `/info`，不跳转）（FrontGroundController::Info，2026-08-25 新增） |
 
 > 业务层配置项的分模块完整清单另见 `Server/doc/CONFIGURATIONS.md`（FeiLib 层配置见 `FeiLib/README.md`）。
 

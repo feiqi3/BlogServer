@@ -32,11 +32,11 @@ default `3600000` (1 hour)
 ## Blog Pages
 
 AboutPageTitle --- Post title used by `/about` route.
-The route queries Posts by this title and redirects to `/post/{id}`.
+The route queries Posts by this title and renders the article content directly at `/about` (keeps the URL, no redirect).
 default `"关于网站"`
 
 LinksPageTitle --- Post title used by `/links` route. (2026-08-22)
-The route queries Posts by this title and redirects to `/post/{id}`.
+The route queries Posts by this title and renders the article content directly at `/links` (keeps the URL, no redirect).
 default `"友链"`
 
 ### Friend Links Page Setup
