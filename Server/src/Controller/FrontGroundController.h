@@ -4,6 +4,7 @@
 #include "Http/FController.h"
 #include "Http/FHttpRequest.h"
 #include "Http/FHttpResponse.h"
+#include "Model/Posts.h"
 
 namespace Blog{
     class FrontGroundController: public Fei::Http::FControllerBase {
@@ -15,6 +16,7 @@ namespace Blog{
 		Fei::Http::FHttpResponse CategoriesDetail(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse About(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse Links(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+		static Fei::Http::FHttpResponse RenderArticlePost(const Model::Post& post, const std::string& pageUrl);
 		Fei::Http::FHttpResponse Archive(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse PhotosPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse ArchivePage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);

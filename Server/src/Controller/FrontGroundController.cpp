@@ -36,6 +36,20 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
         id = std::stoi(_id);
     }
 
+    auto post = DAO::PostQuery::QueryPostById(id);
+    if(!post.has_value()){
+        return Redirector::RedirectTo("/404");
+    }
+    DAO::PostQuery::updateViewTimes(id);
+    return RenderArticlePost(post.value(), "/post/" + std::to_string(id));
+}
+
+Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::Post& _post, const std::string& pageUrl){
+    auto cateName = DAO::CategoryQuery::QueryCategoryNameById(_post.category_id);
+    if(!cateName.has_value()){
+        return Redirector::RedirectTo("/505");
+    }
+
     struct BlogPost{
         uint64_t id;
         std::string profile;
@@ -47,35 +61,24 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
         std::string content;
         uint32_t viewTimes;
         int allowComment;
-        
+
     };
 
-    auto post = DAO::PostQuery::QueryPostById(id);
-    if(!post.has_value()){
-        return Redirector::RedirectTo("/404");
-    }
-    DAO::PostQuery::updateViewTimes(id);
-    auto& _post  = post.value();
-    
-    auto cateName = DAO::CategoryQuery::QueryCategoryNameById(_post.category_id);
-    if(!cateName.has_value()){
-        return Redirector::RedirectTo("/505");
-    }
-    
     BlogPost mPost{
         .id = _post.id,
-        .profile = std::move(_post.profile),
-        .titlepic = std::move(_post.titlepic),
-        .title = std::move(_post.title),
+        .profile = _post.profile,
+        .titlepic = _post.titlepic,
+        .title = _post.title,
         .created_at = _post.created_at,
         .updated_at = _post.updated_at,
-        .categoryName = std::move(cateName.value()),
-        .content = std::move(_post.content),
+        .categoryName = cateName.value(),
+        .content = _post.content,
         .viewTimes = static_cast<uint32_t>(_post.view_times),
         .allowComment = _post.allow_comment
     };
     TemplateRenderData data;
     data.setData("post",std::move(mPost));
+    data.setData("pageUrl", pageUrl);
     std::string renderOut;
     setBlogCommonData(data);
     auto gcUrl = Fei::FConfigReader::instance()->getCfg("GoatCounterUrl");
@@ -167,22 +170,22 @@ Fei::Http::FHttpResponse FrontGroundController::About(const Fei::Http::FHttpRequ
     auto cfg = Fei::FConfigReader::instance();
     auto titleOpt = cfg->getCfg("AboutPageTitle");
     std::string title = titleOpt.value_or("关于网站");
-    auto _id = DAO::PostQuery::QueryPostIdByTitle(title.c_str());
-    if(!_id.has_value()){
+    auto post = DAO::PostQuery::QueryPostByTitle(title.c_str());
+    if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    return Redirector::RedirectTo("/post/" + std::to_string(_id.value()));
+    return RenderArticlePost(post.value(), "/about");
 }
 
 Fei::Http::FHttpResponse FrontGroundController::Links(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
     auto cfg = Fei::FConfigReader::instance();
     auto titleOpt = cfg->getCfg("LinksPageTitle");
     std::string title = titleOpt.value_or("友链");
-    auto _id = DAO::PostQuery::QueryPostIdByTitle(title.c_str());
-    if(!_id.has_value()){
+    auto post = DAO::PostQuery::QueryPostByTitle(title.c_str());
+    if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    return Redirector::RedirectTo("/post/" + std::to_string(_id.value()));
+    return RenderArticlePost(post.value(), "/links");
 }
 
 Fei::Http::FHttpResponse FrontGroundController::Archive(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){

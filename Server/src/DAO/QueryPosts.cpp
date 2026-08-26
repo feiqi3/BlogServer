@@ -71,7 +71,7 @@ std::tuple<uint64_t, std::string, uint64_t, uint64_t>>{
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                  FIELD(Model::Post, created_at) -
                 FIELD(Model::Post, updated_at));
-    q.From("Posts").Where(FIELD(Model::Post, id) > PARAM && FIELD(Model::Post, hide) == 0).limit(PARAM).OrderByDesc(FIELD(Model::Post,id)).setStaticQuery(true);
+    q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id)).setStaticQuery(true);
         return q;
       };
     thread_local auto query = getQuery();
@@ -113,7 +113,7 @@ std::optional<Model::Post> PostQuery::QueryPostByTitle(const char* postName)
 {
     auto getQuery = []() {
         Query<Model::Post> query;
-        query.Where(FIELD(Model::Post, title) == PARAM).setStaticQuery(true);
+        query.Select().Where(FIELD(Model::Post, title) == PARAM).setStaticQuery(true);
         return query;
         };
     thread_local auto query = getQuery();
