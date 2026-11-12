@@ -55,6 +55,11 @@ void FEventLoop::Loop() {
     callback();
   }
   mLoopCloseCallbacks.clear();
+  // Keep ownership valid through close callbacks, but never leave a stale
+  // pointer behind. A nested Loop that did not own this thread must not clear it.
+  if (_this_thread_loop == (uint64)this) {
+    _this_thread_loop = 0;
+  }
   m_stoped = true;
 }
 
