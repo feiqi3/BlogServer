@@ -167,6 +167,10 @@ namespace Fei::Http {
 		mTcpServer->stop(force);
 	}
 
+	FEventLoop& FHttpServer::jobLoop() {
+		return mTcpServer->jobLoop();
+	}
+
 	TickEventId FHttpServer::addAppTickEvent(AppTickEvent event){
 		return mTcpServer->addTickEvent(event);
 	}

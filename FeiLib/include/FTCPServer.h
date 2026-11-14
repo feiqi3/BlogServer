@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -27,6 +28,9 @@ class F_API FTcpServer : public FNoCopyable{
     static void deinitGlobalSSLEnv();
     void run();
     void stop(bool forceClose = false);
+    // Shared application I/O Loop. Configure before run(); clients must drain
+    // before stop(). The server owns its thread, never individual services.
+    FEventLoop& jobLoop();
 
     void addListenPort(uint32 port,bool reuseport =false);
     void addSslListenPort(uint32 port,bool reuseport = false);
@@ -51,6 +55,8 @@ class F_API FTcpServer : public FNoCopyable{
     TcpIdleCallback mOnIdleCallback;
     TcpWriteCompleteCallback mWriteCompleteCallback;
     std::unique_ptr<FEventLoop> m_listenerLoop;
+    std::unique_ptr<FEventLoop> m_jobLoop;
+    std::thread m_jobThread;
     std::vector<std::unique_ptr<FEventLoop>> m_subLoops;
     uint32 m_threadNums;
     std::vector<std::unique_ptr<FAcceptor>> m_acceptors;
