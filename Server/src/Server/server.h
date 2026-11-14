@@ -3,8 +3,11 @@
 
 #include "Http/FHttpServer.h"
 #include <functional>
+#include <atomic>
+#include <memory>
 
 namespace Blog {
+	namespace Script { class ScriptAdminService; }
 	class Server {
 	public:
 		Server();
@@ -14,8 +17,11 @@ namespace Blog {
 		static void CurThreadCleanCallback(std::function<void()> callback);
 		~Server();
 	private:
-		bool shouldClose = false;
+		std::atomic_bool shouldClose{false};
 		Fei::Http::FHttpServer* server;
+#ifdef FEILIB_ENABLE_SCRIPT
+		std::shared_ptr<Script::ScriptAdminService> scripts;
+#endif
 	};
 }
 #endif

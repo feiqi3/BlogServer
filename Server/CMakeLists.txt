@@ -37,6 +37,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/3
 
 #3rd
 target_link_libraries(${PROJECT_NAME} PRIVATE FeiLib)
+if(FEILIB_ENABLE_SCRIPT)
+    target_sources(${PROJECT_NAME} PRIVATE ScriptRuntime/ScriptService.cpp ScriptRuntime/ModuleBundle.cpp
+        ScriptRuntime/VersionStore.cpp ScriptRuntime/ScriptVersions.cpp)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 # OpenSSL for ImageDimReader HTTPS client (TLS_client_method)
 find_package(OpenSSL REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)

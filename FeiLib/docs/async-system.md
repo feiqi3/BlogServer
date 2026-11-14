@@ -30,6 +30,12 @@ Keep the loop, client, and pool alive until completion callbacks have run. To sh
 
 For server-owned background I/O, obtain `server.jobLoop()` before `server.run()`. The TCP server starts and joins this loop; drain its clients before stopping the server.
 
+`ClientOptions::allowAddress` optionally checks the hostname and each numeric
+DNS result on the client loop before a socket is opened. Every result must
+pass; a rejection or exception returns `ErrorCode::AccessDenied`. Use an
+immutable policy for a client's lifetime; pooled connections retain their
+original connection decision. An empty policy preserves unrestricted access.
+
 To run the isolated async tests (C++20, OpenSSL, Python, and the `openssl` command are required):
 
 ```bash

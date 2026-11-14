@@ -12,11 +12,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add source files
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+option(FEILIB_ENABLE_SCRIPT "Enable built-in QuickJS scripting" OFF)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+if(NOT FEILIB_ENABLE_SCRIPT)
+    list(FILTER SOURCES EXCLUDE REGEX "/src/Script/")
+endif()
 file(GLOB_RECURSE HEADERS "include/*.h")
 
 # Create library
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
+if(FEILIB_ENABLE_SCRIPT)
+    enable_language(C)
+    add_subdirectory(3rd/quickjs)
+    target_link_libraries(${PROJECT_NAME} PRIVATE FeiQuickJS)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC FEILIB_ENABLE_SCRIPT=1)
+endif()
 
 # Use clang-cl toolset for FeiLib target (VS generator only)
 if(CMAKE_GENERATOR MATCHES "Visual Studio")

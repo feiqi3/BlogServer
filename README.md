@@ -12,3 +12,7 @@ This Server focus on the following features:
 
 
 Enjoy!
+
+Documentation:
+- [Built-in scripting API](FeiLib/docs/script-system.md)
+- [Script administration and configuration](Server/ScriptRuntime/README.md)

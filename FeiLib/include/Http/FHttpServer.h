@@ -11,6 +11,8 @@
 namespace Fei{
 	class FTcpServer;
 	class FEventLoop;
+    class FScriptEngine;
+    struct FScriptOptions;
 }
 namespace Fei::Http {
 
@@ -36,6 +38,8 @@ public:
 	void run(); 
 	void stop(bool force = false);
 	FEventLoop& jobLoop();
+    FScriptEngine& scriptEngine();
+    FScriptEngine& scriptEngine(const FScriptOptions& options);
 	void setOnInternalErrorCB(InternalErrorCallback cb) { mInternalErrCallback = std::move(cb); }
 	void setOnRoutNotMatchCB(RouteNotMatchCallback cb) { mRouteNotMatchCallback = std::move(cb); }
 	void setPreSendResponseCB(PreSendHttpResponseCallback cb) { mPreSendCallback = std::move(cb); }
@@ -70,6 +74,8 @@ private:
 	FHttpResponse httpHandle(const FTcpConnPtr& ptr,const FHttpRequest& request);
 private:
 	std::unique_ptr<FTcpServer> mTcpServer;
+    std::shared_ptr<FScriptEngine> m_scriptEngine;
+    bool m_running = false;
 	PreSendHttpResponseCallback mPreSendCallback;
 	InternalErrorCallback mInternalErrCallback;
 	RouteNotMatchCallback mRouteNotMatchCallback;

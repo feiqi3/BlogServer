@@ -12,6 +12,12 @@
 #include "Http/FHttp2Helper.h"
 #include <chrono>
 #include <algorithm>
+#include <future>
+#include <stdexcept>
+#ifdef FEILIB_ENABLE_SCRIPT
+#include "Script/FScriptEngine.h"
+#include "FEventLoop.h"
+#endif
 #define MODULE_NAME "HttpServer"
 #define ERROR_ROUTE_PATH "/error"
 #define DEFAULT_CONTENT_TYPE "text/html"
@@ -137,6 +143,7 @@ namespace Fei::Http {
 	}
 
 	FHttpServer::~FHttpServer() {
+        if (m_scriptEngine && m_running) stop();
 		mTcpServer->removeEvent(mRouteCacheCleanEventId);
 		if (FRouter::valid()) {
 			delete FRouter::instance();
@@ -160,12 +167,43 @@ namespace Fei::Http {
 	void FHttpServer::run()
 	{
 		mTcpServer->run();
+        m_running = true;
+#ifdef FEILIB_ENABLE_SCRIPT
+        if (m_scriptEngine) m_scriptEngine->start();
+#endif
 	}
 
 	void FHttpServer::stop(bool force)
 	{
+#ifdef FEILIB_ENABLE_SCRIPT
+        if (m_running && m_scriptEngine) {
+            if (FEventLoop::getCurrentLoop()) throw std::logic_error("Stop the server from its control thread");
+            std::promise<void> drained; auto done=drained.get_future();
+            m_scriptEngine->shutdown([&drained]{drained.set_value();});
+            done.get();
+        }
+#endif
 		mTcpServer->stop(force);
+        m_running = false;
 	}
+    FScriptEngine& FHttpServer::scriptEngine() {
+#ifdef FEILIB_ENABLE_SCRIPT
+        if(m_scriptEngine)return *m_scriptEngine;
+        return scriptEngine(FScriptOptions{});
+#else
+        throw std::logic_error("FeiLib was built without scripting");
+#endif
+    }
+    FScriptEngine& FHttpServer::scriptEngine(const FScriptOptions& options) {
+#ifdef FEILIB_ENABLE_SCRIPT
+        if(m_running||m_scriptEngine)throw std::logic_error("Configure the script engine once before run");
+        m_scriptEngine=std::make_shared<FScriptEngine>(jobLoop(),options);
+        return *m_scriptEngine;
+#else
+        (void)options;
+        throw std::logic_error("FeiLib was built without scripting");
+#endif
+    }
 
 	FEventLoop& FHttpServer::jobLoop() {
 		return mTcpServer->jobLoop();
