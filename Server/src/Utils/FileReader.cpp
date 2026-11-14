@@ -1,6 +1,5 @@
 #include <string>
 #include <cstring>
-#include "Utils/BlogRuntimeError.h"
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -9,7 +8,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #endif
-#include <fstream>
 #include "FileReader.h"
 
 using namespace Blog;
@@ -17,11 +15,20 @@ using namespace Blog;
 
 namespace Blog{
 
+    namespace {
+        // Single failure exit: log a warning and keep the "not open" state
+        // (data_ == nullptr, size_ == 0).
+        void logOpenFailure(const std::string &filename, const char *reason) {
+            Fei::Logger::instance()->log(
+                Fei::lvl::warn, "MemoryMappedFile open failed ({}): {}", filename, reason);
+        }
+    }
 
         void MemoryMappedFile::open() {
+            data_ = nullptr;
 #ifdef _WIN32
             if (mode_ == Mode::ReadOnly) {
-                // 只读模式：仅打开读权限，要求文件已存在
+                // Read-only: open for read only; the file must already exist.
                 fileHandle_ = CreateFileA(
                     filename_.c_str(),
                     GENERIC_READ,
@@ -32,7 +39,20 @@ namespace Blog{
                     nullptr
                 );
                 if (fileHandle_ == INVALID_HANDLE_VALUE) {
-                    throw RuntimeError("Failed to open file (ReadOnly)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "CreateFile failed (ReadOnly)");
+                    return;
+                }
+
+                if (size_ == 0) {
+                    LARGE_INTEGER fileSize;
+                    if (!GetFileSizeEx(fileHandle_, &fileSize) || fileSize.QuadPart <= 0) {
+                        CloseHandle(fileHandle_);
+                        fileHandle_ = nullptr;
+                        logOpenFailure(filename_, "query size failed or empty (ReadOnly)");
+                        return;
+                    }
+                    size_ = static_cast<size_t>(fileSize.QuadPart);
                 }
 
                 mapHandle_ = CreateFileMapping(
@@ -45,29 +65,36 @@ namespace Blog{
                 );
                 if (!mapHandle_) {
                     CloseHandle(fileHandle_);
-                    throw RuntimeError("Failed to create file mapping (ReadOnly)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "CreateFileMapping failed (ReadOnly)");
+                    return;
                 }
 
                 data_ = MapViewOfFile(mapHandle_, FILE_MAP_READ, 0, 0, size_);
                 if (!data_) {
                     CloseHandle(mapHandle_);
+                    mapHandle_ = nullptr;
                     CloseHandle(fileHandle_);
-                    throw RuntimeError("Failed to map view of file (ReadOnly)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "MapViewOfFile failed (ReadOnly)");
                 }
             }
             else if (mode_ == Mode::WriteOnly) {
-                // 写模式：只写映射，Windows下不能真正只写，所以仍使用 PAGE_READWRITE，但只申请写权限的映射视图
+                // Write-only mapping: Windows cannot map write-only, so use
+                // PAGE_READWRITE and request a write-only view.
                 fileHandle_ = CreateFileA(
                     filename_.c_str(),
                     GENERIC_WRITE,
-                    0,  // 不共享写
+                    0,  // no write sharing
                     nullptr,
                     OPEN_ALWAYS,
                     FILE_ATTRIBUTE_NORMAL,
                     nullptr
                 );
                 if (fileHandle_ == INVALID_HANDLE_VALUE) {
-                    throw RuntimeError("Failed to open file (WriteOnly)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "CreateFile failed (WriteOnly)");
+                    return;
                 }
 
                 mapHandle_ = CreateFileMapping(
@@ -80,19 +107,23 @@ namespace Blog{
                 );
                 if (!mapHandle_) {
                     CloseHandle(fileHandle_);
-                    throw RuntimeError("Failed to create file mapping (WriteOnly)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "CreateFileMapping failed (WriteOnly)");
+                    return;
                 }
 
-                // 映射时仅要求写权限
+                // Request write access only for the view.
                 data_ = MapViewOfFile(mapHandle_, FILE_MAP_WRITE, 0, 0, size_);
                 if (!data_) {
                     CloseHandle(mapHandle_);
+                    mapHandle_ = nullptr;
                     CloseHandle(fileHandle_);
-                    throw RuntimeError("Failed to map view of file (WriteOnly)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "MapViewOfFile failed (WriteOnly)");
                 }
             }
             else if (mode_ == Mode::ReadWrite) {
-                // 可读可写模式：打开时同时要读和写
+                // Read+write: request both access rights on open.
                 fileHandle_ = CreateFileA(
                     filename_.c_str(),
                     GENERIC_READ | GENERIC_WRITE,
@@ -103,7 +134,9 @@ namespace Blog{
                     nullptr
                 );
                 if (fileHandle_ == INVALID_HANDLE_VALUE) {
-                    throw RuntimeError("Failed to open file (ReadWrite)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "CreateFile failed (ReadWrite)");
+                    return;
                 }
 
                 mapHandle_ = CreateFileMapping(
@@ -116,70 +149,110 @@ namespace Blog{
                 );
                 if (!mapHandle_) {
                     CloseHandle(fileHandle_);
-                    throw RuntimeError("Failed to create file mapping (ReadWrite)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "CreateFileMapping failed (ReadWrite)");
+                    return;
                 }
 
-                // 映射时允许同时读写
+                // Allow read and write on the view.
                 data_ = MapViewOfFile(mapHandle_, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, size_);
                 if (!data_) {
                     CloseHandle(mapHandle_);
+                    mapHandle_ = nullptr;
                     CloseHandle(fileHandle_);
-                    throw RuntimeError("Failed to map view of file (ReadWrite)");
+                    fileHandle_ = nullptr;
+                    logOpenFailure(filename_, "MapViewOfFile failed (ReadWrite)");
                 }
             }
 #else
             if (mode_ == Mode::ReadOnly) {
                 fileDescriptor_ = ::open(filename_.c_str(), O_RDONLY);
                 if (fileDescriptor_ == -1) {
-                    throw RuntimeError("Failed to open file (ReadOnly)");
+                    logOpenFailure(filename_, "open failed (ReadOnly)");
+                    return;
                 }
 
-                data_ = mmap(nullptr, size_, PROT_READ, MAP_SHARED, fileDescriptor_, 0);
-                if (data_ == MAP_FAILED) {
-                    ::close(fileDescriptor_);
-                    throw RuntimeError("Failed to mmap file (ReadOnly)");
+                if (size_ == 0) {
+                    struct stat st;
+                    if (::fstat(fileDescriptor_, &st) != 0) {
+                        ::close(fileDescriptor_);
+                        fileDescriptor_ = -1;
+                        logOpenFailure(filename_, "fstat failed (ReadOnly)");
+                        return;
+                    }
+                    size_ = static_cast<size_t>(st.st_size);
                 }
+                if (size_ == 0) {
+                    // mmap with length 0 is undefined; treat empty files as failure.
+                    ::close(fileDescriptor_);
+                    fileDescriptor_ = -1;
+                    logOpenFailure(filename_, "empty file (ReadOnly)");
+                    return;
+                }
+
+                void *mapped = ::mmap(nullptr, size_, PROT_READ, MAP_SHARED, fileDescriptor_, 0);
+                if (mapped == MAP_FAILED) {
+                    ::close(fileDescriptor_);
+                    fileDescriptor_ = -1;
+                    logOpenFailure(filename_, "mmap failed (ReadOnly)");
+                    return;
+                }
+                data_ = mapped;
             }
             else if (mode_ == Mode::WriteOnly) {
-                // 写模式：以读写方式打开文件，因为 mmap 写映射要求读写文件描述符
+                // Write mode: open read+write because mmap write mappings need it.
                 fileDescriptor_ = ::open(filename_.c_str(), O_RDWR | O_CREAT, 0666);
                 if (fileDescriptor_ == -1) {
-                    throw RuntimeError("Failed to open file (WriteOnly)");
+                    logOpenFailure(filename_, "open failed (WriteOnly)");
+                    return;
                 }
-                // 调整文件大小（确保文件至少有 size_ 字节）
+                // Grow the file so it holds at least size_ bytes.
                 if (lseek(fileDescriptor_, size_ - 1, SEEK_SET) == -1 ||
                     write(fileDescriptor_, "", 1) != 1) {
                     ::close(fileDescriptor_);
-                    throw RuntimeError("Failed to resize file (WriteOnly)");
+                    fileDescriptor_ = -1;
+                    logOpenFailure(filename_, "resize failed (WriteOnly)");
+                    return;
                 }
 
-                // 仅写映射：只允许写操作，读操作可能导致错误
-                data_ = mmap(nullptr, size_, PROT_WRITE, MAP_SHARED, fileDescriptor_, 0);
-                if (data_ == MAP_FAILED) {
+                void *mapped = ::mmap(nullptr, size_, PROT_WRITE, MAP_SHARED, fileDescriptor_, 0);
+                if (mapped == MAP_FAILED) {
                     ::close(fileDescriptor_);
-                    throw RuntimeError("Failed to mmap file (WriteOnly)");
+                    fileDescriptor_ = -1;
+                    logOpenFailure(filename_, "mmap failed (WriteOnly)");
+                    return;
                 }
+                data_ = mapped;
             }
             else if (mode_ == Mode::ReadWrite) {
                 fileDescriptor_ = ::open(filename_.c_str(), O_RDWR | O_CREAT, 0666);
                 if (fileDescriptor_ == -1) {
-                    throw RuntimeError("Failed to open file (ReadWrite)");
+                    logOpenFailure(filename_, "open failed (ReadWrite)");
+                    return;
                 }
-                // 调整文件大小（确保文件至少有 size_ 字节）
+                // Grow the file so it holds at least size_ bytes.
                 if (lseek(fileDescriptor_, size_ - 1, SEEK_SET) == -1 ||
                     write(fileDescriptor_, "", 1) != 1) {
                     ::close(fileDescriptor_);
-                    throw RuntimeError("Failed to resize file (ReadWrite)");
+                    fileDescriptor_ = -1;
+                    logOpenFailure(filename_, "resize failed (ReadWrite)");
+                    return;
                 }
 
-                // 读写映射
-                data_ = mmap(nullptr, size_, PROT_READ | PROT_WRITE, MAP_SHARED, fileDescriptor_, 0);
-                if (data_ == MAP_FAILED) {
+                void *mapped = ::mmap(nullptr, size_, PROT_READ | PROT_WRITE, MAP_SHARED, fileDescriptor_, 0);
+                if (mapped == MAP_FAILED) {
                     ::close(fileDescriptor_);
-                    throw RuntimeError("Failed to mmap file (ReadWrite)");
+                    fileDescriptor_ = -1;
+                    logOpenFailure(filename_, "mmap failed (ReadWrite)");
+                    return;
                 }
+                data_ = mapped;
             }
 #endif
+            // Normalize the failure state: data_ == nullptr implies size_ == 0.
+            if (!data_) {
+                size_ = 0;
+            }
         }
 
         void MemoryMappedFile::close() {

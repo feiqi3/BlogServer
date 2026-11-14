@@ -14,6 +14,7 @@
 #include "Utils/Digital.h"
 #include "Utils/FileReader.h"
 #include "Utils/FileCache.h"
+#include "Utils/HtmlHelper.h"
 #include "Utils/TimeHelper.h"
 #include <algorithm>
 #include <cmath>
@@ -55,6 +56,8 @@ Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::P
         std::string profile;
         std::string titlepic;
         std::string title;
+        std::string titlePlain;
+        std::string profilePlain;
         uint64_t created_at;
         uint64_t updated_at;
         std::string categoryName;
@@ -69,6 +72,8 @@ Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::P
         .profile = _post.profile,
         .titlepic = _post.titlepic,
         .title = _post.title,
+        .titlePlain = stripFxMarkers(_post.title),
+        .profilePlain = stripFxMarkers(_post.profile),
         .created_at = _post.created_at,
         .updated_at = _post.updated_at,
         .categoryName = cateName.value(),
@@ -142,8 +147,8 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
     for(auto && p : postVec){
         BlogProfile profile{
             .id = std::get<0>(p),
-            .title = std::move(std::get<1>(p)),
-            .profile = std::move(std::get<2>(p)),
+            .title = stripFxMarkers(std::get<1>(p)),
+            .profile = stripFxMarkers(std::get<2>(p)),
             .blogtitlepic = std::move(std::get<5>(p)),
             .categoryName = cateName,
             .created_at =  std::get<3>(p),
@@ -201,8 +206,8 @@ Fei::Http::FHttpResponse FrontGroundController::Archive(const Fei::Http::FHttpRe
         std::string ym = TimeHelper::toFormatTime(created_at, "%Y-%m");
         nlohmann::json postObj;
         postObj["id"] = std::get<0>(p);
-        postObj["title"] = std::get<1>(p);
-        postObj["profile"] = std::get<2>(p);
+        postObj["title"] = stripFxMarkers(std::get<1>(p));
+        postObj["profile"] = stripFxMarkers(std::get<2>(p));
         postObj["titlepic"] = std::get<3>(p);
         postObj["createdAt"] = created_at;
         postObj["viewTimes"] = std::get<5>(p);
@@ -269,6 +274,10 @@ Fei::Http::FHttpResponse FrontGroundController::RssXml(const Fei::Http::FHttpReq
 Fei::Http::FHttpResponse FrontGroundController::RobotsTxt(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
     MemoryMappedFile file(BlogWebAssetsPath + "robots.txt", Mode::ReadOnly, 0);
     Fei::Http::FHttpResponse res;
+    if (!file.data()) {
+        res.setStatusCode(Fei::Http::StatusCode::_404);
+        return res;
+    }
     res.setContentType("text/plain; charset=utf-8");
     res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
     return res;
@@ -277,6 +286,10 @@ Fei::Http::FHttpResponse FrontGroundController::RobotsTxt(const Fei::Http::FHttp
 Fei::Http::FHttpResponse FrontGroundController::SitemapXml(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
     MemoryMappedFile file(BlogWebAssetsPath + "sitemap.xml", Mode::ReadOnly, 0);
     Fei::Http::FHttpResponse res;
+    if (!file.data()) {
+        res.setStatusCode(Fei::Http::StatusCode::_404);
+        return res;
+    }
     res.setContentType("application/xml; charset=utf-8");
     res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
     return res;
@@ -285,6 +298,10 @@ Fei::Http::FHttpResponse FrontGroundController::SitemapXml(const Fei::Http::FHtt
 Fei::Http::FHttpResponse FrontGroundController::WebManifest(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
     MemoryMappedFile file(BlogWebAssetsPath + "site.webmanifest", Mode::ReadOnly, 0);
     Fei::Http::FHttpResponse res;
+    if (!file.data()) {
+        res.setStatusCode(Fei::Http::StatusCode::_404);
+        return res;
+    }
     res.setContentType("application/manifest+json; charset=utf-8");
     res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
     return res;
@@ -293,6 +310,10 @@ Fei::Http::FHttpResponse FrontGroundController::WebManifest(const Fei::Http::FHt
 Fei::Http::FHttpResponse FrontGroundController::FaviconIco(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
     MemoryMappedFile file(BlogWebAssetsPath + "favicon.ico", Mode::ReadOnly, 0);
     Fei::Http::FHttpResponse res;
+    if (!file.data()) {
+        res.setStatusCode(Fei::Http::StatusCode::_404);
+        return res;
+    }
     res.setContentType("image/x-icon");
     res.setBody(std::string(static_cast<const char*>(file.data()), file.size()));
     return res;

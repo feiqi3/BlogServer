@@ -4,26 +4,23 @@
 #include "FException.h"
 #include "FLogger.h"
 namespace Blog {
-    // 模式选项：只读、只写、可读可写
+    // Mode options: read-only, write-only, read+write.
     enum class Mode {
         ReadOnly,
         WriteOnly,
         ReadWrite
     };
 
+    // Failure semantics (since 2026-09-22): the constructor never throws.
+    // On open/map failure the object stays in a well-defined "not open" state:
+    // data() == nullptr and size() == 0, with a warn-level log entry.
+    // Callers MUST check data() (or isOpen()) before using the mapping.
     class MemoryMappedFile {
     public:
         //size = 0: get file size auto
         MemoryMappedFile(const std::string& filename, Mode mode, size_t size)
             : filename_(filename), mode_(mode), size_(size), data_(nullptr)
         {
-            {
-                if (size == 0 && mode == Mode::ReadOnly) {
-                    std::fstream fs(filename);
-                    fs.seekg(0, std::ios::end);
-                    size_ = fs.tellg();
-                }
-            }
             open();
         }
 
@@ -33,6 +30,7 @@ namespace Blog {
 
         void* data()const { return data_; }
         size_t size()const { return size_; }
+        bool isOpen()const { return data_ != nullptr; }
     private:
         void open();
         void close();

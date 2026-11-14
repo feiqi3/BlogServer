@@ -43,11 +43,11 @@ void RssBuilder::rebuild() {
   items.reserve(postVec.size());
   for (auto &&p : postVec) {
     RssItem item;
-    item.title = html_unescape(std::get<1>(p));
+    item.title = stripFxMarkers(html_unescape(std::get<1>(p)));
     item.link = std::string(sSiteLink) + "/post/" + std::to_string(std::get<0>(p));
     item.guid = item.link;
     item.pubDate = TimeHelper::toRfc822(std::get<3>(p));
-    item.description = html_unescape(std::get<2>(p));
+    item.description = stripFxMarkers(html_unescape(std::get<2>(p)));
     auto it = catesMap.find(std::get<4>(p));
     if (it != catesMap.end()) {
       item.categoryName = it->second;

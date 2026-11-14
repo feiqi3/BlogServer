@@ -42,6 +42,75 @@ inline void append_codepoint_utf8(std::string &out, uint32_t cp) {
     }
 }
 
+// Strip inline text-effect markers of the form {{key:text}}.
+// Contract v1 (mirrors blogweb src/text-fx.ts):
+//   key  = [A-Za-z][A-Za-z0-9_]*   (case sensitive)
+//   text = any char except '{', '}' and '\n' (may be empty)
+// A well-formed marker (known or unknown key) is replaced by its text part;
+// a malformed one is copied verbatim, character for character.
+inline std::string stripFxMarkers(const std::string &input) {
+    std::string out;
+    out.reserve(input.size());
+
+    const size_t n = input.size();
+    size_t i = 0;
+    while (i < n) {
+        if (input[i] != '{' || i + 1 >= n || input[i + 1] != '{') {
+            out.push_back(input[i]);
+            ++i;
+            continue;
+        }
+
+        // key = [A-Za-z][A-Za-z0-9_]*
+        size_t p = i + 2;
+        char first = (p < n) ? input[p] : '\0';
+        bool keyStart = (first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z');
+        if (!keyStart) {
+            out.push_back(input[i]);
+            ++i;
+            continue;
+        }
+        size_t keyEnd = p + 1;
+        while (keyEnd < n) {
+            char c = input[keyEnd];
+            bool keyChar = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                           (c >= '0' && c <= '9') || c == '_';
+            if (!keyChar) break;
+            ++keyEnd;
+        }
+        if (keyEnd >= n || input[keyEnd] != ':') {
+            out.push_back(input[i]);
+            ++i;
+            continue;
+        }
+
+        // payload = [^{}\n]*, terminated by "}}"
+        size_t payloadStart = keyEnd + 1;
+        size_t q = payloadStart;
+        bool matched = false;
+        while (q < n) {
+            char c = input[q];
+            if (c == '{' || c == '\n') break;
+            if (c == '}') {
+                if (q + 1 < n && input[q + 1] == '}') {
+                    out.append(input, payloadStart, q - payloadStart);
+                    i = q + 2;
+                    matched = true;
+                }
+                break;
+            }
+            ++q;
+        }
+        if (matched) continue;
+
+        // malformed shape -> emit the brace literally and rescan from next char
+        out.push_back(input[i]);
+        ++i;
+    }
+
+    return out;
+}
+
 inline std::string html_unescape(const std::string &input) {
     std::string out;
     out.reserve(input.size());

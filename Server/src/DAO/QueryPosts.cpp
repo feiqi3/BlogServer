@@ -65,17 +65,17 @@ auto PostQuery::QueryPostsForArchive()
   return query.exec().getVector();
 }
 
-auto PostQuery::QueryPostsBasicStatusByPage(uint64_t lastId,int perPageNum)      -> std::vector<
+auto PostQuery::QueryPostsBasicStatusByPage(uint64_t pageIdx,int perPageNum)      -> std::vector<
 std::tuple<uint64_t, std::string, uint64_t, uint64_t>>{
     auto getQuery = []() {
         Query q(FIELD(Model::Post, id) - FIELD(Model::Post, title) -
                  FIELD(Model::Post, created_at) -
                 FIELD(Model::Post, updated_at));
-    q.From("Posts").Where(FIELD(Model::Post, id) > PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id)).setStaticQuery(true);
+    q.From("Posts").skip(PARAM).limit(PARAM).OrderByDesc(FIELD(Model::Post,id)).setStaticQuery(true);
         return q;
       };
     thread_local auto query = getQuery();
-  return query.exec(lastId,perPageNum).getVector();
+  return query.exec(perPageNum,pageIdx * perPageNum).getVector();
 }
 
 std::optional<Model::Post> PostQuery::QueryPostById(uint64_t postId)
@@ -189,6 +189,17 @@ int PostQuery::QueryPostCount(){
         Query<int> q;
         q.Select(SelectCount());
         q.From("Posts").Where(FIELD(Model::Post, hide) == 0).setStaticQuery(true);
+        return q;
+        };
+    thread_local auto query = getQuery();
+    return query.exec().getVector()[0];
+}
+
+int PostQuery::QueryAllPostCount(){
+    auto getQuery = []() {
+        Query<int> q;
+        q.Select(SelectCount());
+        q.From("Posts").setStaticQuery(true);
         return q;
         };
     thread_local auto query = getQuery();

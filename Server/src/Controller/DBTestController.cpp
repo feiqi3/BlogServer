@@ -3,6 +3,7 @@
 #include "Core/JsonTool.h"
 #include "Core/ServerBasicDef.h"
 #include "DAO/TestMessageQuery.h"
+#include "Http/FHttpDef.h"
 #include "Http/FHttpResponse.h"
 #include "Utils/Digital.h"
 #include "Utils/FileReader.h"
@@ -76,6 +77,10 @@ DatabaseTestPageController::GetMessagePage(const Fei::Http::FHttpRequest &,
   MemoryMappedFile file(BlogWebPagePath + "testMessage.html", Mode::ReadOnly,
                         0);
   Fei::Http::FHttpResponse res;
+  if (!file.data()) {
+    res.setStatusCode(Fei::Http::StatusCode::_404);
+    return res;
+  }
   res.setBody(std::string((char *)file.data(), file.size()));
   return res;
 }

@@ -30,8 +30,8 @@ uint64_t, std::string, uint64_t>>;
                                 uint64_t, uint64_t>>;
 
 
-  // Id, Title, Create Time, Update Time
-  static auto QueryPostsBasicStatusByPage(uint64_t lastId, int perPageNum = 10)
+  // Id, Title, Create Time, Update Time — admin article list, pageIdx starts at 0
+  static auto QueryPostsBasicStatusByPage(uint64_t pageIdx, int perPageNum = 10)
       -> std::vector<std::tuple<uint64_t, std::string, uint64_t, uint64_t>>;
 
   static std::optional<Model::Post> QueryPostById(uint64_t postId);
@@ -55,6 +55,7 @@ uint64_t, std::string, uint64_t>>;
   static void updateViewTimes(uint64_t id);
 
   static int QueryPostCount();
+  static int QueryAllPostCount();
   static int QueryPostOfCategoryCount(uint64_t id);
 
   // Id, Title, Profile, Create Time, CategoryId — RSS feed source (allow_rss == 1)

@@ -55,8 +55,14 @@ MemMapedFilePtr FileCache::getOrGen(const std::string &path) const {
       return ret;
     }
   }
+  auto file = std::make_shared<MemoryMappedFile>(path, Mode::ReadOnly, 0);
+  if (!file->data()) {
+    // Do not cache negative results: caching a failed handle would keep a
+  // "file appears later" scenario failing until the cache entry expires.
+    return file;
+  }
   FileCacheLine line{
-      .file = std::make_shared<MemoryMappedFile>(path, Mode::ReadOnly, 0),
+      .file = std::move(file),
       .cacheTime = getTime()};
   dp->mmap.insert(path, line);
   return line.file;
