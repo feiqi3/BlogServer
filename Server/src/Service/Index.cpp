@@ -2,6 +2,7 @@
 #include "Core/ServerBasicDef.h"
 #include "Service/BlogCommonDataSetter.h"
 #include "Utils/Digital.h"
+#include "Utils/HtmlHelper.h"
 #include <string>
 #include "Core/TemplateRender.h"
 #include "DAO/QueryPosts.h"
@@ -17,11 +18,11 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
         catesMap.insert({std::get<0>(i),std::move(std::get<1>(i))});
     }
     auto pageNum = var.get("page");
-    int page = 0;
+    int page = 1;
     if(!pageNum.empty() && Digital::isNumber(pageNum)){
-        page = std::min(std::stoi(pageNum)  ,0);
+        page = std::max(std::stoi(pageNum),0);
     }
-    auto postVec = DAO::PostQuery::QueryPostDataProfile(page );
+    auto postVec = DAO::PostQuery::QueryPostDataProfile(page -1  );
     struct BlogProfile{
         uint64_t id;
         std::string title;
@@ -29,17 +30,19 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
         std::string blogtitlepic;
         std::string categoryName;
         uint64_t created_at;
+        uint64_t viewTimes;
     };
     std::vector<BlogProfile> prf;
     prf.reserve(postVec.size());
     for(auto && p : postVec){
         BlogProfile profile{
             .id = std::get<0>(p),
-            .title = std::move(std::get<1>(p)),
-            .profile = std::move(std::get<2>(p)),
+            .title = stripFxMarkers(std::get<1>(p)),
+            .profile = stripFxMarkers(std::get<2>(p)),
             .blogtitlepic = std::move(std::get<5>(p)),
             .categoryName = catesMap[std::get<6>(p)],
             .created_at =  std::get<3>(p),
+            .viewTimes = std::get<7>(p),
         };
         prf.push_back(std::move(profile));
     }

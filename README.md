@@ -1,15 +1,14 @@
-A simple Server for my blog.    
-(And is still on going.)
-
-Inlcuding a TcpServer Lib and a RESTful api Http lib.
+A hand-made Http Server for my blog ["feiqi3.cn"](feiqi3.cn).    
 
 Currently can run on linux and windows.     
 
-The features I am working on :       
+This Server focus on the following features:    
+- Http support   
+- TLS1.2/1.3 support     
+- HTTP2 support     
+- An easy to use RESTful API system
+- An Orm System   
+- sqlite3 database   
 
-- Simple orm  
-- A Good looking Blog 
 
-
-Requirement:    
-C++20, gcc-12+, clang-15+, msvc-19.36+    
+Enjoy!

@@ -80,6 +80,15 @@ void FTcpServer::run() {
       _Loop.detach();
     }
   }
+  if (m_jobLoop) m_jobThread = std::thread([this] { m_jobLoop->Loop(); });
+}
+
+FEventLoop& FTcpServer::jobLoop() {
+  if (!m_jobLoop) {
+    if (m_running) throw std::logic_error("Configure the shared JobLoop before FTcpServer::run");
+    m_jobLoop = std::make_unique<FEventLoop>(std::make_unique<FEPollListener>());
+  }
+  return *m_jobLoop;
 }
 
 void FTcpServer::stop(bool forceClose) {
@@ -108,6 +117,11 @@ void FTcpServer::stop(bool forceClose) {
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }; 
       toCloseNums--;
+  }
+  if (m_jobThread.joinable()) {
+    if (forceClose) m_jobLoop->ForceQuit();
+    m_jobLoop->Quit();
+    m_jobThread.join();
   }
   m_running = false;
 }

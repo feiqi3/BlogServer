@@ -10,6 +10,7 @@
 #include "FHttp2Helper.h"
 namespace Fei{
 	class FTcpServer;
+	class FEventLoop;
 }
 namespace Fei::Http {
 
@@ -34,6 +35,7 @@ public:
 	void removeListenPort(uint32 port);
 	void run(); 
 	void stop(bool force = false);
+	FEventLoop& jobLoop();
 	void setOnInternalErrorCB(InternalErrorCallback cb) { mInternalErrCallback = std::move(cb); }
 	void setOnRoutNotMatchCB(RouteNotMatchCallback cb) { mRouteNotMatchCallback = std::move(cb); }
 	void setPreSendResponseCB(PreSendHttpResponseCallback cb) { mPreSendCallback = std::move(cb); }

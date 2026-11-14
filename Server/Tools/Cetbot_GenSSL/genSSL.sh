@@ -72,3 +72,22 @@ nohup "$SERVER_EXEC"
 disown
 
 echo "[$(date '+%F %T')] 服务器已启动"
+
+# -------------------------
+# GoatCounter 证书同步（安装后生效，未安装则跳过）
+# -------------------------
+if [ -x /opt/goatcounter/goatcounter ] && [ -f "$CERTDIR/private.pem" ]; then
+  echo "[$(date '+%F %T')] 同步证书到 GoatCounter..."
+  mkdir -p /opt/goatcounter/ssl
+  cp "$CERTDIR/cert.pem"    /opt/goatcounter/ssl/cert.pem
+  cp "$CERTDIR/private.pem" /opt/goatcounter/ssl/private.pem
+  chmod 600 /opt/goatcounter/ssl/private.pem
+  # GC 的 -tls file 只接受 单证书+key 的合并文件（拒绝多证书 fullchain）
+  awk '/BEGIN CERT/{n++} n==1' "$CERTDIR/cert.pem" > /opt/goatcounter/ssl/combined.pem
+  cat  "$CERTDIR/private.pem" >> /opt/goatcounter/ssl/combined.pem
+  chmod 600 /opt/goatcounter/ssl/combined.pem
+  systemctl reload goatcounter 2>/dev/null || systemctl restart goatcounter
+  echo "[$(date '+%F %T')] GoatCounter 证书已同步并重载"
+else
+  echo "[$(date '+%F %T')] GoatCounter 未安装，跳过证书同步"
+fi

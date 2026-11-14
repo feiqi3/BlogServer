@@ -290,8 +290,8 @@ def main():
     create_domain_if_not_exists(tencent_conf,main_domain)
     record_id = add_dns_record(tencent_conf, main_domain, ext.subdomain, value)
 
-    print("等待 DNS 生效（约60秒）...")
-    time.sleep(60)
+    print("等待 DNS 生效（约160秒）...")
+    time.sleep(160)
 
     # 3. 继续 Certbot 完成签发
     proc.stdin.write("\n")

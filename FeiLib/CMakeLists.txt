@@ -18,6 +18,11 @@ file(GLOB_RECURSE HEADERS "include/*.h")
 # Create library
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
 
+# Use clang-cl toolset for FeiLib target (VS generator only)
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    set_target_properties(${PROJECT_NAME} PROPERTIES VS_PLATFORM_TOOLSET ClangCL)
+endif()
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -38,9 +43,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/3r
 add_subdirectory(3rd/json)
 target_link_libraries(${PROJECT_NAME} PUBLIC nlohmann_json::nlohmann_json)
 
-set(INJA_USE_EMBEDDED_JSON OFF)
-set(INJA_BUILD_TESTS OFF)
-set(BUILD_BENCHMARK OFF)
+set(INJA_USE_EMBEDDED_JSON OFF CACHE BOOL "" FORCE )
+set(INJA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_BENCHMARK OFF CACHE BOOL "" FORCE)
 add_subdirectory(3rd/inja)
 target_link_libraries(${PROJECT_NAME} PUBLIC inja)
 
@@ -78,6 +83,15 @@ add_custom_command(
     COMMENT "Copying TBB $<TARGET_FILE:TBB::tbb> to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )
 
+# Copy nghttp2 DLL to FeiLib output dir (Bin/<Config>) for redistribution
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:nghttp2>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying nghttp2 to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
+)
+
 set(ENABLE_LIB_ONLY ON)
 add_subdirectory(3rd/nghttp2)
 target_include_directories(${PROJECT_NAME} PRIVATE 3rd/nghttp2)
@@ -102,8 +116,8 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/Bin/Debug"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/Bin/Release"
-    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/Lib/Debug"
-    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/Lib/Release"
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/Bin/Debug"
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/Bin/Release"
     ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/Lib/Debug"
     ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/Lib/Release"
 )
@@ -171,6 +185,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     # Copy DLL files
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:${PROJECT_NAME}>
+        ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/bin/$<CONFIG>/
+
+    # Copy dependency DLLs to distribution
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:${tbb_target}>
+        ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/bin/$<CONFIG>/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:nghttp2>
         ${CMAKE_SOURCE_DIR}/3rd/${PROJECT_NAME}/bin/$<CONFIG>/
 
     # Copy LIB files

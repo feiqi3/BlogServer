@@ -22,7 +22,12 @@ public:
     certFile = pathVar.get("filename");
     
     MemoryMappedFile file(CertFileFolder + certFile, Mode::ReadOnly, 0);
-		ret.setBody(std::string((char*)file.data(),file.size()));
+    if (!file.data()) {
+        // Missing challenge file: ACME expects a 404 here.
+        ret.setStatusCode(Fei::Http::StatusCode::_404);
+        return ret;
+    }
+    ret.setBody(std::string((char*)file.data(),file.size()));
   	return ret;
   }
 

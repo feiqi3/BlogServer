@@ -32,7 +32,7 @@ public:
   void CancelTask(TimerID id); 
 private:
 std::mutex m_mutex;
-  uint64 m_timerCounter;
+  uint64 m_timerCounter = 0;
   std::multimap<TimePoint,FTimerTask> m_tasks;
   std::unordered_map<TimerID, TimePoint> m_timerID2Time;
   std::vector<TimerFunc> m_curTasks;

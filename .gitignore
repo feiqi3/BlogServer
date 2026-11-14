@@ -37,3 +37,15 @@ coverage/
 tmp/
 temp/
 .cache/
+
+# AI/agent build trees
+build-clang/
+build-vs/
+build_mingw/
+build-linux/
+
+# DB backups
+Server/resources/database/*.bak.*
+# GoatCounter credentials (plaintext secrets)
+Server/Tools/GoatCounter/gc_credentials.cfg
+Server/Tools/GoatCounter/gc_credentials.*.cfg

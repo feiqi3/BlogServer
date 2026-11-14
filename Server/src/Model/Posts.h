@@ -17,6 +17,10 @@ public:
   uint64_t created_at;
   uint64_t updated_at;
   uint64_t view_times;
+  int allow_comment;
+  int allow_rss;
+  int hide;
+  std::string script_name;
  ENTITY_TABLE(Posts);
  AUTO_INC_PK(id);
 };

@@ -14,6 +14,6 @@ target_link_libraries(${projectname_server} PUBLIC FeiLib)
 add_custom_command(TARGET ${projectname_server} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
         $<TARGET_FILE:FeiLib>
-        $<TARGET_FILE_DIR:${projectname_server}
+        $<TARGET_FILE_DIR:${projectname_server}>
     COMMENT "Copying Dependency"
 )
