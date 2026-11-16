@@ -95,4 +95,52 @@ HTTP 202 means accepted, not activated. HTTP 429 means another operation is
 running; 401 requires login; 403 rejects an unsafe write; 501 means admin mode
 is unavailable. Status reads perform no disk I/O. File work uses FeiLib JobPool,
 and runtime work uses the server's FeiLib job loop. Stop administration before
-stopping that loop. Inbound script routes and existing-page hooks are pending.
+stopping that loop. Arbitrary inbound script routes are pending.
+
+## Article hooks
+
+Export named hook groups from the active package, then select a group in the
+article editor. Groups share the package runtime; visits do not create a VM.
+
+```js
+export const article = {
+    async OnSubmit(event, call) {
+        const category = await call.db.categories.get(event.draft.category_id);
+        if (!category) throw new Error('Category missing');
+        return {title: event.draft.title.trim()};
+    },
+    async OnRequest(event, call) {
+        return {profile: event.post.profile + ' — welcome'};
+    }
+};
+```
+
+Root `OnSubmit`/`OnRequest` exports form the `default` group. Hook names are case
+sensitive. `OnSubmit` receives `{draft, operation, postId}`, returns a field patch
+or null, and finishes before persistence. Errors/timeouts reject the save.
+Concurrent edits detected during preprocessing require reload/retry. `OnRequest`
+receives `{post, postId, request: {path, method}}`; its patch affects only this
+render. Script/patch errors and the 2-second invocation timeout use the original
+article. Capacity/render failures return errors. No configured association keeps
+the existing native path, with no extra SQL, JS call or task submission.
+
+Async model operations: `call.db.posts.get(id)`, `.list({limit,offset})`,
+`.update(id, patch)`, and `call.db.categories.get(id)`/`.list(options)`. IDs are
+decimal strings. Lists accept limits 1..100 and offsets 0..100000. Post lists
+return summaries. Model writes do not trigger article hooks and are forbidden
+inside `OnSubmit`; return the processed draft instead. `ctx.db` provides the
+same reads for lifecycle hooks; use invocation-scoped `call` APIs for requests.
+The Server bounds invocation input/output JSON at 256 KiB.
+During shutdown, pending article calls are cancelled and new submissions receive
+HTTP 503. `onStop` may still perform model reads before workers and loops close.
+
+## Profiling
+
+```text
+ProfilingEnabled: true
+ProfilingDirectory: /data/blog/profiling
+```
+
+Restart to apply. Defaults to disabled; enabling collects native scopes and
+script invocation durations, including awaited work. Admin statistics and file
+locations are described in [Server profiling](../../docs/profiling.md).

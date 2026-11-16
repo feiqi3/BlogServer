@@ -25,10 +25,20 @@ struct FScriptResult {
 struct FScriptExecution {
     std::string script, phase, error;
     std::chrono::milliseconds duration{};
+    std::chrono::microseconds elapsed{};
+    std::uint64_t generation = 0;
+};
+struct FScriptNativeCall {
+    std::string script, hook;
+    std::uint64_t invocationId = 0;
+    ScriptValue arguments;
 };
 struct FScriptOptions {
     Http::ClientOptions http;
     std::function<void(const FScriptExecution&)> report;
+    std::size_t maxJsonBytes = 64 * 1024;
+    bool profileInvocations = false;
+    bool reportInvocations = false; // Optional string-based observer; profiling itself uses cached IDs.
 };
 namespace ScriptDetail {
 template<class T> T argument(const ScriptValue& value) {
@@ -68,6 +78,9 @@ class F_API FScriptEngine {
 public:
     using Completion=std::function<void(FScriptResult)>;
     using NativeFunction=std::function<ScriptValue(const ScriptValue&)>;
+    // Called promptly on the script loop. The host starts bounded asynchronous
+    // work, completes exactly once (also after cancellation), and returns its handle.
+    using NativeAsyncFunction=std::function<Async::OperationHandle(FScriptNativeCall,Completion)>;
     explicit FScriptEngine(FEventLoop&,FScriptOptions options={});
     ~FScriptEngine();
     FScriptEngine(const FScriptEngine&)=delete;
@@ -77,6 +90,7 @@ public:
         bindFunction(std::move(name),[function](const ScriptValue& args){return ScriptDetail::call(function,args,std::index_sequence_for<Args...>{});});
     }
     void bindFunction(std::string name,NativeFunction);
+    void bindAsyncFunction(std::string name,NativeAsyncFunction);
     void addScript(std::string name,std::string file,std::chrono::milliseconds interval={});
     void start();
     Async::OperationHandle load(std::string name,FScriptSource,Completion,

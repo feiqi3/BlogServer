@@ -15,7 +15,7 @@ namespace Blog{
         bool isLogin(const std::string& sessionId)const;
         bool isOnLock();
         
-        bool postOrModifyBlog(const nlohmann::json& json,std::string& out);
+        bool postOrModifyBlog(const nlohmann::json& json,std::string& out,uint64_t* savedId=nullptr);
         bool deleteBlog(uint64_t id,std::string& out);
         bool postOrModifyCategory(const nlohmann::json& json,std::string& out);
         bool deleteCategory(uint64_t id,std::string& out);

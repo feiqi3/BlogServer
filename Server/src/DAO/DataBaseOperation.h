@@ -91,6 +91,9 @@ public:
   DBResultPtr Exec(const std::string &sqlFmt,
                    const std::vector<std::string> &userInParameter) const;
   const char* getErrMsg() const ;
+  uint64_t lastInsertRowId() const;
+  // Configure new background workers before their first database operation.
+  void usePrivateCacheForCurrentThread();
   template <typename... Args>
   DBResultPtr Exec(const std::string &sqlFmt, Args &&...arg) {
     auto stmt = stmtPrepare(sqlFmt);

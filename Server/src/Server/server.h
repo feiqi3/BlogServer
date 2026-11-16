@@ -7,7 +7,8 @@
 #include <memory>
 
 namespace Blog {
-	namespace Script { class ScriptAdminService; }
+    class ProfilerService;
+	namespace Script { class ScriptAdminService; class ArticleHookService; }
 	class Server {
 	public:
 		Server();
@@ -19,8 +20,11 @@ namespace Blog {
 	private:
 		std::atomic_bool shouldClose{false};
 		Fei::Http::FHttpServer* server;
+        std::shared_ptr<ProfilerService> profiler;
 #ifdef FEILIB_ENABLE_SCRIPT
+        void stopScriptServices();
 		std::shared_ptr<Script::ScriptAdminService> scripts;
+        std::shared_ptr<Script::ArticleHookService> articleHooks;
 #endif
 	};
 }

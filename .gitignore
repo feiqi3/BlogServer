@@ -50,6 +50,7 @@ build-linux/
 Server/resources/database/*.bak.*
 # Runtime script uploads and activation records
 Server/resources/scripts/versions/
+Server/resources/profiling/
 # GoatCounter credentials (plaintext secrets)
 Server/Tools/GoatCounter/gc_credentials.cfg
 Server/Tools/GoatCounter/gc_credentials.*.cfg

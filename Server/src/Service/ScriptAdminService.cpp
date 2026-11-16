@@ -1,5 +1,6 @@
 #ifdef FEILIB_ENABLE_SCRIPT
 #include "Service/ScriptAdminService.h"
+#include "Service/ProfilerService.h"
 #include "ScriptRuntime/VersionStore.h"
 #include "Async/FJobPool.h"
 #include "FEventLoop.h"
@@ -28,6 +29,8 @@ struct ScriptAdminService::State {
     std::map<std::string,nlohmann::json> jobs;
     std::deque<std::string> order;
     std::deque<nlohmann::json> events;
+    nlohmann::json functions=nlohmann::json::array();
+    std::function<void(const nlohmann::json&)> activated;
     struct Outcome {bool success=false;std::string version,error;nlohmann::json snapshot;};
     nlohmann::json snapshot(){
         auto active=store.active();
@@ -39,7 +42,7 @@ struct ScriptAdminService::State {
                 versions.push_back({{"id",id},{"entry",source.entry},{"bytes",bytes},{"files",source.sources.size()},{"valid",true}});
             }catch(const std::exception&){versions.push_back({{"id",id},{"valid",false}});}
         }
-        return {{"current",active.current},{"previous",active.previous},{"versions",std::move(versions)}};
+        return {{"current",active.current},{"previous",active.previous},{"versions",std::move(versions)},{"functions",functions}};
     }
     Outcome perform(const std::string& kind,Fei::FScriptSource source,const std::string& bootstrap){
         Outcome outcome;
@@ -58,9 +61,14 @@ struct ScriptAdminService::State {
             source=store.load(outcome.version);
             auto commit=store.prepareActivation(outcome.version);
             std::promise<Fei::FScriptResult> loaded;auto future=loaded.get_future();
-            engine.load("blog",std::move(source),[&loaded](auto result){loaded.set_value(std::move(result));},interval,std::move(commit));
+            engine.load("blog",std::move(source),[this,&loaded](auto result){
+                if(result.ok()&&activated){try{activated(result.value);}catch(...){}}
+                loaded.set_value(std::move(result));
+            },interval,std::move(commit));
             auto result=future.get();
+            if(auto profiler=ProfilerService::current())profiler->version("blog",result.value.is_object()?result.value.value("generation",uint64_t(0)):0,outcome.version);
             if(!result.ok())throw std::runtime_error(result.error.message);
+            functions=result.value.value("functions",nlohmann::json::array());
             outcome.success=true;
         }catch(const std::exception& e){outcome.error=brief(e.what());}
         catch(...){outcome.error="Script operation failed";}
@@ -72,9 +80,10 @@ ScriptAdminService::ScriptAdminService(std::unique_ptr<State> state):state_(std:
 ScriptAdminService::~ScriptAdminService(){shutdown();}
 std::shared_ptr<ScriptAdminService> ScriptAdminService::current(){return current_.load();}
 std::shared_ptr<ScriptAdminService> ScriptAdminService::create(Fei::FEventLoop& loop,Fei::FScriptEngine& engine,
-    std::string directory,std::chrono::milliseconds interval,std::string bootstrap){
+    std::string directory,std::chrono::milliseconds interval,std::string bootstrap,std::function<void(const nlohmann::json&)> activated){
     if(loop.HasStoped() || loop.isInLoopThread())throw std::logic_error("Create script administration on a control thread with a running Loop");
     auto service=std::shared_ptr<ScriptAdminService>(new ScriptAdminService(std::make_unique<State>(loop,engine,std::move(directory),interval)));
+    service->state_->activated=std::move(activated);
     std::shared_ptr<ScriptAdminService> empty;
     if(!current_.compare_exchange_strong(empty,service))throw std::logic_error("Script administration already active");
     auto submitted=service->submit("restore",{},std::move(bootstrap));

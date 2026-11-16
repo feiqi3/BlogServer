@@ -10,7 +10,8 @@ class ScriptAdminService : public std::enable_shared_from_this<ScriptAdminServic
 public:
     struct Submission { std::string id,error; };
     static std::shared_ptr<ScriptAdminService> create(Fei::FEventLoop&,Fei::FScriptEngine&,
-        std::string directory,std::chrono::milliseconds interval,std::string bootstrap={});
+        std::string directory,std::chrono::milliseconds interval,std::string bootstrap={},
+        std::function<void(const nlohmann::json&)> activated={});
     static std::shared_ptr<ScriptAdminService> current();
     ~ScriptAdminService();
     nlohmann::json status() const;

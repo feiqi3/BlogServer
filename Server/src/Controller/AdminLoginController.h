@@ -29,6 +29,7 @@ namespace Blog{
 
 		Fei::Http::FHttpResponse Login(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		Fei::Http::FHttpResponse Post(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
+        Fei::Http::FHttpResponse Profiling(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
         Fei::Http::FHttpResponse DeletePost(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
 		
         Fei::Http::FHttpResponse Category(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var);
@@ -36,6 +37,7 @@ namespace Blog{
         REGISTER_MAPPING_BEGIN("/api")
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/login", AdminController, Login);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/blog", AdminController, Post);
+            REGISTER_MAPPING_FUNC(Fei::Http::Method::GET, "/profiling", AdminController, Profiling);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::DELET, "/blog/{id}", AdminController, DeletePost);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::POST, "/category", AdminController, Category);
 			REGISTER_MAPPING_FUNC(Fei::Http::Method::DELET, "/category/{id}", AdminController, DeleteCategroy);

@@ -1,6 +1,7 @@
 #include <sqlite3.h>
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 #include "DataBaseOperation.h"
 #include "FLogger.h"
@@ -17,10 +18,19 @@ using namespace Fei;
 using namespace Blog;
 
 namespace {
-	thread_local sqlite3* _db;
-
-	thread_local std::vector<sqlite3_stmt*> _stmtToClearPostThread;
-	thread_local bool sHasAddedThreadClean = false;
+    struct ThreadDatabase {
+        sqlite3* connection = nullptr;
+        std::vector<sqlite3_stmt*> statements;
+        bool loopCleanupInstalled = false;
+        bool privateCache = false;
+        void close() noexcept {
+            for(auto* statement:statements)sqlite3_finalize(statement);
+            statements.clear();
+            if(connection){sqlite3_close_v2(connection);connection=nullptr;}
+        }
+        ~ThreadDatabase(){close();}
+    };
+    thread_local ThreadDatabase threadDatabase;
 
 	int toSqlite3Type(DataType dtp) {
 		switch (dtp)
@@ -67,8 +77,8 @@ public:
 	std::string dbPath;
 public:
 	const char* getErrMsg()const {
-		if(_db != 0)
-			return sqlite3_errmsg(_db);
+		if(threadDatabase.connection != 0)
+			return sqlite3_errmsg(threadDatabase.connection);
 		return 0;
 	};
 
@@ -83,44 +93,33 @@ public:
 	}
 
 	bool localDbConnValid()const {
-		return _db != nullptr;
+		return threadDatabase.connection != nullptr;
 	}
 
 	void makeConThreadLocal() {
-		if (_db != nullptr)return;
-		int flag = SQLITE_OPEN_READWRITE | SQLITE_OPEN_SHAREDCACHE;
-		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &_db, flag, nullptr), {
-		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(_db));
+		if (threadDatabase.connection != nullptr)return;
+		int flag = SQLITE_OPEN_READWRITE | (threadDatabase.privateCache?SQLITE_OPEN_PRIVATECACHE:SQLITE_OPEN_SHAREDCACHE);
+		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &threadDatabase.connection, flag, nullptr), {
+		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(threadDatabase.connection));
 			});
-		sqlite3_busy_timeout(_db,5000);
-		sqlite3_exec(_db, "PRAGMA foreign_keys = ON;", 0, 0, 0);
-		sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", 0, 0, 0);
+		sqlite3_busy_timeout(threadDatabase.connection,5000);
+		sqlite3_exec(threadDatabase.connection, "PRAGMA foreign_keys = ON;", 0, 0, 0);
+		sqlite3_exec(threadDatabase.connection, "PRAGMA journal_mode=WAL;", 0, 0, 0);
 
-		if(!sHasAddedThreadClean){
-			sHasAddedThreadClean = true;
-			auto vec = & _stmtToClearPostThread;
-			auto db = &_db;
-			Server::CurThreadCleanCallback([vec,db](){
-				for(auto&& i : *vec){
-					sqlite3_finalize(i);
-				}
-				_stmtToClearPostThread.clear();
-				auto ret =sqlite3_close_v2(*db);
-				if(ret != SQLITE_OK){
-					Logger::instance()->log(MODULE_NAME,lvl::err,"Close database error, reason \"{}\"",sqlite3_errmsg(*db));
-				}
-			});
-		}
+        if(!threadDatabase.loopCleanupInstalled){
+            threadDatabase.loopCleanupInstalled = true;
+            Server::CurThreadCleanCallback([]{threadDatabase.close();});
+        }
 
 	}
 
 	sqlite3* getDbConn() {
 		if (localDbConnValid()) {
-			return _db;
+			return threadDatabase.connection;
 		}
 		else {
 			makeConThreadLocal();
-			return _db;
+			return threadDatabase.connection;
 		}
 	}
 
@@ -273,7 +272,8 @@ void Blog::DatabaseOperation::resetStmt(void* stmt)
 }
 
 void Blog::DatabaseOperation::addThreadCleanDBData(const DBResultPtr& ptr){
-	_stmtToClearPostThread.push_back((sqlite3_stmt*)ptr->mData);
+	if(ptr->mIsAutoCleaned)return;
+	threadDatabase.statements.push_back((sqlite3_stmt*)ptr->mData);
 	ptr->mIsAutoCleaned = true;
 }
 
@@ -296,6 +296,14 @@ Blog::DBResult::DBResult(void *data, int cols) : mData(data), cols(cols) {}
 const char* Blog::DatabaseOperation::getErrMsg() const
 {
 	return dp->getErrMsg();
+}
+uint64_t Blog::DatabaseOperation::lastInsertRowId()const{
+    return static_cast<uint64_t>(sqlite3_last_insert_rowid(dp->getDbConn()));
+}
+
+void Blog::DatabaseOperation::usePrivateCacheForCurrentThread(){
+    if(threadDatabase.connection&&!threadDatabase.privateCache)throw std::logic_error("Configure background database cache before opening a connection");
+    threadDatabase.privateCache=true;
 }
 
 const char* Blog::DBResult::getString(uint32_t col) const

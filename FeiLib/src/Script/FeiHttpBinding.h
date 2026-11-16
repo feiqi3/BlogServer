@@ -19,23 +19,28 @@ namespace Fei::Script {
 class FeiHttpBinding : public std::enable_shared_from_this<FeiHttpBinding> {
 public:
     using ErrorHandler = std::function<void(const std::string&)>;
-    static std::shared_ptr<FeiHttpBinding> create(Fei::Http::FHttpClient& client, ErrorHandler onError);
-    static std::shared_ptr<FeiHttpBinding> createBare(Fei::Http::FHttpClient&, ErrorHandler);
+    static std::shared_ptr<FeiHttpBinding> create(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes=64*1024);
+    static std::shared_ptr<FeiHttpBinding> createBare(Fei::Http::FHttpClient&, ErrorHandler,std::size_t maxJsonBytes=64*1024);
+    std::vector<std::string> functionNames();
     void installHttp();
     void installTimers();
     void installNative(const std::function<void(JSContext*, JSValueConst)>& installer);
     void bindFunction(const std::string&,FScriptEngine::NativeFunction);
+    void bindAsyncFunction(std::string name,std::string script,FScriptEngine::NativeAsyncFunction);
     Async::OperationHandle invoke(const std::string& name, const std::string& inputJson,
         InvocationCallback completion, std::chrono::milliseconds timeout = std::chrono::seconds(30), std::uint64_t id = 0);
     void evaluate(const std::string& source);
     void loadModule(std::map<std::string, std::string> sources, const std::string& entry);
     // Optional global lifecycle function; waits for a returned Promise without blocking.
     void callHook(const std::string& name, std::function<void(std::string)> completion);
-    void stopGracefully(std::function<void()> onClosed);
+    using StopObserver=std::function<void(std::string,std::chrono::nanoseconds)>;
+    void stopGracefully(std::function<void()> onClosed,bool cancelInvocations=true,StopObserver observer={});
+    void cancelInvocations();
     void close(std::function<void()> onClosed);
     void setValidating(bool value) { checkLoop(); validating_ = value; }
 private:
-    explicit FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError);
+    explicit FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes);
+    std::size_t maxJsonBytes_;
     struct Pending;
     struct Timer;
     struct Hook;
@@ -52,6 +57,21 @@ private:
     static JSValue httpGet(JSContext*, JSValueConst, int, JSValueConst*);
     static JSValue after(JSContext*, JSValueConst, int, JSValueConst*);
     static JSValue nativeCall(JSContext*,JSValueConst,int,JSValueConst*,int,JSValue*);
+    static JSValue nativeAsyncCall(JSContext*,JSValueConst,int,JSValueConst*,int,JSValue*);
+    void installAsync(JSValueConst host,std::size_t index,std::uint64_t owner);
+    std::string invocationName(std::uint64_t id) const;
+    struct NativePending {
+        std::size_t id;
+        std::uint64_t owner;
+        JSValue resolve=JS_UNDEFINED,reject=JS_UNDEFINED;
+        Async::OperationHandle handle;
+        std::atomic_bool delivered{false};
+    };
+    struct AsyncRegistration {std::string name,script;FScriptEngine::NativeAsyncFunction function;};
+    std::vector<AsyncRegistration> asynchronous_;
+    std::unordered_map<std::size_t,std::shared_ptr<NativePending>> nativePending_;
+    void completeNative(std::shared_ptr<NativePending>,FScriptResult);
+    void notifyClosed();
     void fireTimer(std::size_t id);
     void complete(std::shared_ptr<Pending>, Fei::Async::Result<Fei::Http::ClientResponse>);
     void checkLoop() const;

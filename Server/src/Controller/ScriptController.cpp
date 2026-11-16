@@ -6,6 +6,7 @@
 #include <optional>
 #ifdef FEILIB_ENABLE_SCRIPT
 #include "Service/ScriptAdminService.h"
+#include "Service/ProfilerService.h"
 #endif
 namespace Blog {
 namespace {
@@ -53,7 +54,11 @@ FHttpResponse submitted(const Script::ScriptAdminService::Submission& submission
 Fei::Http::FHttpResponse ScriptController::Status(const Fei::Http::FHttpRequest& request,const Fei::Http::FPathVar&) {
     if(auto denied=authorize(request,false))return *denied;
 #ifdef FEILIB_ENABLE_SCRIPT
-    if(auto service=Script::ScriptAdminService::current())return reply(Fei::Http::StatusCode::_200,200,service->status());
+    if(auto service=Script::ScriptAdminService::current()){
+        auto status=service->status();auto profiler=ProfilerService::current();
+        status["profiling"]=profiler?profiler->status():nlohmann::json({{"enabled",false}});
+        return reply(Fei::Http::StatusCode::_200,200,std::move(status));
+    }
 #endif
     return unavailable();
 }

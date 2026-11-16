@@ -7,6 +7,7 @@
 #include <string_view>
 #include <thread>
 #include <map>
+#include <vector>
 #include "quickjs.h"
 
 struct JSRuntime;
@@ -31,6 +32,8 @@ public:
     void loadModule(std::map<std::string, std::string> sources, const std::string& entry,
                     std::chrono::milliseconds timeout);
     JSValue lifecycleObject() const;
+    JSValue function(const std::string& path,JSValue& receiver) const;
+    std::vector<std::string> functionNames();
     void watchPromise(JSValue value);
     void unwatchPromise(JSValue value);
     void checkUnhandled();

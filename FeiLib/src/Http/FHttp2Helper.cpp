@@ -325,6 +325,7 @@ namespace Fei{
         bool processed = false;
         uint32_t parentStreamId = 0;
         uint32_t streamId;
+        std::function<void()> onClose;
     };
 
     struct Http2SessionData {
@@ -418,6 +419,8 @@ namespace Fei{
             Http2SessionData* session_data = (Http2SessionData*)user_data;
             Http2StreamData* stream_data = (Http2StreamData*)nghttp2_session_get_stream_user_data(session, stream_id);
             if (stream_data) {
+                auto onClose=std::move(stream_data->onClose);
+                if(onClose){try{onClose();}catch(...){}}
                 stream_data->returnResponse= 0;
                 stream_data->pushPromise = 0;
                 if (stream_data->isServerOpen)
@@ -657,6 +660,8 @@ namespace Fei::Http {
 
         streamUD = (Http2StreamData*)nghttp2_session_get_stream_user_data(mDp->session, streamId);
 
+        if(!streamUD)return;
+
         streamUD->returnResponse =std::make_unique<FHttp2Response>(response);
         auto& h2Response = streamUD->returnResponse;
         auto & dataProvider = streamUD->returnResponse->dataProvider;
@@ -817,6 +822,11 @@ namespace Fei::Http {
         else {
             Logger::instance()->log(lvl::err, MODULE_NAME "Stream close error for id not found");
         }
+    }
+
+    void FHttp2Context::onStreamClose(uint32_t streamId,std::function<void()> callback) {
+        auto it=mDp->sessionData.mStreamDataMap.find(streamId);
+        if(it!=mDp->sessionData.mStreamDataMap.end())it->second.onClose=std::move(callback);
     }
 
     void FHttp2Context::traversalFinishedStreams(std::function<bool(const FHttpRequest& ,uint32_t)> func)

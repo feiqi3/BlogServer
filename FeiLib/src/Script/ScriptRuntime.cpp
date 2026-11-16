@@ -139,6 +139,60 @@ void ScriptRuntime::resume(std::chrono::milliseconds timeout, const std::functio
     callback();
     drainJobs();
 }
+JSValue ScriptRuntime::function(const std::string& path,JSValue& receiver) const {
+    receiver=JS_UNDEFINED;
+    JSValue object=lifecycleObject();std::size_t begin=0;
+    while(true){
+        auto end=path.find('.',begin);auto part=path.substr(begin,end==std::string::npos?end:end-begin);
+        if(part.empty()||part=="__proto__"||part=="constructor"||part=="prototype"){
+            JS_FreeValue(context_,object);return JS_ThrowTypeError(context_,"Invalid function path");
+        }
+        auto value=JS_GetPropertyStr(context_,object,part.c_str());
+        if(end==std::string::npos){
+            if(begin)receiver=object;else JS_FreeValue(context_,object);
+            return value;
+        }
+        JS_FreeValue(context_,object);
+        if(JS_IsException(value))return value;
+        if(!JS_IsObject(value)){JS_FreeValue(context_,value);return JS_UNDEFINED;}
+        object=value;begin=end+1;
+    }
+}
+std::vector<std::string> ScriptRuntime::functionNames(){
+    std::vector<std::string> names;
+    resume(std::chrono::milliseconds(100),[&]{
+        struct Properties {
+            JSContext* context;JSPropertyEnum* values=nullptr;uint32_t count=0;
+            ~Properties(){for(uint32_t i=0;i<count;++i)JS_FreeAtom(context,values[i].atom);js_free(context,values);}
+        };
+        std::function<void(JSValueConst,const std::string&,int)> inspect;
+        inspect=[&](JSValueConst object,const std::string& prefix,int depth){
+            Properties properties{context_};
+            if(JS_GetOwnPropertyNames(context_,&properties.values,&properties.count,object,JS_GPN_STRING_MASK|JS_GPN_ENUM_ONLY)<0)throw std::runtime_error(takeException(context_));
+            if(properties.count>512)throw std::runtime_error("Too many exported properties");
+            for(uint32_t i=0;i<properties.count;++i){
+                const char* text=JS_AtomToCString(context_,properties.values[i].atom);
+                if(!text)throw std::runtime_error(takeException(context_));
+                std::string key(text);JS_FreeCString(context_,text);
+                if(key=="__proto__"||key=="constructor"||key=="prototype")continue;
+                auto value=JS_GetProperty(context_,object,properties.values[i].atom);
+                if(JS_IsException(value))throw std::runtime_error(takeException(context_));
+                try{
+                    auto name=prefix+key;
+                    if(JS_IsFunction(context_,value)){
+                        names.push_back(std::move(name));
+                        if(names.size()>512)throw std::runtime_error("Too many exported functions");
+                    }else if(depth==0&&JS_IsObject(value))inspect(value,name+".",depth+1);
+                }catch(...){JS_FreeValue(context_,value);throw;}
+                JS_FreeValue(context_,value);
+            }
+        };
+        auto object=lifecycleObject();
+        try{inspect(object,"",0);}catch(...){JS_FreeValue(context_,object);throw;}
+        JS_FreeValue(context_,object);
+    });
+    return names;
+}
 void ScriptRuntime::drainJobs() {
     JSContext* jobContext = nullptr;
     int status;

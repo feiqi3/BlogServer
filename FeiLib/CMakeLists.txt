@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add source files
 option(FEILIB_ENABLE_SCRIPT "Enable built-in QuickJS scripting" OFF)
+option(FEILIB_ENABLE_PROFILING "Compile profiling instrumentation" ON)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 if(NOT FEILIB_ENABLE_SCRIPT)
     list(FILTER SOURCES EXCLUDE REGEX "/src/Script/")
@@ -21,6 +22,7 @@ file(GLOB_RECURSE HEADERS "include/*.h")
 
 # Create library
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
+target_compile_definitions(${PROJECT_NAME} PUBLIC FEILIB_ENABLE_PROFILING=$<BOOL:${FEILIB_ENABLE_PROFILING}>)
 if(FEILIB_ENABLE_SCRIPT)
     enable_language(C)
     add_subdirectory(3rd/quickjs)

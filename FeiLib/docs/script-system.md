@@ -73,7 +73,16 @@ background lifecycle hook may finish before `onStop` runs.
 returns null. Argument count, types and integer ranges are checked. Exceptions
 become JavaScript errors. `bindFunction` accepts a JSON-array adapter for other
 C++ callables. Bindings are configured before start and execute synchronously;
-keep them short. The API does not yet provide asynchronous native bindings.
+keep them short. `bindAsyncFunction("db.posts.get", adapter)` installs a native
+Promise binding on `ctx` and invocation-scoped `call`. The adapter receives
+script/hook/invocation identity plus JSON arguments, returns an operation handle,
+and completes exactly once through its supplied callback. Marshal values as JSON;
+never move QuickJS values across threads. Cancelled invocation results are ignored.
+
+`options.profileInvocations` connects invocation timers to the generic
+[Profiler](profiling.md) using IDs cached at load time. Start the profiler before
+loading packages. `options.reportInvocations` separately enables string-based
+execution observer events; it defaults to false and is not needed for profiling.
 
 `loadFile` or `load` asynchronously prepares and starts a replacement. The
 existing version keeps serving until validation and `onStart` succeed. Old
@@ -100,5 +109,5 @@ resource controls, not an OS sandbox for hostile native code.
 
 Server owns authorization, source persistence, administration and blog behavior.
 BlogServer provides authenticated upload and rollback at `/background/scripts`;
-see `Server/ScriptRuntime/README.md` for configuration. Script HTTP routes and
-existing-page hooks remain pending. Enabling a local build does not deploy it.
+see `Server/ScriptRuntime/README.md` for article hooks and configuration. Arbitrary
+script HTTP routes remain pending. Enabling a local build does not deploy it.

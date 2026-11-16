@@ -21,6 +21,7 @@ struct FeiHttpBinding::Timer {
     JSValue callback = JS_UNDEFINED;
 };
 struct FeiHttpBinding::Hook {
+    std::string name;
     JSValue value = JS_UNDEFINED;
     Fei::TimerID timer = 0;
     std::chrono::steady_clock::time_point deadline;
@@ -49,6 +50,7 @@ Async::OperationHandle FeiHttpBinding::invokeImpl(const std::string& name, const
     checkLoop();
     if (!id) id = Async::nextOperationId();
     auto hook = std::make_shared<Hook>();
+    hook->name = name;
     hook->completion = std::move(completion);
     hook->lifecycle = optional;
     auto reject = [&](Async::ErrorCode code, const std::string& message) {
@@ -57,7 +59,7 @@ Async::OperationHandle FeiHttpBinding::invokeImpl(const std::string& name, const
         return Async::OperationHandle{id, {}, hook->done};
     };
     if (closing_ || (draining_ && !stoppingHook) || !failure_.empty()) return reject(Async::ErrorCode::Stopped, "Script unavailable");
-    if (timeout.count() <= 0 || input.size() > 64*1024 || hooks_.contains(id)) return reject(Async::ErrorCode::InvalidArgument, "Invalid invocation");
+    if (timeout.count() <= 0 || input.size() > maxJsonBytes_ || hooks_.contains(id)) return reject(Async::ErrorCode::InvalidArgument, "Invalid invocation");
     if (hooks_.size() >= 64) return reject(Async::ErrorCode::QueueFull, "Too many script invocations");
     hook->deadline = std::chrono::steady_clock::now() + timeout;
     hooks_.emplace(id, hook);
@@ -72,13 +74,12 @@ Async::OperationHandle FeiHttpBinding::invokeImpl(const std::string& name, const
         Async::ErrorCode code = Async::ErrorCode::UserException;
         runtime_.resume(std::min(timeout, 100ms), [&] {
             auto* ctx = runtime_.context();
-            JSValue object = runtime_.lifecycleObject();
-            JSValue function = JS_GetPropertyStr(ctx, object, name.c_str());
-            JS_FreeValue(ctx, object);
-            if (JS_IsException(function)) { error = runtime_.consumeException(); return; }
-            if (JS_IsUndefined(function) && optional) { JS_FreeValue(ctx, function); return; }
+            JSValue object = JS_UNDEFINED;
+            JSValue function = runtime_.function(name,object);
+            if (JS_IsException(function)) { JS_FreeValue(ctx,object);error = runtime_.consumeException(); return; }
+            if (JS_IsUndefined(function) && optional) { JS_FreeValue(ctx, function);JS_FreeValue(ctx,object); return; }
             if (!JS_IsFunction(ctx, function)) {
-                JS_FreeValue(ctx, function); code = Async::ErrorCode::InvalidArgument; error = "Hook is not a function"; return;
+                JS_FreeValue(ctx, function);JS_FreeValue(ctx,object); code = Async::ErrorCode::InvalidArgument; error = "Hook is not a function"; return;
             }
             JSValue args[2] = {JS_ParseJSON(ctx, input.c_str(), input.size(), "invocation.json"), JS_UNDEFINED};
             if (JS_IsException(args[0])) {
@@ -87,13 +88,13 @@ Async::OperationHandle FeiHttpBinding::invokeImpl(const std::string& name, const
                 args[1] = makeScope(id);
                 if (JS_IsException(args[1])) error = runtime_.consumeException();
                 else {
-                    hook->value = JS_Call(ctx, function, JS_UNDEFINED, 2, args);
+                    hook->value = JS_Call(ctx, function, object, 2, args);
                     if (JS_IsException(hook->value)) { error = runtime_.consumeException(); hook->value = JS_UNDEFINED; }
                 }
             }
             if (!JS_IsException(args[0])) JS_FreeValue(ctx, args[0]);
             if (!JS_IsException(args[1])) JS_FreeValue(ctx, args[1]);
-            JS_FreeValue(ctx, function);
+            JS_FreeValue(ctx, function);JS_FreeValue(ctx,object);
         });
         runtime_.watchPromise(hook->value);
         runtime_.checkUnhandled();
@@ -145,7 +146,7 @@ void FeiHttpBinding::pollHook(std::uint64_t id) {
                     const char* text = JS_ToCStringLen(ctx, &length, json);
                     if (!text) error = runtime_.consumeException();
                     else {
-                        if (length > 64*1024) error = "Hook result exceeds 64 KiB";
+                        if (length > maxJsonBytes_) error = "Hook result exceeds JSON budget";
                         else result.json.assign(text, length);
                         JS_FreeCString(ctx, text);
                     }
@@ -163,6 +164,7 @@ void FeiHttpBinding::pollHook(std::uint64_t id) {
     } catch (const std::exception& e) { fault(e.what()); }
 }
 void FeiHttpBinding::cancelScope(std::uint64_t id) {
+    for(auto& [key,pending]:nativePending_)if(pending->owner==id)pending->handle.cancel();
     for (auto it = timers_.begin(); it != timers_.end();) {
         if (it->second->owner != id) { ++it; continue; }
         client_.loop().CancelTimer(it->second->loopId);
@@ -185,28 +187,35 @@ void FeiHttpBinding::finishHook(std::uint64_t id, InvocationResult result) {
         catch (...) { /* User completion must not unwind through the loop. */ }
     }
 }
-void FeiHttpBinding::stopGracefully(std::function<void()> onClosed) {
+void FeiHttpBinding::cancelInvocations(){
+    checkLoop();std::vector<std::uint64_t> cancel;
+    for(const auto& [id,hook]:hooks_)if(!hook->lifecycle)cancel.push_back(id);
+    for(auto id:cancel)finishHook(id,failed(Async::ErrorCode::Stopped,"Engine stopping"));
+}
+void FeiHttpBinding::stopGracefully(std::function<void()> onClosed,bool cancelRequests,StopObserver observer) {
     checkLoop();
     if (!draining_) {
         draining_ = true;
-        std::vector<std::uint64_t> cancel;
-        for (const auto& [id,hook]:hooks_) if(!hook->lifecycle) cancel.push_back(id);
-        for(auto id:cancel)finishHook(id,failed(Async::ErrorCode::Stopped,"Engine stopping"));
     }
+    if(cancelRequests)cancelInvocations();
     if (!failure_.empty()) { close(std::move(onClosed)); return; }
     auto self = shared_from_this();
     if (!hooks_.empty()) {
-        client_.loop().RunAfter(10, [self, onClosed = std::move(onClosed)]() mutable { self->stopGracefully(std::move(onClosed)); });
+        client_.loop().RunAfter(10, [self, onClosed = std::move(onClosed),cancelRequests,observer=std::move(observer)]() mutable { self->stopGracefully(std::move(onClosed),cancelRequests,std::move(observer)); });
         return;
     }
-    callHook("onStop", [self, onClosed = std::move(onClosed)](std::string) mutable { self->close(std::move(onClosed)); });
+    const auto begin=observer?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point();
+    callHook("onStop", [self, onClosed = std::move(onClosed),observer=std::move(observer),begin](std::string error) mutable {
+        if(observer){try{observer(std::move(error),std::chrono::steady_clock::now()-begin);}catch(...){}}
+        self->close(std::move(onClosed));
+    });
 }
 
-FeiHttpBinding::FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError)
-    : client_(client), onError_(std::move(onError)) { checkLoop(); }
+FeiHttpBinding::FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes)
+    : maxJsonBytes_(maxJsonBytes), client_(client), onError_(std::move(onError)) { checkLoop(); }
 
-std::shared_ptr<FeiHttpBinding> FeiHttpBinding::createBare(Fei::Http::FHttpClient& client, ErrorHandler onError) {
-    auto self = std::shared_ptr<FeiHttpBinding>(new FeiHttpBinding(client, std::move(onError)));
+std::shared_ptr<FeiHttpBinding> FeiHttpBinding::createBare(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes) {
+    auto self = std::shared_ptr<FeiHttpBinding>(new FeiHttpBinding(client, std::move(onError),maxJsonBytes));
     auto* ctx = self->runtime_.context();
     JS_SetContextOpaque(ctx, self.get());
     JSValue global = JS_GetGlobalObject(ctx);
@@ -214,8 +223,8 @@ std::shared_ptr<FeiHttpBinding> FeiHttpBinding::createBare(Fei::Http::FHttpClien
     JS_FreeValue(ctx, global);
     return self;
 }
-std::shared_ptr<FeiHttpBinding> FeiHttpBinding::create(Fei::Http::FHttpClient& client, ErrorHandler onError) {
-    auto self = createBare(client, std::move(onError));
+std::shared_ptr<FeiHttpBinding> FeiHttpBinding::create(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes) {
+    auto self = createBare(client, std::move(onError),maxJsonBytes);
     self->installHttp(); self->installTimers();
     return self;
 }
@@ -264,11 +273,11 @@ JSValue FeiHttpBinding::nativeCall(JSContext* ctx,JSValueConst,int argc,JSValueC
     size_t length=0;const char* text=JS_ToCStringLen(ctx,&length,json);
     if(!text){JS_FreeValue(ctx,json);return JS_EXCEPTION;}
     try {
-        if(length>64*1024)throw std::invalid_argument("Native arguments exceed 64 KiB");
+        if(length>self->maxJsonBytes_)throw std::invalid_argument("Native arguments exceed JSON budget");
         auto args=nlohmann::json::parse(text,text+length);
         JS_FreeCString(ctx,text);text=nullptr;JS_FreeValue(ctx,json);json=JS_UNDEFINED;
         auto result=self->nativeFunctions_.at(static_cast<std::size_t>(index))(args).dump();
-        if(result.size()>64*1024)throw std::invalid_argument("Native result exceeds 64 KiB");
+        if(result.size()>self->maxJsonBytes_)throw std::invalid_argument("Native result exceeds JSON budget");
         return JS_ParseJSON(ctx,result.c_str(),result.size(),"native-result.json");
     }catch(const std::exception& e){
         if(text)JS_FreeCString(ctx,text);JS_FreeValue(ctx,json);
@@ -302,6 +311,8 @@ JSValue FeiHttpBinding::makeScope(std::uint64_t id) {
     if (timersEnabled_ && !put(ctx,scope,"after",JS_NewCFunctionData(ctx,scopedAfter,2,0,1,&data))) {
         JS_FreeValue(ctx,scope); JS_FreeValue(ctx,data); return JS_EXCEPTION;
     }
+    try{for(std::size_t index=0;index<asynchronous_.size();++index)installAsync(scope,index,id);}
+    catch(const std::exception& error){JS_FreeValue(ctx,scope);JS_FreeValue(ctx,data);return JS_ThrowInternalError(ctx,"%s",error.what());}
     JS_FreeValue(ctx, data);
     return scope;
 }
@@ -368,6 +379,7 @@ void FeiHttpBinding::fireTimer(std::size_t id) {
 void FeiHttpBinding::checkLoop() const {
     if (!client_.loop().isInLoopThread()) throw std::logic_error("Script binding must run on the client loop");
 }
+std::vector<std::string> FeiHttpBinding::functionNames(){checkLoop();return runtime_.functionNames();}
 void FeiHttpBinding::evaluate(const std::string& source) {
     checkLoop();
     if (closing_ || !failure_.empty()) throw std::logic_error("Script binding is unavailable");
@@ -391,6 +403,7 @@ void FeiHttpBinding::fault(const std::string& error) {
     }
     timers_.clear();
     for (auto& [id, pending] : pending_) pending->handle.cancel();
+    for(auto& [id,pending]:nativePending_)pending->handle.cancel();
     if (onError_) onError_(error);
     while (!hooks_.empty()) finishHook(hooks_.begin()->first, failed(Async::ErrorCode::UserException, error));
 }
@@ -436,7 +449,7 @@ void FeiHttpBinding::complete(std::shared_ptr<Pending> pending, Fei::Async::Resu
     auto* ctx = runtime_.context();
     if (closing_) {
         JS_FreeValue(ctx,pending->resolve);JS_FreeValue(ctx,pending->reject);pending_.erase(pending->id);
-        if(pending_.empty()&&onClosed_){auto callback=std::move(onClosed_);callback();}
+        notifyClosed();
         return;
     }
     try {
@@ -444,7 +457,7 @@ void FeiHttpBinding::complete(std::shared_ptr<Pending> pending, Fei::Async::Resu
         if (pending->owner && !hooks_.contains(pending->owner)) {
             JS_FreeValue(ctx, pending->resolve); JS_FreeValue(ctx, pending->reject);
             pending_.erase(pending->id);
-            if (closing_ && pending_.empty() && onClosed_) { auto callback = std::move(onClosed_); callback(); }
+            notifyClosed();
             return;
         }
         runtime_.resume(100ms, [&] {
@@ -481,10 +494,7 @@ void FeiHttpBinding::complete(std::shared_ptr<Pending> pending, Fei::Async::Resu
     JS_FreeValue(ctx, pending->resolve);
     JS_FreeValue(ctx, pending->reject);
     pending_.erase(pending->id);
-    if (closing_ && pending_.empty() && onClosed_) {
-        auto callback = std::move(onClosed_);
-        callback();
-    }
+    notifyClosed();
 }
 void FeiHttpBinding::close(std::function<void()> onClosed) {
     checkLoop();
@@ -498,7 +508,14 @@ void FeiHttpBinding::close(std::function<void()> onClosed) {
     }
     timers_.clear();
     for (auto& [id, pending] : pending_) pending->handle.cancel();
-    if (pending_.empty() && onClosed_) {
+    for(auto& [id,pending]:nativePending_)pending->handle.cancel();
+    notifyClosed();
+}
+std::string FeiHttpBinding::invocationName(std::uint64_t id)const{
+    auto it=hooks_.find(id);return it==hooks_.end()?std::string():it->second->name;
+}
+void FeiHttpBinding::notifyClosed(){
+    if (closing_ && pending_.empty() && nativePending_.empty() && onClosed_) {
         auto callback = std::move(onClosed_);
         callback();
     }

@@ -27,9 +27,12 @@
 #include "Utils/FileCache.h"
 #include "Utils/ImageDimReader.h"
 #include "Utils/ThreadPool.h"
+#include "Service/ProfilerService.h"
 #ifdef FEILIB_ENABLE_SCRIPT
 #include "Script/FScriptEngine.h"
 #include "Service/ScriptAdminService.h"
+#include "Service/ArticleHookService.h"
+#include <future>
 #endif
 
 const std::string ResourceDir =  SERVER_RESOURCE_DIR;
@@ -90,6 +93,11 @@ Blog::Server::Server()
 
 void Blog::Server::run()
 {
+    auto profileCfg=Fei::FConfigReader::instance();
+    if(profileCfg->getCfg("ProfilingEnabled").value_or("false")=="true"){
+        try{profiler=ProfilerService::create(profileCfg->getCfg("ProfilingDirectory").value_or(ResourceDir+"profiling"));}
+        catch(const std::exception& error){Fei::Logger::instance()->log(Fei::lvl::err,"[Profiling] Could not start: {}",error.what());}
+    }
 #ifdef FEILIB_ENABLE_SCRIPT
     bool adminScripts = false;
     auto scriptCfg = Fei::FConfigReader::instance();
@@ -105,11 +113,14 @@ void Blog::Server::run()
             if (scriptInterval > std::chrono::hours(24) || (scriptInterval.count() > 0 && scriptInterval < std::chrono::milliseconds(10)))
                 throw std::runtime_error("ScriptIntervalMs must be 0 or 10..86400000");
             Fei::FScriptOptions options;
+            options.maxJsonBytes=256*1024;
+            options.profileInvocations=static_cast<bool>(profiler);
             options.report = [](const Fei::FScriptExecution& result) {
                 Fei::Logger::instance()->log(Fei::lvl::info, "[Scripts] phase={} duration_ms={} success={}", result.phase, result.duration.count(), result.error.empty());
                 if (auto admin = Script::ScriptAdminService::current()) admin->record(result);
             };
             auto& engine = server->scriptEngine(options);
+            articleHooks=Script::ArticleHookService::create(server->jobLoop(),engine);
             adminScripts = scriptCfg->getCfg("ScriptAdminEnabled").value_or("false") == "true";
             if (!adminScripts) engine.addScript("blog", scriptPath, scriptInterval);
         } catch (const std::exception&) {
@@ -122,7 +133,8 @@ void Blog::Server::run()
     if (adminScripts) {
         try {
             scripts = Script::ScriptAdminService::create(server->jobLoop(), server->scriptEngine(),
-                scriptCfg->getCfg("ScriptStoreDirectory").value_or(ResourceDir + "scripts/versions"), scriptInterval, scriptPath);
+                scriptCfg->getCfg("ScriptStoreDirectory").value_or(ResourceDir + "scripts/versions"), scriptInterval, scriptPath,
+                [weak=std::weak_ptr<Script::ArticleHookService>(articleHooks)](const auto& info){if(auto hooks=weak.lock())hooks->functions(info.value("functions",nlohmann::json::array()));});
         } catch (const std::exception&) {
             Fei::Logger::instance()->log(Fei::lvl::err, "[Scripts] Administration could not start");
         }
@@ -134,10 +146,24 @@ void Blog::Server::run()
 		server->tickAppEvents();
 	}
 #ifdef FEILIB_ENABLE_SCRIPT
-    if (scripts) scripts->shutdown();
+    stopScriptServices();
 #endif
 	server->stop();
+    if(profiler)profiler->shutdown();
 }
+
+#ifdef FEILIB_ENABLE_SCRIPT
+void Blog::Server::stopScriptServices(){
+    if(articleHooks)articleHooks->stopAccepting();
+    if(scripts){scripts->shutdown();scripts.reset();}
+    if(articleHooks){
+        // Stop scripts while their model workers and callback Loop are alive.
+        std::promise<void> drained;auto ready=drained.get_future();
+        server->scriptEngine().shutdown([&drained]{drained.set_value();});ready.get();
+        articleHooks->shutdown();articleHooks.reset();
+    }
+}
+#endif
 
 void Blog::Server::init()
 {
@@ -160,10 +186,11 @@ void Blog::Server::CurThreadCleanCallback(std::function<void()> callback){
 Blog::Server::~Server()
 {
 #ifdef FEILIB_ENABLE_SCRIPT
-    if (scripts) scripts->shutdown();
-    scripts.reset();
+    stopScriptServices();
 #endif
 	server->stop();
+    if(profiler)profiler->shutdown();
+    profiler.reset();
 	delete server;
 	delete TemplateRender::instance();
 	delete DatabaseOperation::instance();
