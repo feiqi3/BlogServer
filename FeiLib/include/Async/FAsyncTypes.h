@@ -10,7 +10,7 @@
 namespace Fei::Async {
 enum class ErrorCode {
     None, Cancelled, Timeout, QueueFull, Stopped, InvalidArgument,
-    Dns, Connect, Tls, Io, Protocol, LimitExceeded, UserException
+    Dns, Connect, Tls, Io, Protocol, LimitExceeded, UserException, AccessDenied
 };
 
 struct Error {

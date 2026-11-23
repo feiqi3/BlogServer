@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add source files
-file(GLOB_RECURSE SOURCES "src/*.cpp"  "src/*.h")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
 
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -37,6 +37,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/3
 
 #3rd
 target_link_libraries(${PROJECT_NAME} PRIVATE FeiLib)
+if(FEILIB_ENABLE_SCRIPT)
+    file(GLOB SCRIPT_HOST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ScriptRuntime/*.cpp")
+    target_sources(${PROJECT_NAME} PRIVATE ${SCRIPT_HOST_SOURCES})
+    find_package(OpenSSL REQUIRED)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::Crypto)
+endif()
 # OpenSSL for ImageDimReader HTTPS client (TLS_client_method)
 find_package(OpenSSL REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)

@@ -120,8 +120,8 @@ void FHttpParser::parseRequestLine(const std::string &line) {
 
 bool FHttpParser::parse(FBufferReader &buffer) {
   char c;
-  while ((c = buffer.readNext()) != '\0' &&
-         (state_ != EState::Done && state_ != EState::Error)) {
+  while (state_ != EState::Done && state_ != EState::Error &&
+         (c = buffer.readNext()) != '\0') {
     switch (state_) {
 
       // parse request line

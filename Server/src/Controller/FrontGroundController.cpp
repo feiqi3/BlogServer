@@ -16,14 +16,28 @@
 #include "Utils/FileCache.h"
 #include "Utils/HtmlHelper.h"
 #include "Utils/TimeHelper.h"
+#include "Profiling/FProfiler.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
+#ifdef FEILIB_ENABLE_SCRIPT
+#include "Service/ArticleHookService.h"
+#endif
 
 namespace Blog {
+namespace {
+Fei::Http::FHttpResponse renderArticle(const Fei::Http::FHttpRequest& request,Model::Post post,const std::string& url){
+#ifdef FEILIB_ENABLE_SCRIPT
+    if(!post.script_name.empty())if(auto hooks=Script::ArticleHookService::current()){
+        if(auto response=hooks->request(request,post,[url](auto post){return FrontGroundController::RenderArticlePost(post,url);}))return std::move(*response);
+    }
+#endif
+    return FrontGroundController::RenderArticlePost(post,url);
+}
+}
 Fei::Http::FHttpResponse
 FrontGroundController::Articles(const Fei::Http::FHttpRequest &req,
                                 const Fei::Http::FPathVar &var) {
@@ -42,10 +56,11 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
         return Redirector::RedirectTo("/404");
     }
     DAO::PostQuery::updateViewTimes(id);
-    return RenderArticlePost(post.value(), "/post/" + std::to_string(id));
+    return renderArticle(req,post.value(), "/post/" + std::to_string(id));
 }
 
 Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::Post& _post, const std::string& pageUrl){
+    FeiScope("Article.Render");
     auto cateName = DAO::CategoryQuery::QueryCategoryNameById(_post.category_id);
     if(!cateName.has_value()){
         return Redirector::RedirectTo("/505");
@@ -87,9 +102,7 @@ Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::P
     std::string renderOut;
     setBlogCommonData(data);
     auto gcUrl = Fei::FConfigReader::instance()->getCfg("GoatCounterUrl");
-    if (gcUrl.has_value() && !gcUrl->empty()) {
-        data.setData("goatcounter_url", gcUrl.value());
-    }
+    data.setData("goatcounter_url", gcUrl.value_or(""));
     TemplateRender::instance()->render(BlogWebPagePath + "article.html", data, renderOut);
     Fei::Http::FHttpResponse res;
     res.setBody(renderOut);
@@ -179,7 +192,7 @@ Fei::Http::FHttpResponse FrontGroundController::About(const Fei::Http::FHttpRequ
     if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    return RenderArticlePost(post.value(), "/about");
+    return renderArticle(req,post.value(), "/about");
 }
 
 Fei::Http::FHttpResponse FrontGroundController::Links(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
@@ -190,7 +203,7 @@ Fei::Http::FHttpResponse FrontGroundController::Links(const Fei::Http::FHttpRequ
     if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    return RenderArticlePost(post.value(), "/links");
+    return renderArticle(req,post.value(), "/links");
 }
 
 Fei::Http::FHttpResponse FrontGroundController::Archive(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){

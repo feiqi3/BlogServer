@@ -402,3 +402,4 @@ GET /test/message/page={page}
 | 20 | GET | `/test/message` | 无 | 测试留言板页 |
 | 21 | POST | `/test/message` | 无 | 发送测试消息 |
 | 22 | GET | `/test/message/page={page}` | 无 | 获取测试消息 JSON |
+| 23 | GET | `/api/profiling` | **必须** | Current profiling statistics; see [configuration](profiling.md) |

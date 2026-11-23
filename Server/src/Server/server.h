@@ -3,8 +3,12 @@
 
 #include "Http/FHttpServer.h"
 #include <functional>
+#include <atomic>
+#include <memory>
 
 namespace Blog {
+    class ProfilerService;
+	namespace Script { class ScriptAdminService; class ArticleHookService; }
 	class Server {
 	public:
 		Server();
@@ -14,8 +18,14 @@ namespace Blog {
 		static void CurThreadCleanCallback(std::function<void()> callback);
 		~Server();
 	private:
-		bool shouldClose = false;
+		std::atomic_bool shouldClose{false};
 		Fei::Http::FHttpServer* server;
+        std::shared_ptr<ProfilerService> profiler;
+#ifdef FEILIB_ENABLE_SCRIPT
+        void stopScriptServices();
+		std::shared_ptr<Script::ScriptAdminService> scripts;
+        std::shared_ptr<Script::ArticleHookService> articleHooks;
+#endif
 	};
 }
 #endif

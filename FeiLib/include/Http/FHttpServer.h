@@ -11,11 +11,15 @@
 namespace Fei{
 	class FTcpServer;
 	class FEventLoop;
+    class FScriptEngine;
+    struct FScriptOptions;
 }
 namespace Fei::Http {
 
 class FHttpRequest;
 class FHttpResponse;
+struct DeferredConnectionState;
+struct DeferredRegistry;
 
 using PreSendHttpResponseCallback = std::function<void(const FHttpRequest&, FHttpResponse&)>;
 using InternalErrorCallback = std::function<void(const FHttpRequest&, FHttpResponse&, const ::Fei::FException&)>;
@@ -36,6 +40,8 @@ public:
 	void run(); 
 	void stop(bool force = false);
 	FEventLoop& jobLoop();
+    FScriptEngine& scriptEngine();
+    FScriptEngine& scriptEngine(const FScriptOptions& options);
 	void setOnInternalErrorCB(InternalErrorCallback cb) { mInternalErrCallback = std::move(cb); }
 	void setOnRoutNotMatchCB(RouteNotMatchCallback cb) { mRouteNotMatchCallback = std::move(cb); }
 	void setPreSendResponseCB(PreSendHttpResponseCallback cb) { mPreSendCallback = std::move(cb); }
@@ -51,6 +57,7 @@ public:
 		bool shouldKeepAlive = true;
 		uint32 hasSurvivedTime = 0;
 		std::unique_ptr<FHttp2Context> http2Ctx = nullptr;
+        std::shared_ptr<DeferredConnectionState> deferred;
 	};
 
 private:
@@ -67,9 +74,14 @@ private:
 	void defaultExceptionFunc(const FHttpRequest& request, FHttpResponse& response,const ::Fei::FException& exception);
 	void http1Process(const FTcpConnPtr& ptr, FBufferReader& reader);
 	void http2Process(const FTcpConnPtr& ptr, FBufferReader& reader);
+    bool beginDeferred(const FTcpConnPtr&,const FHttpRequest&,FHttpResponse,uint32_t streamId=0);
+    void drainDeferred();
 	FHttpResponse httpHandle(const FTcpConnPtr& ptr,const FHttpRequest& request);
 private:
 	std::unique_ptr<FTcpServer> mTcpServer;
+    std::shared_ptr<FScriptEngine> m_scriptEngine;
+    bool m_running = false;
+    std::shared_ptr<DeferredRegistry> m_deferred;
 	PreSendHttpResponseCallback mPreSendCallback;
 	InternalErrorCallback mInternalErrCallback;
 	RouteNotMatchCallback mRouteNotMatchCallback;

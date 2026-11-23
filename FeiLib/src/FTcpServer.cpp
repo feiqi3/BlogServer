@@ -68,17 +68,19 @@ void FTcpServer::run() {
   if (m_running)
     return;
   m_running = true;
-  {
-    std::thread _mainLoop([this]() { m_listenerLoop->Loop(); });
-    _mainLoop.detach();
-  }
+  // Publish a complete, stable loop container before any thread can access it.
+  // Starting a worker while emplace_back reallocates the vector races its lookup.
   for (auto i = 0u; i < m_threadNums; ++i) {
     m_subLoops.emplace_back(
         std::make_unique<FEventLoop>(std::make_unique<FEPollListener>()));
-    {
-      std::thread _Loop([this, i]() { m_subLoops[i]->Loop(); });
-      _Loop.detach();
-    }
+  }
+  for (auto i = 0u; i < m_threadNums; ++i) {
+    std::thread _Loop([loop=m_subLoops[i].get()]() { loop->Loop(); });
+    _Loop.detach();
+  }
+  {
+    std::thread _mainLoop([loop=m_listenerLoop.get()]() { loop->Loop(); });
+    _mainLoop.detach();
   }
   if (m_jobLoop) m_jobThread = std::thread([this] { m_jobLoop->Loop(); });
 }

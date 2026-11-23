@@ -104,6 +104,7 @@ namespace Fei::Http {
         uint32_t getOpenedStreams()const;
         void endStream(uint32_t streamID,H2StreamErr err);
         void traversalFinishedStreams(std::function<bool(const FHttpRequest&,uint32)>func);
+        void onStreamClose(uint32_t streamId,std::function<void()> callback);
     private:
 
         std::unique_ptr<FHttp2Private> mDp;

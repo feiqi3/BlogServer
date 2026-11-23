@@ -41,6 +41,7 @@ enum class StatusCode{
     _400,_401,_403,_404,_405,_408,_418,_429,
 //5xx    
     _500,_501,_502,_505,
+    _503, // Appended to preserve existing enum values.
 };
 
 F_API const char* statusCodeToStr(StatusCode code);

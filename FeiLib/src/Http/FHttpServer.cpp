@@ -12,6 +12,18 @@
 #include "Http/FHttp2Helper.h"
 #include <chrono>
 #include <algorithm>
+#include <future>
+#include <stdexcept>
+#include "FEventLoop.h"
+#include "FBuffer.h"
+#include "FDeferredResponse.h"
+#include <mutex>
+#include <unordered_map>
+#include <set>
+#ifdef FEILIB_ENABLE_SCRIPT
+#include "Script/FScriptEngine.h"
+#include "FEventLoop.h"
+#endif
 #define MODULE_NAME "HttpServer"
 #define ERROR_ROUTE_PATH "/error"
 #define DEFAULT_CONTENT_TYPE "text/html"
@@ -74,6 +86,18 @@ bool _getContentTypeByPath(const std::string& path, std::string& extensionName)
 }
 
 namespace Fei::Http {
+    struct DeferredConnectionState {
+        std::unordered_map<uint32_t,FHttpResponder> pending;
+        std::shared_ptr<FBuffer> buffered;
+    };
+    struct DeferredRegistry {
+        struct Entry { FEventLoop* loop; FHttpResponder responder; std::weak_ptr<FTcpConnection> connection; };
+        std::mutex mutex;
+        bool accepting=true;
+        std::unordered_map<uint64_t,Entry> active;
+        std::size_t limit=256;
+        uint64_t next=0;
+    };
 
 	void FHttpServer::initSSLenv(const std::string& certFile,const std::string& privateKey){
 		FTcpServer::initGlobalSSLEnv(certFile, privateKey);
@@ -89,6 +113,12 @@ namespace Fei::Http {
 
 	FHttpServer::FHttpServer(uint32 threadNums) : mTcpServer(std::make_unique<FTcpServer>(threadNums))
 	{
+        m_deferred=std::make_shared<DeferredRegistry>();
+        if(auto limit=FConfigReader::instance()->getCfg("HttpMaxDeferredRequests")){
+            auto value=std::stoull(*limit);
+            if(value==0||value>65536)throw std::invalid_argument("Invalid HttpMaxDeferredRequests");
+            m_deferred->limit=value;
+        }
 		if (!FRouter::valid()) {
 			new FRouter;
 		}
@@ -137,6 +167,7 @@ namespace Fei::Http {
 	}
 
 	FHttpServer::~FHttpServer() {
+        if (m_running) stop();
 		mTcpServer->removeEvent(mRouteCacheCleanEventId);
 		if (FRouter::valid()) {
 			delete FRouter::instance();
@@ -160,12 +191,44 @@ namespace Fei::Http {
 	void FHttpServer::run()
 	{
 		mTcpServer->run();
+        m_running = true;
+#ifdef FEILIB_ENABLE_SCRIPT
+        if (m_scriptEngine) m_scriptEngine->start();
+#endif
 	}
 
 	void FHttpServer::stop(bool force)
 	{
+        if(m_running)drainDeferred();
+#ifdef FEILIB_ENABLE_SCRIPT
+        if (m_running && m_scriptEngine) {
+            if (FEventLoop::getCurrentLoop()) throw std::logic_error("Stop the server from its control thread");
+            std::promise<void> drained; auto done=drained.get_future();
+            m_scriptEngine->shutdown([&drained]{drained.set_value();});
+            done.get();
+        }
+#endif
 		mTcpServer->stop(force);
+        m_running = false;
 	}
+    FScriptEngine& FHttpServer::scriptEngine() {
+#ifdef FEILIB_ENABLE_SCRIPT
+        if(m_scriptEngine)return *m_scriptEngine;
+        return scriptEngine(FScriptOptions{});
+#else
+        throw std::logic_error("FeiLib was built without scripting");
+#endif
+    }
+    FScriptEngine& FHttpServer::scriptEngine(const FScriptOptions& options) {
+#ifdef FEILIB_ENABLE_SCRIPT
+        if(m_running||m_scriptEngine)throw std::logic_error("Configure the script engine once before run");
+        m_scriptEngine=std::make_shared<FScriptEngine>(jobLoop(),options);
+        return *m_scriptEngine;
+#else
+        (void)options;
+        throw std::logic_error("FeiLib was built without scripting");
+#endif
+    }
 
 	FEventLoop& FHttpServer::jobLoop() {
 		return mTcpServer->jobLoop();
@@ -234,6 +297,11 @@ namespace Fei::Http {
 
 	void FHttpServer::handleTcpConnClosed(const FTcpConnPtr& ptr)
 	{
+        auto* data=static_cast<HttpConnData*>(ptr->getUserData());
+        if(data&&data->deferred){
+            auto pending=std::move(data->deferred->pending);
+            for(auto& [id,responder]:pending)responder.cancel();
+        }
 		DestroyDataFromTcpConn(ptr);
 	}
 	void FHttpServer::handleTcpIdle(const FTcpConnPtr& ptr){
@@ -353,6 +421,16 @@ namespace Fei::Http {
 	void FHttpServer::http1Process(const FTcpConnPtr& ptr, FBufferReader& reader)
 	{
 		auto http_data = getDataFromTcpConn(ptr);
+        auto bufferRemaining=[&]{
+            int size=0;auto bytes=reader.peekAll(size);
+            if(!size)return;
+            auto& deferred=*http_data->deferred;
+            if(!deferred.buffered)deferred.buffered=std::make_shared<FBuffer>(1024);
+            if(deferred.buffered->getReadableSize()+size>256*1024){ptr->forceClose();return;}
+            deferred.buffered->Append(reinterpret_cast<const char*>(bytes),size);reader.expireSize(size);
+        };
+        if(http_data->deferred&&http_data->deferred->pending.contains(0)){bufferRemaining();return;}
+        do {
 		bool isParseDone = http_data->parser.parse(reader);
 
 		if (!isParseDone) {
@@ -368,12 +446,16 @@ namespace Fei::Http {
 		request.setAddrIn(addr);
 		request.setAddrHost(ptr->getAddrAccept());
 		auto response = httpHandle(ptr, request);
-		ptr->send(std::move(response.toString()));
-		//This connection can be reuse.
-		if (http_data->shouldKeepAlive)
-		{
-			http_data->parser = FHttpParser();//reset
-		}
+        if(response.isDeferred()){
+            if(!beginDeferred(ptr,request,std::move(response)))return;
+            if(ptr->getUserData())bufferRemaining();
+            return;
+        }
+        const bool keepAlive=http_data->shouldKeepAlive;
+        if(keepAlive)http_data->parser=FHttpParser();
+        ptr->send(response.toString());
+        if(!keepAlive)return;
+        }while(reader.getBufferReadableSize()>0&&ptr->getState()!=FTcpConnection::TcpConnState::DisConnected);
 	}
 
 	void FHttpServer::http2Process(const FTcpConnPtr& ptr, FBufferReader& reader)
@@ -388,6 +470,7 @@ namespace Fei::Http {
 
 		auto perStream = [&ptr,this,&http_data](const FHttpRequest& request,uint32_t streamID) {
 			auto response = httpHandle(ptr, request);
+            if(response.isDeferred()){beginDeferred(ptr,request,std::move(response),streamID);return true;}
 			http_data->http2Ctx->http2SubmitResponseStream(streamID,response,true);
 			if(http_data->http2Ctx->enablePush())
 			{
@@ -489,9 +572,75 @@ namespace Fei::Http {
 			}
 		}
 
-		preProcessHttpRequestSend(ptr, request, response);
+		if(!response.isDeferred())preProcessHttpRequestSend(ptr, request, response);
 		return response;
 	}
+
+    bool FHttpServer::beginDeferred(const FTcpConnPtr& ptr,const FHttpRequest& request,FHttpResponse response,uint32_t streamId) {
+        auto spec=std::move(response.mDeferred);
+        auto* data=getDataFromTcpConn(ptr);
+        if(!data->deferred)data->deferred=std::make_shared<DeferredConnectionState>();
+        auto registry=m_deferred;
+        std::weak_ptr<FTcpConnection> connection=ptr;
+        uint64_t id;
+        {std::lock_guard lock(registry->mutex);id=++registry->next;}
+        auto responder=FHttpResponder::create(ptr->loop(),spec->timeout,
+            [this,registry,connection,request,streamId,id](FHttpResponse completed)mutable{
+                {std::lock_guard lock(registry->mutex);registry->active.erase(id);}
+                auto ptr=connection.lock();
+                if(!ptr||ptr->getState()==FTcpConnection::TcpConnState::DisConnected||!ptr->getUserData())return;
+                auto* data=static_cast<HttpConnData*>(ptr->getUserData());
+                if(!data->deferred||!data->deferred->pending.erase(streamId))return;
+                preProcessHttpRequestSend(ptr,request,completed);
+                if(streamId){
+                    data->http2Ctx->http2SubmitResponseStream(streamId,completed,true);
+                    data->http2Ctx->http2SendProcess(ptr);
+                }else{
+                    const bool keepAlive=data->shouldKeepAlive;
+                    if(keepAlive)data->parser=FHttpParser();
+                    ptr->send(completed.toString());
+                    if(keepAlive&&ptr->getState()!=FTcpConnection::TcpConnState::DisConnected){
+                        auto buffered=std::move(data->deferred->buffered);
+                        if(buffered){FBufferReader reader(*buffered);http1Process(ptr,reader);}
+                    }
+                }
+            });
+        bool admitted,accepting;
+        {std::lock_guard lock(registry->mutex);accepting=registry->accepting;admitted=accepting&&registry->active.size()<registry->limit;
+         if(admitted)registry->active.emplace(id,DeferredRegistry::Entry{&ptr->loop(),responder,connection});}
+        if(!admitted){
+            responder.cancel();
+            if(!accepting){ptr->forceClose();return false;}
+            FHttpResponse busy;busy.setStatusCode(StatusCode::_429).setBody("Too many pending responses");
+            preProcessHttpRequestSend(ptr,request,busy);
+            if(streamId){data->http2Ctx->http2SubmitResponseStream(streamId,busy,true);data->http2Ctx->http2SendProcess(ptr);}
+            else{data->shouldKeepAlive=false;busy.addHeader("Connection","close");ptr->send(busy.toString());}
+            return false;
+        }
+        data->deferred->pending.emplace(streamId,responder);
+        responder.onCancel([registry,id]{std::lock_guard lock(registry->mutex);registry->active.erase(id);});
+        if(streamId)data->http2Ctx->onStreamClose(streamId,[connection,responder,streamId]{
+            responder.cancel();
+            if(auto ptr=connection.lock())if(auto* data=static_cast<HttpConnData*>(ptr->getUserData()))if(data->deferred)data->deferred->pending.erase(streamId);
+        });
+        try{spec->start(responder);}catch(...){FHttpResponse failed;failed.setStatusCode(StatusCode::_500).setBody("Deferred handler failed");responder.complete(std::move(failed));}
+        return true;
+    }
+    void FHttpServer::drainDeferred() {
+        if(FEventLoop::getCurrentLoop())throw std::logic_error("Stop the server from its control thread");
+        std::vector<DeferredRegistry::Entry> active;
+        {
+            std::lock_guard lock(m_deferred->mutex);m_deferred->accepting=false;
+            for(auto& [id,entry]:m_deferred->active)active.push_back(entry);
+            m_deferred->active.clear();
+        }
+        std::set<FEventLoop*> loops;
+        for(auto& entry:active){loops.insert(entry.loop);entry.loop->AddTask([entry]{
+            entry.responder.cancel();
+            if(auto ptr=entry.connection.lock())if(auto* data=static_cast<HttpConnData*>(ptr->getUserData()))data->deferred.reset();
+        });}
+        for(auto* loop:loops){auto done=std::make_shared<std::promise<void>>();auto future=done->get_future();loop->AddTask([done]{done->set_value();});future.get();}
+    }
 
 };
 

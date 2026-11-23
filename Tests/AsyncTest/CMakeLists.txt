@@ -12,6 +12,7 @@ if(NOT TARGET FeiLib)
     file(GLOB ASYNC_IMPLEMENTATION CONFIGURE_DEPENDS "${FEILIB_ROOT}/src/Async/*.cpp")
     add_library(FeiLibAsyncUnderTest STATIC
         ${ASYNC_IMPLEMENTATION}
+        "${FEILIB_ROOT}/src/Profiling/FProfiler.cpp"
         "${FEILIB_ROOT}/src/Http/FHttpClient.cpp"
         "${FEILIB_ROOT}/src/Http/FHttpResponseParser.cpp"
         "${FEILIB_ROOT}/src/Http/FHttpRequestParser.cpp"

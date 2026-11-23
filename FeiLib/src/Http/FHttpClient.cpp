@@ -419,6 +419,20 @@ struct FHttpClient::State : std::enable_shared_from_this<State> {
     }
 
     void connectResolved(const std::shared_ptr<Request>& req, std::vector<Address> addresses) {
+        if (options.allowAddress) {
+            bool allowed = true;
+            try {
+                for (const auto& address : addresses) {
+                    char numeric[INET6_ADDRSTRLEN]{};
+                    const void* bytes = address.storage.ss_family == AF_INET
+                        ? static_cast<const void*>(&reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_addr)
+                        : static_cast<const void*>(&reinterpret_cast<const sockaddr_in6*>(&address.storage)->sin6_addr);
+                    if (!inet_ntop(address.storage.ss_family, bytes, numeric, sizeof(numeric)) ||
+                        !options.allowAddress(req->url.host, numeric)) { allowed = false; break; }
+                }
+            } catch (...) { allowed = false; }
+            if (!allowed) { fail(req, ErrorCode::AccessDenied, "Destination denied by connection policy"); return; }
+        }
         auto conn = std::make_shared<Connection>();
         conn->id = Async::nextOperationId();
         conn->request = req;

@@ -56,6 +56,8 @@ const char *statusCodeToStr(StatusCode code) {
     return "501 Not Implemented";
   case StatusCode::_502:
     return "502 Bad Gateway";
+  case StatusCode::_503:
+    return "503 Service Unavailable";
   case StatusCode::_505:
     return "505 HTTP Version Not Supported";
     break;
@@ -110,6 +112,8 @@ const char* statusCodeToStr2(StatusCode code) {
         return "501";
     case StatusCode::_502:
         return "502";
+    case StatusCode::_503:
+        return "503";
     case StatusCode::_505:
         return "505";
     }
