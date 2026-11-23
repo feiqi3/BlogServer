@@ -14,6 +14,7 @@ namespace Blog{
 
     class TemplateRenderData{
         public:
+        TemplateRenderData() : renderData({{"visitId", ""}}) {}
         void setData(const std::string& key,const std::string& value){
             renderData[key] = value;
         }

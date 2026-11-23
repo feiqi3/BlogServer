@@ -1,4 +1,5 @@
 #include <sqlite3.h>
+#include <chrono>
 #include <vector>
 #include <memory>
 #include <stdexcept>
@@ -198,7 +199,59 @@ public:
 	}
 
 };
-void Blog::DatabaseOperation::bind(void* stmt,int i,std::nullptr_t nullable){
+namespace {
+void ensureVisitTable(sqlite3* connection) {
+    const char* sql = "CREATE TABLE IF NOT EXISTS ConfirmedArticleVisits("
+        "token TEXT PRIMARY KEY, article_id INTEGER NOT NULL, expires INTEGER NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0)";
+    if (sqlite3_exec(connection, sql, nullptr, nullptr, nullptr) != SQLITE_OK)
+        throw std::runtime_error("Could not create confirmed visit table");
+}
+std::int64_t visitWallTime() {
+    return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+}
+void Blog::DatabaseOperation::registerArticleVisit(const std::string& token, uint64_t articleId) {
+    auto* connection = dp->getDbConn();
+    ensureVisitTable(connection);
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "INSERT OR IGNORE INTO ConfirmedArticleVisits(token,article_id,expires) VALUES(?,?,?)",
+        -1, &statement, nullptr) != SQLITE_OK) throw std::runtime_error("Could not register visit");
+    sqlite3_bind_text(statement, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(statement, 2, articleId);
+    sqlite3_bind_int64(statement, 3, visitWallTime() + 3600);
+    const auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) throw std::runtime_error("Could not register visit");
+    thread_local std::int64_t cleaned = 0;
+    if (visitWallTime() - cleaned >= 600) {
+        cleaned = visitWallTime();
+        auto sql = "DELETE FROM ConfirmedArticleVisits WHERE expires < " + std::to_string(cleaned);
+        sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr);
+    }
+}
+bool Blog::DatabaseOperation::confirmArticleVisit(const std::string& token) {
+    auto* connection = dp->getDbConn();
+    ensureVisitTable(connection);
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
+    auto rollback = [&] { sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr); return false; };
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "UPDATE Posts SET view_times=view_times+1 WHERE id IN "
+        "(SELECT article_id FROM ConfirmedArticleVisits WHERE token=? AND confirmed=0 AND expires>=?)",
+        -1, &statement, nullptr) != SQLITE_OK) return rollback();
+    sqlite3_bind_text(statement, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(statement, 2, visitWallTime());
+    auto result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) return rollback();
+    if (sqlite3_prepare_v2(connection, "UPDATE ConfirmedArticleVisits SET confirmed=1 WHERE token=?", -1, &statement, nullptr) != SQLITE_OK)
+        return rollback();
+    sqlite3_bind_text(statement, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+    result = sqlite3_step(statement);
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE || sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr) != SQLITE_OK) return rollback();
+    return true;
+}
+	void Blog::DatabaseOperation::bind(void* stmt,int i,std::nullptr_t nullable){
 	auto _s = (sqlite3_stmt*) stmt;
 	sqlite3_bind_null(_s, i);
 }

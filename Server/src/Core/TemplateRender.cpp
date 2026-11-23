@@ -36,7 +36,7 @@ namespace Blog {
 
     bool TemplateRender::render(const std::string& templateFilePath,TemplateRenderData&data,std::string& out){
         auto filePtr = FileCache::instance()->getOrGen(templateFilePath);
-        if(!filePtr){
+        if(!filePtr || !filePtr->data()){
             out = "Template file not found: " + templateFilePath;
             Fei::Logger::instance()->log(Fei::lvl::err, "Template file not found: {}", templateFilePath);
             return false;

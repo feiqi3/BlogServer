@@ -12,6 +12,7 @@
 #include "Service/AdminLogin.h"
 
 #include "Service/Filter.h"
+#include "Service/TrafficGuard.h"
 
 #include "Service/BlogData.h"
 
@@ -181,6 +182,7 @@ void Blog::Server::init()
 	server->addAppTickEvent(std::bind(&BlogData::syncData,BlogData::instance(),std::placeholders::_1));
 	server->addAppTickEvent(std::bind(&TemplateRender::checkOverdue,TemplateRender::instance(),std::placeholders::_1));
 	//server->setConnFilterCB(&filterAll);
+	TrafficGuard::install(*server, ResourceDir);
 }
 
 void Blog::Server::shutdown(){
