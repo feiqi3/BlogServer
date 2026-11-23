@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "mode": "observe",
+  "rules": [
+    {
+      "id": "public-pages-without-report",
+      "enabled": true,
+      "pages": ["home", "article", "archive", "category", "photos"],
+      "groupBy": "clientIp",
+      "windowSeconds": 600,
+      "reportGraceSeconds": 30,
+      "maxUnreported": 30,
+      "maxPendingPerIp": 64,
+      "banSeconds": 3600,
+      "blockScopes": ["publicPages", "publicApi"]
+    }
+  ],
+  "clientIp": {
+    "source": "socket",
+    "forwardedHeader": "X-Forwarded-For",
+    "trustedProxyCidrs": [],
+    "allowCidrs": ["127.0.0.0/8"]
+  },
+  "limits": {
+    "maxTrackedIps": 4096,
+    "maxOutstandingVisits": 16384,
+    "maxRecentConfirmations": 16384,
+    "confirmationRetentionSeconds": 60
+  },
+  "persistence": {
+    "banFile": "cache/traffic-guard-bans.json",
+    "flushIntervalSeconds": 5
+  },
+  "observability": {
+    "requestSampleRate": 0.01,
+    "logBanEvents": true
+  },
+  "articleViews": { "countOn": "pageRequest" }
+}

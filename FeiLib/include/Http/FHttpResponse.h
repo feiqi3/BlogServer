@@ -6,13 +6,22 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <memory>
+#include "Http/FHttpResponder.h"
 
 namespace Fei::Http {
+struct DeferredResponse;
+class FHttpResponse;
+using RequestRejectedCallback = std::function<void(StatusCode, FHttpResponse&)>;
 using HeaderMap = std::multimap<std::string, std::string>;
 
 class FHttpResponse {
 public:
   FHttpResponse() {}
+  static F_API FHttpResponse defer(std::function<void(FHttpResponder)> start,
+      std::chrono::milliseconds timeout = std::chrono::seconds(30));
+  bool isDeferred() const noexcept { return static_cast<bool>(mDeferred); }
 
   bool getHeader(const std::string key, std::string& data)const {
       auto itor = this->mHeaders.find(key);
@@ -85,7 +94,7 @@ public:
     return *this;
   }
 
-  std::string toString() const;
+  F_API std::string toString() const;
 
   StatusCode getStatusCode()const { return mStatus; };
 
@@ -97,7 +106,13 @@ private:
   HeaderMap mHeaders;
   std::string mBody;
   std::vector<FCookie> mCookies;
+  std::shared_ptr<DeferredResponse> mDeferred;
+  friend class FHttpServer;
 };
+
+namespace detail {
+FHttpResponse makeRejectedResponse(StatusCode status, const RequestRejectedCallback& callback);
+}
 
 } // namespace Fei::Http
 

@@ -20,6 +20,10 @@ struct ClientOptions {
     std::size_t resolverThreads = 2;
     // Empty uses the system OpenSSL trust store. Verification cannot be disabled.
     std::string caFile;
+    // Optional immutable connection policy, called on loop() after DNS and before
+    // any socket is opened. All resolved addresses must pass. Empty preserves
+    // existing behavior. Pooled connections retain the policy applied at connect.
+    std::function<bool(std::string_view host, std::string_view address)> allowAddress;
 };
 
 // Nonblocking HTTP/1.1 client bound to an existing EventLoop. It owns no I/O

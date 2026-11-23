@@ -1,0 +1,19 @@
+[Unit]
+Description=Back up BlogServer and Artalk SQLite databases to private Qiniu Kodo
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/BlogServer/Server/Tools/QiniuBackup
+ExecStart=/usr/bin/python3 /root/BlogServer/Server/Tools/QiniuBackup/backup.py --config /root/BlogServer/Server/Tools/QiniuBackup/backup.ini
+UMask=0077
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Keep the existing blog and Artalk services running throughout backup.

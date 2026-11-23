@@ -1,4 +1,5 @@
 #include "Index.h"
+#include "Service/TrafficGuard.h"
 #include "Core/ServerBasicDef.h"
 #include "Service/BlogCommonDataSetter.h"
 #include "Utils/Digital.h"
@@ -48,6 +49,7 @@ Fei::Http::FHttpResponse IndexArticles(const Fei::Http::FHttpRequest& req, const
     }
 
     TemplateRenderData data;
+    data.setData("visitId", TrafficGuard::visitId(req));
     int totalPageNum = std::max(1,int(std::ceil((float)DAO::PostQuery::QueryPostCount() / sPerPageCount)));
     //1. generate json
     setPageData(data, page, totalPageNum, 2);

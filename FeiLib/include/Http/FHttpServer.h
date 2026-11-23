@@ -11,17 +11,22 @@
 namespace Fei{
 	class FTcpServer;
 	class FEventLoop;
+    class FScriptEngine;
+    struct FScriptOptions;
 }
 namespace Fei::Http {
 
 class FHttpRequest;
 class FHttpResponse;
+struct DeferredConnectionState;
+struct DeferredRegistry;
 
 using PreSendHttpResponseCallback = std::function<void(const FHttpRequest&, FHttpResponse&)>;
 using InternalErrorCallback = std::function<void(const FHttpRequest&, FHttpResponse&, const ::Fei::FException&)>;
 using RouteNotMatchCallback = std::function<void(const FHttpRequest&, FHttpResponse&)>;
 //if true, the connection will not be processed by controller's function.
 using ConnectionFilterCallback = std::function<bool(const FHttpRequest&, FHttpResponse&)>;
+using HeadersFilterCallback = std::function<bool(const FHttpRequestHeaders&, FHttpResponse&)>;
 
 class F_API FHttpServer {
 public:
@@ -36,10 +41,17 @@ public:
 	void run(); 
 	void stop(bool force = false);
 	FEventLoop& jobLoop();
+    FScriptEngine& scriptEngine();
+    FScriptEngine& scriptEngine(const FScriptOptions& options);
 	void setOnInternalErrorCB(InternalErrorCallback cb) { mInternalErrCallback = std::move(cb); }
 	void setOnRoutNotMatchCB(RouteNotMatchCallback cb) { mRouteNotMatchCallback = std::move(cb); }
 	void setPreSendResponseCB(PreSendHttpResponseCallback cb) { mPreSendCallback = std::move(cb); }
 	void setConnFilterCB(ConnectionFilterCallback cb) { mConnFilterFunc = std::move(cb); }
+    // Configure before run(). True rejects after headers, before retaining the body.
+    void setHeadersFilterCB(HeadersFilterCallback cb) { mHeadersFilter = std::move(cb); }
+    // Configure before run(). Runs on the I/O thread for parser rejections and can
+    // customize the immediate response headers and body. FeiLib sends the response.
+    void setRequestRejectedCB(RequestRejectedCallback cb) { mRequestRejected = std::move(cb); }
 	TickEventId addAppTickEvent(AppTickEvent event);
 	void removeAppTickEvent(TickEventId id);
 	void tickAppEvents();
@@ -49,8 +61,10 @@ public:
 	struct HttpConnData{
 		FHttpParser parser;
 		bool shouldKeepAlive = true;
+        std::string headerRejection;
 		uint32 hasSurvivedTime = 0;
 		std::unique_ptr<FHttp2Context> http2Ctx = nullptr;
+        std::shared_ptr<DeferredConnectionState> deferred;
 	};
 
 private:
@@ -67,13 +81,20 @@ private:
 	void defaultExceptionFunc(const FHttpRequest& request, FHttpResponse& response,const ::Fei::FException& exception);
 	void http1Process(const FTcpConnPtr& ptr, FBufferReader& reader);
 	void http2Process(const FTcpConnPtr& ptr, FBufferReader& reader);
+    bool beginDeferred(const FTcpConnPtr&,const FHttpRequest&,FHttpResponse,uint32_t streamId=0);
+    void drainDeferred();
 	FHttpResponse httpHandle(const FTcpConnPtr& ptr,const FHttpRequest& request);
 private:
 	std::unique_ptr<FTcpServer> mTcpServer;
+    std::shared_ptr<FScriptEngine> m_scriptEngine;
+    bool m_running = false;
+    std::shared_ptr<DeferredRegistry> m_deferred;
 	PreSendHttpResponseCallback mPreSendCallback;
 	InternalErrorCallback mInternalErrCallback;
 	RouteNotMatchCallback mRouteNotMatchCallback;
 	ConnectionFilterCallback mConnFilterFunc;
+    HeadersFilterCallback mHeadersFilter;
+    RequestRejectedCallback mRequestRejected;
 	TickEventId mRouteCacheCleanEventId = 0;
 	
 

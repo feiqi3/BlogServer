@@ -77,9 +77,9 @@ bool AdminLogin::isLogin(const std::string &sessionId) const {
 
 
 bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
-                                  std::string &out) {
+                                  std::string &out,uint64_t* savedId) {
   bool isModify = false;
-  uint32_t categoryId = 0;
+  uint64_t categoryId = 0;
   bool isvalid = true;
   {
       std::string categoryStr;
@@ -89,7 +89,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
         return false;
       }
       if (Digital::isNumber(categoryStr)) {
-          categoryId = std::stoul(categoryStr);
+          categoryId = std::stoull(categoryStr);
       }
   }
 
@@ -150,7 +150,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
       }
   }
 
-  Model::Post post;
+  Model::Post post{};
   int allowComment = JsonTool::get(json, std::string("allow_comment"), 1);
   if (allowComment != 0) {
     allowComment = 1;
@@ -181,6 +181,8 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.title = title;
     post.profile = profile;
     post.content = content;
+    post.script_name=json.value("script_name",postopt->script_name);
+    post.tags=json.value("tags",postopt->tags);
     post.titlepic = titlepic;
     post.updated_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.category_id = categoryId;
@@ -191,20 +193,23 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
     post.allow_rss = JsonTool::check(json, "allow_rss") ? allowRss
                                                         : postopt->allow_rss;
     post.hide = JsonTool::check(json, "hide") ? hide : postopt->hide;
-    auto out = DAO::PostQuery::UpdatePostById(id, post);
-    if (out.has_value()) {
-      out = out.value();
+    auto error = DAO::PostQuery::UpdatePostById(id, post);
+    if (error.has_value()) {
+      out = error.value();
       return false;
     }
+    if(savedId)*savedId=id;
     RssBuilder::instance()->setDirty();
     return true;
   } else {
     // insert
-    Model::Post post;
+    Model::Post post{};
     post.view_times = 0;
     post.title = title;
     post.profile = profile;
     post.content = content;
+    post.script_name=json.value("script_name",std::string());
+    post.tags=json.value("tags",std::string());
     post.titlepic = titlepic;
     post.created_at = TimeHelper::getCurrentTimeFromEpochMills();
     post.updated_at = 0;
@@ -217,6 +222,7 @@ bool AdminLogin::postOrModifyBlog(const nlohmann::json &json,
       out = res.value();
       return false;
     }
+    if(savedId)*savedId=DatabaseOperation::instance()->lastInsertRowId();
     RssBuilder::instance()->setDirty();
     return true;
   }

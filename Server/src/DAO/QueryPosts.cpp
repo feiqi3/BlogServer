@@ -157,6 +157,8 @@ std::optional<std::string> PostQuery::UpdatePostById(uint64_t postId,
             (FIELD(Model::Post, profile) == PARAM) -
             (FIELD(Model::Post, titlepic) == PARAM) -
             (FIELD(Model::Post, content) == PARAM) -
+            (FIELD(Model::Post, script_name) == PARAM) -
+            (FIELD(Model::Post, tags) == PARAM) -
             (FIELD(Model::Post, allow_comment) == PARAM) -
             (FIELD(Model::Post, allow_rss) == PARAM) -
             (FIELD(Model::Post, hide) == PARAM) -
@@ -165,7 +167,7 @@ std::optional<std::string> PostQuery::UpdatePostById(uint64_t postId,
         };
     thread_local auto query = getQuery();
     auto updateTime = TimeHelper::getCurrentTimeFromEpochMills();
-    auto ptr = query.exec(post.title, post.category_id, post.profile, post.titlepic, post.content, post.allow_comment, post.allow_rss, post.hide, updateTime,postId).getResult();
+    auto ptr = query.exec(post.title, post.category_id, post.profile, post.titlepic, post.content, post.script_name, post.tags, post.allow_comment, post.allow_rss, post.hide, updateTime,postId).getResult();
     bool res = ptr->excute();
     if(res)return std::nullopt;
     return ptr->getErrMsg();

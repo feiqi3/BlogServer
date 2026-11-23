@@ -1,0 +1,10 @@
+backup.ini
+credentials.ini
+*.local.ini
+backups/
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.db-*
+*.tar.gz

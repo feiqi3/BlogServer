@@ -10,15 +10,15 @@
 #include <string_view>
 
 #include <algorithm>
+#include <charconv>
 #include <sstream>
 #include <string_view>
 namespace Fei::Http {
 namespace {
 //%xx and +
-bool isAllDigits(const std::string &s) {
-  return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char c) {
-    return std::isdigit(c);
-  });
+bool headerNameIs(std::string_view name, std::string_view lowercase) {
+  return std::equal(name.begin(), name.end(), lowercase.begin(), lowercase.end(),
+                    [](char a, char b) { return (a >= 'A' && a <= 'Z' ? a + ('a' - 'A') : a) == b; });
 }
 
 inline void trimSpaces(std::string &s) {
@@ -118,10 +118,47 @@ void FHttpParser::parseRequestLine(const std::string &line) {
   }
 }
 
+bool FHttpParser::parseBodyLength() {
+  bool hasLength = false;
+  for (const auto& [name, value] : mCtx.mHeaders) {
+    if (headerNameIs(name, "transfer-encoding")) return false; // HTTP/1 chunked requests are unsupported.
+    if (!headerNameIs(name, "content-length")) continue;
+    if (hasLength) return false;
+    hasLength = true;
+    const auto end = value.data() + value.size();
+    const auto parsed = std::from_chars(value.data(), end, contentLength_);
+    if (parsed.ptr != end || parsed.ec == std::errc::invalid_argument) return false;
+    if (parsed.ec == std::errc::result_out_of_range || contentLength_ > HttpMaxRequestBodyBytes) {
+      errorStatus_ = StatusCode::_413;
+      return false;
+    }
+  }
+  return true;
+}
+
 bool FHttpParser::parse(FBufferReader &buffer) {
-  char c;
-  while ((c = buffer.readNext()) != '\0' &&
-         (state_ != EState::Done && state_ != EState::Error)) {
+  while (state_ != EState::Done && state_ != EState::Error && state_ != EState::Rejected &&
+         buffer.getBufferReadableSize() > 0) {
+    if (state_ == EState::Body) {
+      int available = 0;
+      const auto* bytes = buffer.peekAll(available);
+      const auto length = std::min(static_cast<size_t>(available), contentLength_ - mCtx.mRequestBody.size());
+      mCtx.mRequestBody.append(reinterpret_cast<const char*>(bytes), length);
+      buffer.expireSize(static_cast<int>(length));
+      if (mCtx.mRequestBody.size() == contentLength_) state_ = EState::Done;
+      continue;
+    }
+    if (headerBytes_ == HttpMaxRequestHeaderBytes) {
+      errorStatus_ = StatusCode::_431;
+      state_ = EState::Error;
+      return false;
+    }
+    ++headerBytes_;
+    const auto c = buffer.readNext();
+    if (c == '\0') {
+      state_ = EState::Error;
+      return false;
+    }
     switch (state_) {
 
       // parse request line
@@ -147,21 +184,15 @@ bool FHttpParser::parse(FBufferReader &buffer) {
           lineBuf_.end()[-1] == '\n') {
         // End of headers
         if (lineBuf_ == "\r\n") {
-          auto it = mCtx.mHeaders.find("Content-Length");
-          if (it != mCtx.mHeaders.end()) {
-            if (!isAllDigits(it->second)) {
-              state_ = EState::Error;
-              return false;
-            }
-
-            contentLength_ = std::stoul(it->second);
-            mCtx.mRequestBody.reserve(contentLength_);
-
-            state_ = (contentLength_ > 0 ? EState::Body : EState::Done);
-          } else {
-            // 没声明长度，按 RFC 7230 对请求消息可视为 0-length
-            state_ = EState::Done;
+          if (headersCallback_ && !headersCallback_(mCtx)) {
+            state_ = EState::Rejected;
+            return false;
           }
+          if (!parseBodyLength()) {
+            state_ = EState::Error;
+            return false;
+          }
+          state_ = contentLength_ > 0 ? EState::Body : EState::Done;
 
           // parse Cookies
           auto range = mCtx.mHeaders.equal_range("Cookie");
@@ -192,16 +223,11 @@ bool FHttpParser::parse(FBufferReader &buffer) {
         lineBuf_.clear();
       }
     } break;
-    case EState::Body:
-      mCtx.mRequestBody.push_back(c);
-      ++bodyBytesRead_;
-      if (bodyBytesRead_ >= contentLength_) {
-        state_ = EState::Done;
-      }
-      break;
+    case EState::Body: // Handled in bulk before reading a header byte.
     case EState::Done:
       return true;
     case EState::Error:
+    case EState::Rejected:
       return false;
       break;
     }

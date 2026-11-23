@@ -100,12 +100,13 @@ public:
 | `QueryPostDataProfileByCategoryId(categoryId, pageIdx, perPageNum)` | SELECT 部分列 WHERE category_id=? ORDER BY created_at DESC | 分类下的分页列表 |
 | `QueryPostsDataProfileSinceLastByPageDesc(lastId, perPageNum)` | SELECT 部分列 WHERE id>lastId ORDER BY id DESC LIMIT | 游标分页（向前翻页） |
 | `QueryPostsDataWithCategoryProfileSinceLastByPageDesc(lastId, categoryId, perPageNum)` | SELECT 部分列 WHERE id>lastId AND category_id=? LIMIT | 分类下的游标分页 |
-| `QueryPostsBasicStatusByPage(lastId, perPageNum)` | SELECT 部分列 WHERE id>lastId ORDER BY id DESC LIMIT | 后台文章管理列表 |
+| `QueryPostsBasicStatusByPage(pageIdx, perPageNum)` | SELECT 部分列 ORDER BY id DESC LIMIT ? OFFSET ? | 后台文章管理列表（pageIdx 从 0 开始） |
 | `InsertPost(post)` | INSERT（跳过自增 id） | 新增文章 |
 | `UpdatePostById(postId, post)` | UPDATE SET title,category_id,profile,titlepic,content,updated_at WHERE id=? | 修改文章 |
 | `DeletePostById(postId)` | DELETE WHERE id=? | 删除文章 |
 | `updateViewTimes(id)` | UPDATE SET view_times=view_times+1 WHERE id=? | 阅读计数 +1 |
-| `QueryPostCount()` | SELECT COUNT(*) | 文章总数 |
+| `QueryPostCount()` | SELECT COUNT(*) WHERE hide=0 | 前台可见文章总数 |
+| `QueryAllPostCount()` | SELECT COUNT(*) | 文章总数（含隐藏，后台翻页用） |
 | `QueryPostOfCategoryCount(id)` | SELECT COUNT(*) WHERE category_id=? | 某分类下文章总数 |
 
 ---

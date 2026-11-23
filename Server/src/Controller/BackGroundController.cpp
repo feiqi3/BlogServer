@@ -15,6 +15,15 @@
 #include "Core/ServerBasicDef.h"
 #include "Utils/Digital.h"
 namespace Blog{
+    Fei::Http::FHttpResponse BackGroundController::ScriptsPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar&) {
+        if (!AdminLogin::instance()->isLogin(req)) return Redirector::RedirectTo("/background");
+        MemoryMappedFile file(BlogWebPagePath + "backyard-scripts.html", Mode::ReadOnly, 0);
+        if (!file.data()) return Redirector::RedirectTo("/404");
+        Fei::Http::FHttpResponse response;
+        response.addHeader("Cache-Control", "no-store");
+        response.setBody(std::string(static_cast<char*>(file.data()), file.size()));
+        return response;
+    }
     BackGroundController::BackGroundController():Fei::Http::FControllerBase("BackGroundController"){
     }
     Fei::Http::FHttpResponse BackGroundController::LoginPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){

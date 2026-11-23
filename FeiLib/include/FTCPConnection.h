@@ -40,6 +40,7 @@ public:
   ~FTcpConnection();
 
   TcpConnState getState() const { return mstate; }
+  FEventLoop& loop() const { return *m_loop; }
   void setReading(bool v);
   void send(const char *data, uint64 len);
   void send(std::string&& data);

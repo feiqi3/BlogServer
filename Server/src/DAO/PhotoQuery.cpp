@@ -103,22 +103,18 @@ PhotoQuery::InsertPhoto(const Model::Photo& photo) {
 std::optional<std::string>
 PhotoQuery::UpdatePhoto(const Model::Photo& photo) {
   auto getQuery = []() {
-    Query<Model::Photo> query;
-    query
-        .update((FIELD(Model::Photo, album_id) == PARAM) -
-                (FIELD(Model::Photo, url) == PARAM) -
-                (FIELD(Model::Photo, caption) == PARAM) -
-                (FIELD(Model::Photo, sort_order) == PARAM) -
-                (FIELD(Model::Photo, title) == PARAM) -
-                (FIELD(Model::Photo, description) == PARAM))
-        .Where(FIELD(Model::Photo, id) == PARAM).setStaticQuery(true);
-    return query;
+    auto statement = DatabaseOperation::instance()->Prepare(
+        "UPDATE Photos SET width=CASE WHEN url=? THEN width ELSE 0 END, "
+        "height=CASE WHEN url=? THEN height ELSE 0 END, "
+        "album_id=?, url=?, caption=?, sort_order=?, title=?, description=? WHERE id=?");
+    DatabaseOperation::addThreadCleanDBData(statement);
+    return statement;
   };
   thread_local auto query = getQuery();
-  auto ptr = query.exec(photo.album_id, photo.url, photo.caption,
-                        photo.sort_order, photo.title, photo.description,
-                        photo.id)
-                 .getResult();
+  DatabaseOperation::instance()->ReExec(query, photo.url, photo.url,
+      photo.album_id, photo.url, photo.caption, photo.sort_order, photo.title,
+      photo.description, photo.id);
+  auto ptr = query;
   bool res = ptr->excute();
   if (res)
     return std::nullopt;
@@ -141,16 +137,30 @@ PhotoQuery::UpdatePhotoDims(uint64_t id, int width, int height) {
   return q->getErrMsg();
 }
 
+std::optional<std::string>
+PhotoQuery::UpdatePhotoDimsIfUrlMatches(uint64_t id, const std::string& url, int width, int height) {
+  auto getQuery = []() {
+    auto statement = DatabaseOperation::instance()->Prepare(
+        "UPDATE Photos SET width=?, height=? WHERE id=? AND url=?");
+    DatabaseOperation::addThreadCleanDBData(statement);
+    return statement;
+  };
+  thread_local auto query = getQuery();
+  DatabaseOperation::instance()->ReExec(query, width, height, id, url);
+  if (query->excute()) return std::nullopt;
+  return query->getErrMsg();
+}
+
 std::vector<std::pair<uint64_t, std::string>>
-PhotoQuery::QueryPhotosMissingDims() {
+PhotoQuery::QueryPhotosMissingDims(uint64_t afterId, int limit) {
   auto getQueryStatement = []() {
     auto ret = DatabaseOperation::instance()->Prepare(
-        "SELECT id, url FROM Photos WHERE width = 0 OR height = 0");
+        "SELECT id, url FROM Photos WHERE id > ? AND (width = 0 OR height = 0) ORDER BY id LIMIT ?");
     DatabaseOperation::addThreadCleanDBData(ret);
     return ret;
   };
   thread_local auto q = getQueryStatement();
-  DatabaseOperation::instance()->ReExec(q);
+  DatabaseOperation::instance()->ReExec(q, afterId, limit);
   std::vector<std::pair<uint64_t, std::string>> ret;
   while (q->step()) {
     uint64_t id = (uint64_t)q->getInteger64(0);
@@ -158,6 +168,20 @@ PhotoQuery::QueryPhotosMissingDims() {
     ret.emplace_back(id, url ? url : "");
   }
   return ret;
+}
+
+bool PhotoQuery::NeedsDimensions(uint64_t id, const std::string& url) {
+  auto prepare = [] {
+    auto statement = DatabaseOperation::instance()->Prepare(
+        "SELECT 1 FROM Photos WHERE id=? AND url=? AND (width=0 OR height=0)");
+    DatabaseOperation::addThreadCleanDBData(statement);
+    return statement;
+  };
+  thread_local auto query = prepare();
+  DatabaseOperation::instance()->ReExec(query, id, url);
+  const bool needed = query->step();
+  if (needed) query->step(); // Finish the cursor before the next database job.
+  return needed;
 }
 
 std::optional<std::string>

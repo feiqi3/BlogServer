@@ -11,19 +11,34 @@
 #include "Service/Index.h"
 #include "Service/QuickRedirect.h"
 #include "Service/RssBuilder.h"
+#include "Service/TrafficGuard.h"
 #include "Utils/Digital.h"
 #include "Utils/FileReader.h"
 #include "Utils/FileCache.h"
 #include "Utils/HtmlHelper.h"
 #include "Utils/TimeHelper.h"
+#include "Profiling/FProfiler.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
+#ifdef FEILIB_ENABLE_SCRIPT
+#include "Service/ArticleHookService.h"
+#endif
 
 namespace Blog {
+namespace {
+Fei::Http::FHttpResponse renderArticle(const Fei::Http::FHttpRequest& request,Model::Post post,const std::string& url){
+#ifdef FEILIB_ENABLE_SCRIPT
+    if(!post.script_name.empty())if(auto hooks=Script::ArticleHookService::current()){
+        if(auto response=hooks->request(request,post,[url, token=TrafficGuard::visitId(request)](auto post){return FrontGroundController::RenderArticlePost(post,url,token);}))return std::move(*response);
+    }
+#endif
+    return FrontGroundController::RenderArticlePost(post,url,TrafficGuard::visitId(request));
+}
+}
 Fei::Http::FHttpResponse
 FrontGroundController::Articles(const Fei::Http::FHttpRequest &req,
                                 const Fei::Http::FPathVar &var) {
@@ -41,11 +56,12 @@ Fei::Http::FHttpResponse FrontGroundController::ArticleDetail(const Fei::Http::F
     if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    DAO::PostQuery::updateViewTimes(id);
-    return RenderArticlePost(post.value(), "/post/" + std::to_string(id));
+    if (TrafficGuard::countOnRequest(req)) DAO::PostQuery::updateViewTimes(id);
+    return renderArticle(req,post.value(), "/post/" + std::to_string(id));
 }
 
-Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::Post& _post, const std::string& pageUrl){
+Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::Post& _post, const std::string& pageUrl, const std::string& visitId){
+    FeiScope("Article.Render");
     auto cateName = DAO::CategoryQuery::QueryCategoryNameById(_post.category_id);
     if(!cateName.has_value()){
         return Redirector::RedirectTo("/505");
@@ -84,12 +100,11 @@ Fei::Http::FHttpResponse FrontGroundController::RenderArticlePost(const Model::P
     TemplateRenderData data;
     data.setData("post",std::move(mPost));
     data.setData("pageUrl", pageUrl);
+    data.setData("visitId", visitId);
     std::string renderOut;
     setBlogCommonData(data);
     auto gcUrl = Fei::FConfigReader::instance()->getCfg("GoatCounterUrl");
-    if (gcUrl.has_value() && !gcUrl->empty()) {
-        data.setData("goatcounter_url", gcUrl.value());
-    }
+    data.setData("goatcounter_url", gcUrl.value_or(""));
     TemplateRender::instance()->render(BlogWebPagePath + "article.html", data, renderOut);
     Fei::Http::FHttpResponse res;
     res.setBody(renderOut);
@@ -104,6 +119,7 @@ Fei::Http::FHttpResponse FrontGroundController::Categories(const Fei::Http::FHtt
     }
     
     TemplateRenderData data;
+    data.setData("visitId", TrafficGuard::visitId(req));
     data.setData("categories",std::move(DAO::CategoryQuery::QueryAllCategory()));
     std::string renderOut;
     setBlogCommonData(data);
@@ -158,6 +174,7 @@ Fei::Http::FHttpResponse  FrontGroundController::CategoriesDetail(const Fei::Htt
     }
 
     TemplateRenderData data;
+    data.setData("visitId", TrafficGuard::visitId(req));
     int totalPageNum = std::max(1,int(std::ceil((float)DAO::PostQuery::QueryPostOfCategoryCount(cate.id) / sPerPageCount)));
     //1. generate json
     setPageData(data, page, totalPageNum, 2);
@@ -179,7 +196,7 @@ Fei::Http::FHttpResponse FrontGroundController::About(const Fei::Http::FHttpRequ
     if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    return RenderArticlePost(post.value(), "/about");
+    return renderArticle(req,post.value(), "/about");
 }
 
 Fei::Http::FHttpResponse FrontGroundController::Links(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
@@ -190,7 +207,7 @@ Fei::Http::FHttpResponse FrontGroundController::Links(const Fei::Http::FHttpRequ
     if(!post.has_value()){
         return Redirector::RedirectTo("/404");
     }
-    return RenderArticlePost(post.value(), "/links");
+    return renderArticle(req,post.value(), "/links");
 }
 
 Fei::Http::FHttpResponse FrontGroundController::Archive(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
@@ -230,24 +247,26 @@ Fei::Http::FHttpResponse FrontGroundController::Archive(const Fei::Http::FHttpRe
     return res;
 }
 
-Fei::Http::FHttpResponse FrontGroundController::PhotosPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
-    Fei::Http::FHttpResponse res;
-    MemoryMappedFile file(BlogWebPagePath + "photos.html", Mode::ReadOnly, 0);
-    if (file.data() == nullptr) {
+Fei::Http::FHttpResponse FrontGroundController::PhotosPage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar&){
+    TemplateRenderData data;
+    data.setData("visitId", TrafficGuard::visitId(req));
+    std::string body;
+    if (!TemplateRender::instance()->render(BlogWebPagePath + "photos.html", data, body))
         return Redirector::RedirectTo("/404");
-    }
-    res.setBody(std::string((char*)file.data(), file.size()));
-    return res;
+    Fei::Http::FHttpResponse response;
+    response.setBody(std::move(body));
+    return response;
 }
 
-Fei::Http::FHttpResponse FrontGroundController::ArchivePage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){
-    Fei::Http::FHttpResponse res;
-    MemoryMappedFile file(BlogWebPagePath + "archive.html", Mode::ReadOnly, 0);
-    if (file.data() == nullptr) {
+Fei::Http::FHttpResponse FrontGroundController::ArchivePage(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar&){
+    TemplateRenderData data;
+    data.setData("visitId", TrafficGuard::visitId(req));
+    std::string body;
+    if (!TemplateRender::instance()->render(BlogWebPagePath + "archive.html", data, body))
         return Redirector::RedirectTo("/404");
-    }
-    res.setBody(std::string((char*)file.data(), file.size()));
-    return res;
+    Fei::Http::FHttpResponse response;
+    response.setBody(std::move(body));
+    return response;
 }
 
 Fei::Http::FHttpResponse FrontGroundController::RssXml(const Fei::Http::FHttpRequest& req, const Fei::Http::FPathVar& var){

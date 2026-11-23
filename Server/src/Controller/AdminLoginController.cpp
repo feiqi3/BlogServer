@@ -13,8 +13,12 @@
 #include "Core/Session.h"
 #include "Service/AdminLogin.h"
 #include "Service/QuickRedirect.h"
+#include "Service/ProfilerService.h"
 #include "nlohmann/json_fwd.hpp"
 #include "Utils/Digital.h"
+#ifdef FEILIB_ENABLE_SCRIPT
+#include "Service/ArticleHookService.h"
+#endif
 #define MODULE_NAME "[AdminLoginController]"
 namespace {
 const int sMaxErrorTime = 5;
@@ -25,6 +29,16 @@ namespace Blog {
 AdminController::AdminController() : Fei::Http::FControllerBase("AdminLogin") {}
 
 void AdminController::lateInit() {
+}
+
+Fei::Http::FHttpResponse AdminController::Profiling(const Fei::Http::FHttpRequest& req,const Fei::Http::FPathVar&){
+    Fei::Http::FHttpResponse response;
+    response.setContentType("application/json").addHeader("Cache-Control","no-store");
+    if(!AdminLogin::instance()->isLogin(req)){
+        response.setStatusCode(Fei::Http::StatusCode::_401).setBody("{\"error\":\"Login required\"}");return response;
+    }
+    auto profiler=ProfilerService::current();
+    response.setBody((profiler?profiler->status():nlohmann::json({{"enabled",false}})).dump());return response;
 }
 
 Fei::Http::FHttpResponse
@@ -91,13 +105,26 @@ AdminController::Post(const Fei::Http::FHttpRequest &req,
     return res;
   }
   std::string outErr;
-  bool result = AdminLogin::instance()->postOrModifyBlog(json, outErr);
+  uint64_t savedId=0;
+#ifdef FEILIB_ENABLE_SCRIPT
+  auto hooks=Script::ArticleHookService::current();
+  if(Script::ArticleHookService::stopping()){
+    res.setStatusCode(Fei::Http::StatusCode::_503).setContentType("application/json")
+      .setBody(JsonTool::ToString(getErrorJson("Server is stopping")));
+    return res;
+  }
+  if(hooks){if(auto response=hooks->submit(json))return std::move(*response);}
+#endif
+  bool result = AdminLogin::instance()->postOrModifyBlog(json, outErr,&savedId);
   if (!result) {
     Fei::Logger::instance()->log(Fei::lvl::err, MODULE_NAME "Post error: {}",
                                  outErr);
     res.setBody(JsonTool::ToString(getErrorJson(outErr)));
     return res;
   } else {
+#ifdef FEILIB_ENABLE_SCRIPT
+    if(hooks)hooks->saved(savedId,json);
+#endif
     res.setBody(JsonTool::ToString(getSucc()));
     return res;
   }

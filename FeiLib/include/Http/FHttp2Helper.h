@@ -7,6 +7,7 @@
 #include "FCallBackDef.h"
 #include "FHttpParserHelper.h"
 #include "FHttpRequest.h"
+#include "FHttpResponse.h"
 #include "FBufferReader.h"
 #include <functional>
 #include <string>
@@ -44,27 +45,10 @@ namespace Fei::Http {
             return mMethod != Method::Invalid;
         }
 
-        void setDataLength(uint32_t len) {
-            mDataLength = len;
-        }
-
-        void appendData(char* data,int len) {
-            if (mData.empty()) {
-                mData.reserve(mDataLength);
-            }
-            mData.append(data, len);
-
-            if (mData.size() >= mDataLength) {
-                mData.resize(mDataLength);
-                mDataFinish = true;
-            }
-        }
-
         void onHeaderFinish();
         bool isFinish()const;
         bool mHeaderFinish = false;
         bool mDataFinish = false;
-        uint32_t mDataLength = 0;
         Method mMethod = Method::Invalid;
         std::string mPath;
         std::string mData;
@@ -76,7 +60,7 @@ namespace Fei::Http {
 
         virtual std::string reason()const { return"Http2 Error"; }
     };
-    class FHttp2Context {
+    class F_API FHttp2Context {
     public:
         static int select_alpn(const unsigned char** out, unsigned char* outlen,
             const unsigned char* in, unsigned int inlen);
@@ -103,7 +87,12 @@ namespace Fei::Http {
         bool isConnEnd()const;
         uint32_t getOpenedStreams()const;
         void endStream(uint32_t streamID,H2StreamErr err);
-        void traversalFinishedStreams(std::function<bool(const FHttpRequest&,uint32)>func);
+        void traversalFinishedStreams(std::function<bool(FHttpRequest&,uint32)>func);
+        void onStreamClose(uint32_t streamId,std::function<void()> callback);
+        void setHeadersFilter(std::function<bool(FHttp2Parser&, uint32_t)> callback);
+        bool hasHeadersFilter() const;
+        void setRequestRejectedCallback(RequestRejectedCallback callback);
+        bool hasRequestRejectedCallback() const;
     private:
 
         std::unique_ptr<FHttp2Private> mDp;

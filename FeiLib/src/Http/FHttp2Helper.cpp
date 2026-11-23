@@ -1,6 +1,7 @@
 #include "Http/FHttp2Helper.h"
 #include "Http/FHttpDef.h"
 #include "Http/FHttpRequest.h"
+#include <charconv>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -320,11 +321,14 @@ namespace Fei{
         Fei::Http::FHttp2Parser parser;
         std::unique_ptr<FHttp2Response> returnResponse = 0;
         std::unique_ptr<FHttp2PushPromise> pushPromise = 0;
-        bool isStreamRecvFinish = false;
+        size_t headerBytes = 0;
+        bool headersTooLarge = false;
         bool isServerOpen = false;
         bool processed = false;
+        bool rejected = false;
         uint32_t parentStreamId = 0;
         uint32_t streamId;
+        std::function<void()> onClose;
     };
 
     struct Http2SessionData {
@@ -338,6 +342,8 @@ namespace Fei{
         uint32_t serverOpenedStreams = 0;
         std::map<uint32_t, Http2StreamData> mStreamDataMap;
         Http2SessionSettings settings;
+        std::function<bool(Http::FHttp2Parser&, uint32_t)> headersFilter;
+        Http::RequestRejectedCallback requestRejected;
 #ifdef HTTP2_DEBUG
         Fei::FSocketAddr addr;
 #endif
@@ -345,6 +351,36 @@ namespace Fei{
 
     class Http2Callbacks {
     public:
+        static int submitResponse(nghttp2_session* session, uint32_t streamId, Http2StreamData& stream,
+                                  Http::FHttpResponse& response) {
+            stream.returnResponse = std::make_unique<FHttp2Response>(response);
+            auto& h2Response = *stream.returnResponse;
+            auto& dataProvider = h2Response.dataProvider;
+            dataProvider.source.ptr = nullptr;
+            dataProvider.read_callback = submit_data_read_callback;
+            auto& headers = h2Response.getNgHttp2NameValueArray();
+            return nghttp2_submit_response2(session, streamId, headers.data(), headers.size(), &dataProvider);
+        }
+
+        static int rejectRequest(nghttp2_session* session, Http2StreamData& stream, Http::StatusCode status,
+                                 const Http::RequestRejectedCallback& callback) {
+            stream.rejected = true;
+            stream.processed = true;
+            stream.parser.mHeaders.clear();
+            std::string{}.swap(stream.parser.mData);
+            if (callback) {
+                auto response = Http::detail::makeRejectedResponse(status, callback);
+                return submitResponse(session, stream.streamId, stream, response) == 0 ? 0 : NGHTTP2_ERR_CALLBACK_FAILURE;
+            }
+            const auto code = Http::statusCodeToStr2(status);
+            nghttp2_nv header{
+                reinterpret_cast<uint8_t*>(const_cast<char*>(":status")),
+                reinterpret_cast<uint8_t*>(const_cast<char*>(code)), 7, 3, NGHTTP2_NV_FLAG_NONE};
+            if (nghttp2_submit_response2(session, stream.streamId, &header, 1, nullptr) != 0)
+                return NGHTTP2_ERR_CALLBACK_FAILURE;
+            return 0;
+        }
+
         static Http2StreamData* getStreamUserData(nghttp2_session* s, int32_t streamId) {
             Http2StreamData* ret = (Http2StreamData*)nghttp2_session_get_stream_user_data(s, streamId);
             return ret;
@@ -399,17 +435,17 @@ namespace Fei{
 
         static int on_data_chunk_recv_callback(nghttp2_session* session, uint8_t flags, int32_t stream_id, const uint8_t* data, size_t len, void* user_data) {
             Http2StreamData* streamUD = getStreamUserData(session, stream_id);
-            Http2SessionData* sessionData = (Http2SessionData*)user_data;
 
-            if(!streamUD){
+            if(!streamUD || streamUD->rejected){
                 return 0;
             }
 
             auto& parser = streamUD->parser;
-            parser.appendData((char*)data, len);
-            if (flags & NGHTTP2_FLAG_END_STREAM) {
-                streamUD->isStreamRecvFinish = true;
+            if (len > Http::HttpMaxRequestBodyBytes - parser.mData.size()) {
+                const auto& callback = static_cast<Http2SessionData*>(user_data)->requestRejected;
+                return rejectRequest(session, *streamUD, Http::StatusCode::_413, callback);
             }
+            parser.mData.append(reinterpret_cast<const char*>(data), len);
             return 0;
         }
 
@@ -418,6 +454,8 @@ namespace Fei{
             Http2SessionData* session_data = (Http2SessionData*)user_data;
             Http2StreamData* stream_data = (Http2StreamData*)nghttp2_session_get_stream_user_data(session, stream_id);
             if (stream_data) {
+                auto onClose=std::move(stream_data->onClose);
+                if(onClose){try{onClose();}catch(...){}}
                 stream_data->returnResponse= 0;
                 stream_data->pushPromise = 0;
                 if (stream_data->isServerOpen)
@@ -436,9 +474,16 @@ namespace Fei{
         static int on_header_callback(nghttp2_session* session, const nghttp2_frame* frame, const uint8_t* name, size_t namelen, const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data)
         {
             auto streamId = frame->hd.stream_id;
-            auto sessionData = (Http2SessionData*)user_data;
             Http2StreamData* streamUD = getStreamUserData(session, streamId);
-            if(!streamUD)return 0;
+            if (!streamUD || streamUD->rejected || streamUD->headersTooLarge) return 0;
+
+            // Include the per-field overhead used by the HTTP/2 header list size.
+            auto remaining = Http::HttpMaxRequestHeaderBytes - streamUD->headerBytes;
+            if (remaining < 32 || namelen > remaining - 32 || valuelen > remaining - 32 - namelen) {
+                streamUD->headersTooLarge = true;
+                return 0;
+            }
+            streamUD->headerBytes += namelen + valuelen + 32;
 
             auto& parser = streamUD->parser;
             parser.addHeader(std::string((char*)name, namelen), std::string((char*)value, valuelen));
@@ -483,6 +528,7 @@ namespace Fei{
             std::vector<nghttp2_settings_entry> iv;
 
             iv.push_back({ NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, s_maxConcurrentStream });
+            iv.push_back({ NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, Http::HttpMaxRequestHeaderBytes });
             //No real use.
             iv.push_back({ NGHTTP2_SETTINGS_ENABLE_PUSH, settings.enablePush });
 
@@ -501,16 +547,30 @@ namespace Fei{
             else if(!streamUD){
 
             }
-            else if (frameType == NGHTTP2_HEADERS) {
+            else if (frameType == NGHTTP2_HEADERS && !streamUD->rejected) {
+                if (streamUD->headersTooLarge)
+                    return rejectRequest(session, *streamUD, Http::StatusCode::_431, sessionData->requestRejected);
                 auto& parser = streamUD->parser;
-                //End of Header Frame
-                parser.mHeaderFinish = true;
-                parser.onHeaderFinish();
-            }else if (frameType == NGHTTP2_DATA) {
-                auto& parser = streamUD->parser;
-                if (parser.mData.size() != parser.mDataLength) {
-                    Logger::instance()->log(lvl::warn, MODULE_NAME"Stream {}: Data recv size mismatch with content_length",streamId);
+                if (frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
+                    parser.mHeaderFinish = true;
+                    parser.onHeaderFinish();
+                    if (sessionData->headersFilter && sessionData->headersFilter(parser, frame->hd.stream_id)) {
+                        streamUD->rejected = true;
+                        streamUD->processed = true;
+                    } else if (auto length = parser.mHeaders.find("content-length"); length != parser.mHeaders.end()) {
+                        size_t size = 0;
+                        const auto& value = length->second;
+                        const auto end = value.data() + value.size();
+                        const auto parsed = std::from_chars(value.data(), end, size);
+                        if (parsed.ptr != end || parsed.ec == std::errc::invalid_argument)
+                            return rejectRequest(session, *streamUD, Http::StatusCode::_400, sessionData->requestRejected);
+                        if (parsed.ec == std::errc::result_out_of_range || size > Http::HttpMaxRequestBodyBytes)
+                            return rejectRequest(session, *streamUD, Http::StatusCode::_413, sessionData->requestRejected);
+                    }
                 }
+                parser.mDataFinish = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) != 0;
+            }else if (frameType == NGHTTP2_DATA && !streamUD->rejected) {
+                streamUD->parser.mDataFinish = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) != 0;
             }
 
 #ifdef HTTP2_DEBUG
@@ -650,22 +710,9 @@ namespace Fei::Http {
 
     void FHttp2Context::http2SubmitResponseStream(uint32_t streamId, FHttpResponse& response, bool closeStream)
     {
-
-        Http2StreamData* streamUD = 0;
-        Http2SessionData& sessionData = mDp->sessionData;
         auto session = mDp->session;
-
-        streamUD = (Http2StreamData*)nghttp2_session_get_stream_user_data(mDp->session, streamId);
-
-        streamUD->returnResponse =std::make_unique<FHttp2Response>(response);
-        auto& h2Response = streamUD->returnResponse;
-        auto & dataProvider = streamUD->returnResponse->dataProvider;
-        dataProvider.source.ptr = nullptr;
-        dataProvider.read_callback = Http2Callbacks::submit_data_read_callback;
-        auto& h2NVA = h2Response->getNgHttp2NameValueArray();
-        //DO NOT USE SUBMIT HEADER AND SUBMIT DATA
-        auto res = nghttp2_submit_response2(session, streamId, h2NVA.data(), h2NVA.size(), &streamUD->returnResponse->dataProvider);
-        if (res != 0) {
+        auto* stream = Http2Callbacks::getStreamUserData(session, streamId);
+        if (stream && Http2Callbacks::submitResponse(session, streamId, *stream, response) != 0) {
             Logger::instance()->log(lvl::err, MODULE_NAME"Submit response error.");
         }
     }
@@ -819,7 +866,24 @@ namespace Fei::Http {
         }
     }
 
-    void FHttp2Context::traversalFinishedStreams(std::function<bool(const FHttpRequest& ,uint32_t)> func)
+    void FHttp2Context::onStreamClose(uint32_t streamId,std::function<void()> callback) {
+        auto it=mDp->sessionData.mStreamDataMap.find(streamId);
+        if(it!=mDp->sessionData.mStreamDataMap.end())it->second.onClose=std::move(callback);
+    }
+
+    void FHttp2Context::setHeadersFilter(std::function<bool(FHttp2Parser&, uint32_t)> callback) {
+        mDp->sessionData.headersFilter = std::move(callback);
+    }
+    bool FHttp2Context::hasHeadersFilter() const {
+        return static_cast<bool>(mDp->sessionData.headersFilter);
+    }
+    void FHttp2Context::setRequestRejectedCallback(RequestRejectedCallback callback) {
+        mDp->sessionData.requestRejected = std::move(callback);
+    }
+    bool FHttp2Context::hasRequestRejectedCallback() const {
+        return static_cast<bool>(mDp->sessionData.requestRejected);
+    }
+    void FHttp2Context::traversalFinishedStreams(std::function<bool(FHttpRequest&, uint32_t)> func)
     {
         for (auto& [streamID, streamData] : mDp->sessionData.mStreamDataMap) {
             if (!streamData.isServerOpen && streamData.parser.isFinish() && !streamData.processed) {
@@ -870,13 +934,6 @@ namespace Fei::Http {
             mHeaders.erase(itor);
         }
 
-        itor = mHeaders.find("content-length");
-        if (itor != mHeaders.end()) {
-            mDataLength = std::stoul(itor->second);
-        }
-        else {
-            mDataFinish = true;
-        }
     }
 
     bool FHttp2Parser::isFinish() const

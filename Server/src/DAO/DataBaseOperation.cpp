@@ -1,6 +1,8 @@
 #include <sqlite3.h>
+#include <chrono>
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 #include "DataBaseOperation.h"
 #include "FLogger.h"
@@ -17,10 +19,21 @@ using namespace Fei;
 using namespace Blog;
 
 namespace {
-	thread_local sqlite3* _db;
-
-	thread_local std::vector<sqlite3_stmt*> _stmtToClearPostThread;
-	thread_local bool sHasAddedThreadClean = false;
+    struct ThreadDatabase {
+        sqlite3* connection = nullptr;
+        std::vector<sqlite3_stmt*> statements;
+        bool loopCleanupInstalled = false;
+        bool privateCache = false;
+        bool visitTableInitialized = false;
+        void close() noexcept {
+            for(auto* statement:statements)sqlite3_finalize(statement);
+            statements.clear();
+            if(connection){sqlite3_close_v2(connection);connection=nullptr;}
+            visitTableInitialized = false;
+        }
+        ~ThreadDatabase(){close();}
+    };
+    thread_local ThreadDatabase threadDatabase;
 
 	int toSqlite3Type(DataType dtp) {
 		switch (dtp)
@@ -67,8 +80,8 @@ public:
 	std::string dbPath;
 public:
 	const char* getErrMsg()const {
-		if(_db != 0)
-			return sqlite3_errmsg(_db);
+		if(threadDatabase.connection != 0)
+			return sqlite3_errmsg(threadDatabase.connection);
 		return 0;
 	};
 
@@ -83,44 +96,33 @@ public:
 	}
 
 	bool localDbConnValid()const {
-		return _db != nullptr;
+		return threadDatabase.connection != nullptr;
 	}
 
 	void makeConThreadLocal() {
-		if (_db != nullptr)return;
-		int flag = SQLITE_OPEN_READWRITE | SQLITE_OPEN_SHAREDCACHE;
-		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &_db, flag, nullptr), {
-		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(_db));
+		if (threadDatabase.connection != nullptr)return;
+		int flag = SQLITE_OPEN_READWRITE | (threadDatabase.privateCache?SQLITE_OPEN_PRIVATECACHE:SQLITE_OPEN_SHAREDCACHE);
+		SQL_CHECK(sqlite3_open_v2(dbPath.c_str(), &threadDatabase.connection, flag, nullptr), {
+		Logger::instance()->log(MODULE_NAME,lvl::critical,"Try open database \"{}\" failed. reason \"{}\"",dbPath, sqlite3_errmsg(threadDatabase.connection));
 			});
-		sqlite3_busy_timeout(_db,5000);
-		sqlite3_exec(_db, "PRAGMA foreign_keys = ON;", 0, 0, 0);
-		sqlite3_exec(_db, "PRAGMA journal_mode=WAL;", 0, 0, 0);
+		sqlite3_busy_timeout(threadDatabase.connection,5000);
+		sqlite3_exec(threadDatabase.connection, "PRAGMA foreign_keys = ON;", 0, 0, 0);
+		sqlite3_exec(threadDatabase.connection, "PRAGMA journal_mode=WAL;", 0, 0, 0);
 
-		if(!sHasAddedThreadClean){
-			sHasAddedThreadClean = true;
-			auto vec = & _stmtToClearPostThread;
-			auto db = &_db;
-			Server::CurThreadCleanCallback([vec,db](){
-				for(auto&& i : *vec){
-					sqlite3_finalize(i);
-				}
-				_stmtToClearPostThread.clear();
-				auto ret =sqlite3_close_v2(*db);
-				if(ret != SQLITE_OK){
-					Logger::instance()->log(MODULE_NAME,lvl::err,"Close database error, reason \"{}\"",sqlite3_errmsg(*db));
-				}
-			});
-		}
+        if(!threadDatabase.loopCleanupInstalled){
+            threadDatabase.loopCleanupInstalled = true;
+            Server::CurThreadCleanCallback([]{threadDatabase.close();});
+        }
 
 	}
 
 	sqlite3* getDbConn() {
 		if (localDbConnValid()) {
-			return _db;
+			return threadDatabase.connection;
 		}
 		else {
 			makeConThreadLocal();
-			return _db;
+			return threadDatabase.connection;
 		}
 	}
 
@@ -199,7 +201,53 @@ public:
 	}
 
 };
-void Blog::DatabaseOperation::bind(void* stmt,int i,std::nullptr_t nullable){
+namespace {
+void ensureVisitTable(sqlite3* connection) {
+    const char* sql = "CREATE TABLE IF NOT EXISTS ConfirmedArticleVisits("
+        "token TEXT PRIMARY KEY, article_id INTEGER NOT NULL, expires INTEGER NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0)";
+    if (sqlite3_exec(connection, sql, nullptr, nullptr, nullptr) != SQLITE_OK)
+        throw std::runtime_error("Could not create confirmed visit table");
+}
+std::int64_t visitWallTime() {
+    return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+}
+bool Blog::DatabaseOperation::confirmArticleVisit(const std::string& token, uint64_t articleId) {
+    auto* connection = dp->getDbConn();
+    if (!threadDatabase.visitTableInitialized) {
+        ensureVisitTable(connection);
+        threadDatabase.visitTableInitialized = true;
+    }
+    if (sqlite3_exec(connection, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) != SQLITE_OK) return false;
+    auto rollback = [&] { sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr); return false; };
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(connection, "INSERT OR IGNORE INTO ConfirmedArticleVisits(token,article_id,expires,confirmed) VALUES(?,?,?,1)",
+        -1, &statement, nullptr) != SQLITE_OK) return rollback();
+    sqlite3_bind_text(statement, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(statement, 2, articleId);
+    sqlite3_bind_int64(statement, 3, visitWallTime() + 3600);
+    auto result = sqlite3_step(statement);
+    const bool inserted = result == SQLITE_DONE && sqlite3_changes(connection) == 1;
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) return rollback();
+    if (inserted) {
+        if (sqlite3_prepare_v2(connection, "UPDATE Posts SET view_times=view_times+1 WHERE id=?",
+            -1, &statement, nullptr) != SQLITE_OK) return rollback();
+        sqlite3_bind_int64(statement, 1, articleId);
+        result = sqlite3_step(statement);
+        sqlite3_finalize(statement);
+        if (result != SQLITE_DONE) return rollback();
+    }
+    if (sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr) != SQLITE_OK) return rollback();
+    thread_local std::int64_t cleaned = 0;
+    const auto now = visitWallTime();
+    if (now - cleaned >= 600) {
+        auto sql = "DELETE FROM ConfirmedArticleVisits WHERE expires < " + std::to_string(now);
+        if (sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK) cleaned = now;
+    }
+    return true;
+}
+	void Blog::DatabaseOperation::bind(void* stmt,int i,std::nullptr_t nullable){
 	auto _s = (sqlite3_stmt*) stmt;
 	sqlite3_bind_null(_s, i);
 }
@@ -273,7 +321,8 @@ void Blog::DatabaseOperation::resetStmt(void* stmt)
 }
 
 void Blog::DatabaseOperation::addThreadCleanDBData(const DBResultPtr& ptr){
-	_stmtToClearPostThread.push_back((sqlite3_stmt*)ptr->mData);
+	if(ptr->mIsAutoCleaned)return;
+	threadDatabase.statements.push_back((sqlite3_stmt*)ptr->mData);
 	ptr->mIsAutoCleaned = true;
 }
 
@@ -296,6 +345,14 @@ Blog::DBResult::DBResult(void *data, int cols) : mData(data), cols(cols) {}
 const char* Blog::DatabaseOperation::getErrMsg() const
 {
 	return dp->getErrMsg();
+}
+uint64_t Blog::DatabaseOperation::lastInsertRowId()const{
+    return static_cast<uint64_t>(sqlite3_last_insert_rowid(dp->getDbConn()));
+}
+
+void Blog::DatabaseOperation::usePrivateCacheForCurrentThread(){
+    if(threadDatabase.connection&&!threadDatabase.privateCache)throw std::logic_error("Configure background database cache before opening a connection");
+    threadDatabase.privateCache=true;
 }
 
 const char* Blog::DBResult::getString(uint32_t col) const
