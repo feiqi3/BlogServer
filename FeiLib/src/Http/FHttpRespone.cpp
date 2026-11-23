@@ -5,6 +5,24 @@
 #define LINE_BREAKER "\r\n"
 
 namespace Fei::Http{
+  FHttpResponse detail::makeRejectedResponse(StatusCode status, const RequestRejectedCallback& callback) {
+    FHttpResponse response;
+    response.setStatusCode(status);
+    if (!callback) return response;
+    try {
+      callback(status, response);
+      if (!response.isDeferred()) {
+        response.setStatusCode(status);
+        return response;
+      }
+    } catch (...) {
+      // An application callback cannot abort protocol processing.
+    }
+    response = FHttpResponse{};
+    response.setStatusCode(status);
+    return response;
+  }
+
   std::string FHttpResponse::toString() const{
     std::stringstream ss;
     ss<<versionToStr(mVersion)<<" "<<statusCodeToStr(mStatus)<<LINE_BREAKER;

@@ -1,6 +1,7 @@
 #ifndef FHTTPDEF_H
 #define FHTTPDEF_H
 #include <map>
+#include <cstddef>
 #include "../FDef.h"
 namespace Fei::Http {
     
@@ -42,11 +43,14 @@ enum class StatusCode{
 //5xx    
     _500,_501,_502,_505,
     _503, // Appended to preserve existing enum values.
+    _413,_431,
 };
 
 F_API const char* statusCodeToStr(StatusCode code);
 F_API const char* statusCodeToStr2(StatusCode code);
 const uint32 HttpMaxRequestPathLen = 4096;
+inline constexpr std::size_t HttpMaxRequestHeaderBytes = 64 * 1024;
+inline constexpr std::size_t HttpMaxRequestBodyBytes = 8 * 1024 * 1024;
 
 using HttpQueryMap = std::map<std::string, std::string>;
 using HeaderMap = std::multimap<std::string, std::string>;

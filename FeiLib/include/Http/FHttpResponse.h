@@ -12,6 +12,8 @@
 
 namespace Fei::Http {
 struct DeferredResponse;
+class FHttpResponse;
+using RequestRejectedCallback = std::function<void(StatusCode, FHttpResponse&)>;
 using HeaderMap = std::multimap<std::string, std::string>;
 
 class FHttpResponse {
@@ -107,6 +109,10 @@ private:
   std::shared_ptr<DeferredResponse> mDeferred;
   friend class FHttpServer;
 };
+
+namespace detail {
+FHttpResponse makeRejectedResponse(StatusCode status, const RequestRejectedCallback& callback);
+}
 
 } // namespace Fei::Http
 

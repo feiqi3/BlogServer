@@ -431,12 +431,38 @@ namespace Fei::Http {
         };
         if(http_data->deferred&&http_data->deferred->pending.contains(0)){bufferRemaining();return;}
         do {
+        if (mHeadersFilter && !http_data->parser.hasHeadersCallback()) http_data->parser.setHeadersCallback([this, weak=std::weak_ptr<FTcpConnection>(ptr)](const FHttpContext& headers) {
+            auto connection = weak.lock();
+            if (!connection) return false;
+            const auto peer = connection->getAddr();
+            const FHttpRequestHeaders view{headers.getMethod(), headers.getRequestPath(), headers.headers(), peer};
+            FHttpResponse response;
+            if (!mHeadersFilter(view, response)) return true;
+            FHttpRequest request(headers);
+            request.setAddrIn(peer);
+            request.setAddrHost(connection->getAddrAccept());
+            auto* data = getDataFromTcpConn(connection);
+            data->shouldKeepAlive = false;
+            response.addHeader("Connection", "close");
+            preProcessHttpRequestSend(connection, request, response);
+            data->headerRejection = response.toString();
+            return false;
+        });
 		bool isParseDone = http_data->parser.parse(reader);
 
 		if (!isParseDone) {
+            if (http_data->parser.getState() == FHttpParser::EState::Rejected) {
+                auto wire = std::move(http_data->headerRejection);
+                ptr->setReading(false);
+                ptr->send(std::move(wire));
+                return;
+            }
 			if (http_data->parser.getState() == FHttpParser::EState::Error) {
-				Logger::instance()->log(MODULE_NAME, lvl::info, "request error from {}.{}.{}.{} : {} error.", ptr->getAddr().un.un_byte.a0, ptr->getAddr().un.un_byte.a1, ptr->getAddr().un.un_byte.a2, ptr->getAddr().un.un_byte.a3, ptr->getAddr().port);
-				ptr->forceClose();
+                auto response = detail::makeRejectedResponse(http_data->parser.errorStatus(), mRequestRejected);
+                response.setHttpVersion(DEFAULT_HTTP_VERSION).addHeader("Connection", "close");
+                http_data->shouldKeepAlive = false;
+                ptr->setReading(false);
+                ptr->send(response.toString());
 			}
 			return;
 		}
@@ -465,10 +491,31 @@ namespace Fei::Http {
 		//1. process data
 		auto http_data = getDataFromTcpConn(ptr);
 		auto& http2Ctx = http_data->http2Ctx;
+        if (mHeadersFilter && !http2Ctx->hasHeadersFilter()) http2Ctx->setHeadersFilter([this, weak=std::weak_ptr<FTcpConnection>(ptr)](FHttp2Parser& parser, uint32_t stream) {
+            auto connection = weak.lock();
+            if (!connection) return true;
+            const auto peer = connection->getAddr();
+            const FHttpRequestHeaders view{parser.mMethod, parser.mPath, parser.mHeaders, peer};
+            FHttpResponse response;
+            if (!mHeadersFilter(view, response)) return false;
+            FHttpRequest request(parser);
+            request.setAddrIn(peer);
+            request.setAddrHost(connection->getAddrAccept());
+            preProcessHttpRequestSend(connection, request, response);
+            getDataFromTcpConn(connection)->http2Ctx->http2SubmitResponseStream(stream, response, true);
+            return true;
+        });
+        if (mRequestRejected && !http2Ctx->hasRequestRejectedCallback()) {
+            http2Ctx->setRequestRejectedCallback([this](StatusCode status, FHttpResponse& response) {
+                mRequestRejected(status, response);
+            });
+        }
 		http2Ctx->http2RecvProcess(reader);
 		http2Ctx->http2SendProcess(ptr);
 
-		auto perStream = [&ptr,this,&http_data](const FHttpRequest& request,uint32_t streamID) {
+		auto perStream = [&ptr,this,&http_data](FHttpRequest& request,uint32_t streamID) {
+			request.setAddrIn(ptr->getAddr());
+			request.setAddrHost(ptr->getAddrAccept());
 			auto response = httpHandle(ptr, request);
             if(response.isDeferred()){beginDeferred(ptr,request,std::move(response),streamID);return true;}
 			http_data->http2Ctx->http2SubmitResponseStream(streamID,response,true);
