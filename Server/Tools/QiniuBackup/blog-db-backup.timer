@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up blog and comments twice each month (Hong Kong time)
+
+[Timer]
+OnCalendar=*-*-01,16 03:00:00 Asia/Hong_Kong
+Persistent=true
+AccuracySec=1min
+Unit=blog-db-backup.service
+
+[Install]
+WantedBy=timers.target
