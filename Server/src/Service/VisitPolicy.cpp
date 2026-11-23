@@ -104,21 +104,23 @@ VisitPolicy::Decision VisitPolicy::reserve(const std::string& ip, const std::str
         --budget_->visits;
         return result;
     }
-    auto expiry = state.expiry.emplace(now + 120, token); // Reserved render deadline, not a missed visit.
-    state.pending.emplace(token, Pending{false, expiry});
+     auto expiry = state.expiry.emplace(now + 120, token); // Reserved render deadline, not a missed visit.
+    state.pending.emplace(token, Pending{false, expiry, {}});
     result.issued = true;
     return result;
 }
-bool VisitPolicy::activate(const std::string& ip, const std::string& token, std::int64_t now) {
+bool VisitPolicy::activate(const std::string& ip, const std::string& token, std::int64_t now,
+                           std::optional<std::uint64_t> articleId) {
     auto& part = shard(ip);
     std::lock_guard lock(part.mutex);
     auto found = part.states.find(ip);
     if (found == part.states.end()) return false;
     auto& state = found->second;
+    advance(state, now);
     auto visit = state.pending.find(token);
     if (visit == state.pending.end()) return false;
     state.expiry.erase(visit->second.expiry);
-    visit->second = {true, state.expiry.emplace(now + options_.grace, token)};
+    visit->second = {true, state.expiry.emplace(now + options_.grace, token), articleId};
     return true;
 }
 void VisitPolicy::cancel(const std::string& ip, const std::string& token) {
@@ -134,26 +136,33 @@ void VisitPolicy::cancel(const std::string& ip, const std::string& token) {
     --budget_->visits;
     --budget_->recent;
 }
-int VisitPolicy::confirm(const std::string& ip, const std::string& token, std::int64_t now,
-                         const std::function<bool()>& commit) {
+std::optional<VisitPolicy::Confirmation> VisitPolicy::confirm(const std::string& ip,
+        const std::string& token, std::int64_t now) {
     auto& part = shard(ip);
     std::lock_guard lock(part.mutex);
     auto found = part.states.find(ip);
-    if (found == part.states.end()) return 0;
+    if (found == part.states.end()) return std::nullopt;
     auto& state = found->second;
     advance(state, now);
-    if (state.recent.contains(token)) return 1;
+    if (auto recent = state.recent.find(token); recent != state.recent.end())
+        return Confirmation{recent->second, false};
     auto visit = state.pending.find(token);
-    if (visit == state.pending.end() || !visit->second.active) return 0;
-    try {
-        if (commit && !commit()) return -1;
-    } catch (...) { return -1; }
-    state.recent[token] = now + options_.retention;
+    if (visit == state.pending.end() || !visit->second.active) return std::nullopt;
+    const auto articleId = visit->second.articleId;
+    state.recent.emplace(token, articleId);
     state.recentExpiry.emplace_back(now + options_.retention, token);
     state.expiry.erase(visit->second.expiry);
     state.pending.erase(visit);
     --budget_->visits;
-    return 1;
+    return Confirmation{articleId, true};
+}
+void VisitPolicy::markCounted(const std::string& ip, const std::string& token) {
+    auto& part = shard(ip);
+    std::lock_guard lock(part.mutex);
+    auto found = part.states.find(ip);
+    if (found == part.states.end()) return;
+    auto& recent = found->second.recent;
+    if (auto visit = recent.find(token); visit != recent.end()) visit->second.reset();
 }
 void VisitPolicy::sweep(std::int64_t now, ActiveBans* active) {
     for (auto& part : shards_) {

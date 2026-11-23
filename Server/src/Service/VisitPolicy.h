@@ -3,10 +3,10 @@
 #include <atomic>
 #include <cstdint>
 #include <deque>
-#include <functional>
 #include <map>
 #include <mutex>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,11 +31,15 @@ public:
     ~VisitPolicy();
     Decision check(const std::string& ip, std::int64_t now);
     Decision reserve(const std::string& ip, const std::string& token, std::int64_t now, bool enforce);
-    bool activate(const std::string& ip, const std::string& token, std::int64_t now);
+    bool activate(const std::string& ip, const std::string& token, std::int64_t now,
+                  std::optional<std::uint64_t> articleId = {});
     void cancel(const std::string& ip, const std::string& token);
-    // 1 accepted, 0 invalid/expired, -1 storage callback failed.
-    int confirm(const std::string& ip, const std::string& token, std::int64_t now,
-                const std::function<bool()>& commit = {});
+    struct Confirmation {
+        std::optional<std::uint64_t> articleId;
+        bool first;
+    };
+    std::optional<Confirmation> confirm(const std::string& ip, const std::string& token, std::int64_t now);
+    void markCounted(const std::string& ip, const std::string& token);
     using ActiveBans = std::vector<std::pair<std::string, std::int64_t>>;
     // Appends IPs and absolute monotonic expiration times when active is supplied.
     void sweep(std::int64_t now, ActiveBans* active = nullptr);
@@ -43,11 +47,15 @@ public:
     void unban(const std::string& ip);
     Options options() const { return options_; }
 private:
-    struct Pending { bool active; std::multimap<std::int64_t, std::string>::iterator expiry; };
+    struct Pending {
+        bool active;
+        std::multimap<std::int64_t, std::string>::iterator expiry;
+        std::optional<std::uint64_t> articleId;
+    };
     struct State {
         std::unordered_map<std::string, Pending> pending;
         std::multimap<std::int64_t, std::string> expiry;
-        std::unordered_map<std::string, std::int64_t> recent;
+        std::unordered_map<std::string, std::optional<std::uint64_t>> recent;
         std::deque<std::pair<std::int64_t, std::string>> recentExpiry;
         std::deque<std::int64_t> misses;
         std::int64_t bannedUntil = 0;

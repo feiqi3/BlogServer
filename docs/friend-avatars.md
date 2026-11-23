@@ -42,8 +42,9 @@ Existing Markdown stays unchanged:
 `friends.OnSubmit` queues version-scoped work and returns immediately. It does
 not delay persistence or change the draft. Startup and periodic ticks scan the
 stored article; they recover failed submissions/restarts without visitor work.
-Successful avatars refresh after 24 hours. Downloads run two at a time, at most
-64 unique URLs per scan, with a 5-second timeout per hop and at most 3 redirects.
+Successful avatars refresh after 24 hours. The scan rotates through the article
+in batches of up to 64 unique URLs. Downloads run two at a time, with a
+5-second timeout per hop and at most 3 redirects.
 HTTPS downgrades, private network destinations and compressed responses fail.
 Failures retain the last successful file and retry at a later tick.
 

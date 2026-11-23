@@ -94,8 +94,7 @@ public:
   uint64_t lastInsertRowId() const;
   // Configure new background workers before their first database operation.
   void usePrivateCacheForCurrentThread();
-  void registerArticleVisit(const std::string& token, uint64_t articleId);
-  bool confirmArticleVisit(const std::string& token);
+  bool confirmArticleVisit(const std::string& token, uint64_t articleId);
   template <typename... Args>
   DBResultPtr Exec(const std::string &sqlFmt, Args &&...arg) {
     auto stmt = stmtPrepare(sqlFmt);

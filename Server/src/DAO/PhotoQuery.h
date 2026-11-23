@@ -22,7 +22,8 @@ public:
   static std::optional<std::string> UpdatePhotoDims(uint64_t id, int width, int height);
   static std::optional<std::string> UpdatePhotoDimsIfUrlMatches(uint64_t id, const std::string& url, int width, int height);
   // returns {id, url} pairs for photos whose dimensions were never detected
-  static std::vector<std::pair<uint64_t, std::string>> QueryPhotosMissingDims();
+  static std::vector<std::pair<uint64_t, std::string>> QueryPhotosMissingDims(uint64_t afterId, int limit);
+  static bool NeedsDimensions(uint64_t id, const std::string& url);
   static std::optional<std::string> DeletePhoto(uint64_t id);
   static void incrementPhotoView(uint64_t id);
 };

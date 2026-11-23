@@ -137,17 +137,7 @@ void Blog::Server::run()
 	images = std::make_unique<ImageService>(server->jobLoop());
 
 
-	// Backfill dimensions for photos created before width/height tracking.
-	auto missingDims = DAO::PhotoQuery::QueryPhotosMissingDims();
-	if (!missingDims.empty()) {
-		Fei::Logger::instance()->log(
-			Fei::lvl::info,
-			"[Server] Backfilling image dimensions for {} photos",
-			missingDims.size());
-		for (const auto& [id, url] : missingDims) {
-			images->refreshDimensions(id, url);
-		}
-	}
+	images->backfillDimensions();
 	while (!shouldClose) {
 		using namespace std::chrono_literals;
 		std::this_thread::sleep_for(20s);
@@ -158,6 +148,7 @@ void Blog::Server::run()
     stopScriptServices();
     if(avatars)avatars->shutdown();
 #endif
+    trafficGuard->stopDatabase();
 	server->stop();
     if(profiler)profiler->shutdown();
 }
@@ -182,7 +173,7 @@ void Blog::Server::init()
 	server->addAppTickEvent(std::bind(&BlogData::syncData,BlogData::instance(),std::placeholders::_1));
 	server->addAppTickEvent(std::bind(&TemplateRender::checkOverdue,TemplateRender::instance(),std::placeholders::_1));
 	//server->setConnFilterCB(&filterAll);
-	TrafficGuard::install(*server, ResourceDir);
+	trafficGuard = TrafficGuard::install(*server, ResourceDir);
 }
 
 void Blog::Server::shutdown(){
@@ -201,10 +192,12 @@ Blog::Server::~Server()
     if(avatars)avatars->shutdown();
 #endif
 	if (images) images->shutdown();
+    if (trafficGuard) trafficGuard->stopDatabase();
 	server->stop();
     if(profiler)profiler->shutdown();
     profiler.reset();
 	images.reset();
+    trafficGuard.reset();
 	delete server;
 	delete TemplateRender::instance();
 	delete DatabaseOperation::instance();

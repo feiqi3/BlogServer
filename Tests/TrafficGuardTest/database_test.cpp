@@ -24,13 +24,11 @@ int main() {
     Fei::Logger logger(log);
     Blog::DatabaseOperation database;
     database.LoadDB(file);
-    database.registerArticleVisit("first", 1);
-    require(database.confirmArticleVisit("first"), "first confirmation");
-    require(database.confirmArticleVisit("first"), "idempotent confirmation");
-    database.registerArticleVisit("second", 1);
+    require(database.confirmArticleVisit("first", 1), "first confirmation");
+    require(database.confirmArticleVisit("first", 1), "idempotent confirmation");
     auto confirm = [&] {
         database.usePrivateCacheForCurrentThread();
-        require(database.confirmArticleVisit("second"), "concurrent database confirmation");
+        require(database.confirmArticleVisit("second", 1), "concurrent database confirmation");
     };
     std::thread a(confirm), b(confirm);
     a.join(); b.join();

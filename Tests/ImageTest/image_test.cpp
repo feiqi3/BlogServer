@@ -169,10 +169,8 @@ struct Database {
 };
 void service() {
     const auto http = env("FEILIB_TEST_HTTP_URL"); Database db;
-    // All real DAO statements/connections stay on this Loop and close with it.
     FeiTest::LoopRunner runner;
     db.insert(1, http + "/image/png"); db.insert(2, http + "/image/slow?w=3");
-    db.insert(3, http + "/image/slow");
     Blog::ImageService images(runner.loop());
     images.refreshDimensions(1, http + "/image/png"); db.expect(1, 13, 7);
     images.refreshDimensions(2, http + "/image/slow?w=3");
@@ -215,6 +213,10 @@ void service() {
     db.expect(4, 23, 7);
     for (std::uint64_t id = 10; id < 30; ++id) { auto url = http + "/image/png?w=" + std::to_string(id); db.insert(id, url); images.refreshDimensions(id, url); }
     for (std::uint64_t id = 10; id < 30; ++id) db.expect(id, static_cast<int>(id), 7);
+    for (std::uint64_t id = 30; id < 50; ++id) db.insert(id, http + "/image/png?w=" + std::to_string(id));
+    images.backfillDimensions();
+    for (std::uint64_t id = 30; id < 50; ++id) db.expect(id, static_cast<int>(id), 7);
+    db.insert(3, http + "/image/slow");
     images.refreshDimensions(3, http + "/image/slow"); runner.drain();
     images.shutdown(); images.shutdown();
     check(db.dims(3) == std::pair{0, 0}, "shutdown wrote cancelled dimensions");

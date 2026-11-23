@@ -7,6 +7,7 @@ const MAX_URLS = 64;
 const CONCURRENCY = 2;
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 let stopping = false;
+let nextUrl = 0;
 const queued = new Set();
 const known = new Map();
 const inFlight = new Set();
@@ -29,7 +30,6 @@ function urls(content) {
         const match = trimmed.match(/^\[[^\]]+\]\([^)]+\)\s*\|\s*([^|]*)/);
         const url = match?.[1].trim();
         if (url && /^https?:\/\/[^\s]+$/.test(url) && url.length <= 2048) found.add(url);
-        if (found.size >= MAX_URLS) break;
     }
     return found;
 }
@@ -110,8 +110,15 @@ function pump() {
 }
 function enqueue(content) {
     if (stopping) return;
-    for (const url of urls(content)) {
-        if (!inFlight.has(url) && queued.size < MAX_URLS) queued.add(url);
+    const sources = Array.from(urls(content));
+    if (!sources.length) { nextUrl = 0; return; }
+    nextUrl %= sources.length;
+    const now = Date.now();
+    for (let scanned = 0; scanned < Math.min(MAX_URLS, sources.length) && queued.size < MAX_URLS; ++scanned) {
+        const url = sources[nextUrl];
+        nextUrl = (nextUrl + 1) % sources.length;
+        const cached = known.get(url);
+        if (!inFlight.has(url) && (!cached || now - cached.cachedAt >= REFRESH_MS)) queued.add(url);
     }
     pump();
 }

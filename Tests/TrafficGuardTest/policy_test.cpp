@@ -15,10 +15,10 @@ int main() {
             require(policy.activate("a", token, 100), "activate");
         }
         require(!policy.check("a", 129).blocked, "grace");
-        require(policy.confirm("a", "0", 129) == 1, "confirmation");
-        require(policy.confirm("a", "0", 130) == 1, "idempotent retry");
+        require(policy.confirm("a", "0", 129)->first, "confirmation");
+        require(!policy.confirm("a", "0", 130)->first, "idempotent retry");
         require(!policy.check("a", 130).blocked, "only 29 misses");
-        require(policy.confirm("a", "1", 130) == 0, "deadline cannot be rescued by a late report");
+        require(!policy.confirm("a", "1", 130), "deadline cannot be rescued by a late report");
         require(policy.reserve("a", "last", 131, true).issued, "next visit");
         policy.activate("a", "last", 131);
         auto banned = policy.check("a", 161);
@@ -51,10 +51,16 @@ int main() {
     {
         VisitPolicy policy({}, budget);
         require(policy.reserve("a", "once", 100, true).issued, "reserve once");
-        policy.activate("a", "once", 100);
-        require(policy.confirm("b", "once", 101) == 0, "cross-IP rejected");
-        require(policy.confirm("a", "once", 101, [] { return false; }) == -1, "commit failure");
-        require(policy.confirm("a", "once", 102) == 1, "commit retry");
+        policy.activate("a", "once", 100, 42);
+        require(!policy.confirm("b", "once", 101), "cross-IP rejected");
+        auto first = policy.confirm("a", "once", 129);
+        require(first && first->first && first->articleId == 42, "article proof");
+        auto retry = policy.confirm("a", "once", 131);
+        require(retry && !retry->first && retry->articleId == 42, "storage retry after grace");
+        require(!policy.check("a", 131).unreported, "accepted proof never becomes a miss");
+        policy.markCounted("a", "once");
+        auto counted = policy.confirm("a", "once", 132);
+        require(counted && !counted->articleId, "already counted");
         budget->maxVisits = 1;
         policy.reserve("a", "one", 103, true);
         require(!policy.reserve("b", "two", 103, true).issued, "global capacity");
@@ -67,7 +73,7 @@ int main() {
                 auto key = std::to_string(index) + "-" + std::to_string(i);
                 require(policy.reserve(std::to_string(index), key, 100, true).issued, "concurrent reservation");
                 policy.activate(std::to_string(index), key, 100);
-                require(policy.confirm(std::to_string(index), key, 101) == 1, "concurrent confirmation");
+                require(policy.confirm(std::to_string(index), key, 101).has_value(), "concurrent confirmation");
             }
         };
         std::thread a(work, 1), b(work, 2), c(work, 3);
@@ -79,7 +85,7 @@ int main() {
         require(policy.reserve("a", "slot", 100, true).issued, "acknowledgement slot reservation");
         require(!policy.reserve("b", "overflow", 100, true).issued, "skip tracking before acknowledgement capacity is exhausted");
         policy.activate("a", "slot", 100);
-        require(policy.confirm("a", "slot", 101) == 1, "existing valid proof keeps its reserved capacity");
+        require(policy.confirm("a", "slot", 101).has_value(), "existing valid proof keeps its reserved capacity");
         budget->maxRecent = 16384;
     }
     {
@@ -89,7 +95,7 @@ int main() {
             auto token = std::to_string(i);
             require(policy.reserve("benchmark", token, 100, true).issued, "sustained reservation");
             policy.activate("benchmark", token, 100);
-            require(policy.confirm("benchmark", token, 101) == 1, "sustained confirmation");
+            require(policy.confirm("benchmark", token, 101).has_value(), "sustained confirmation");
         }
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
         require(budget->visits == 0, "successful traffic must release pending capacity immediately");

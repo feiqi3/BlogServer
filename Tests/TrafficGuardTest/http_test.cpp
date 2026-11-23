@@ -27,8 +27,9 @@ FHttpRequest request(const std::string& path, const std::string& ip = "203.0.113
     result.setAddrIn(Fei::FSocketAddr(ip.c_str(), 1234));
     return result;
 }
-std::string page(Blog::TrafficGuard& guard) {
-    auto req = request("/post/51");
+std::string page(Blog::TrafficGuard& guard, const std::string& path = "/post/51",
+                 const std::string& ip = "203.0.113.1", const std::string& headers = "") {
+    auto req = request(path, ip, "", headers);
     FHttpResponse response;
     require(!guard.filter(req, response), "allowed page");
     auto token = Blog::TrafficGuard::visitId(req);
@@ -146,9 +147,11 @@ int main(int argc, char** argv) {
         std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         auto rendered = inja::render(text, nlohmann::json{{"visitId", std::string(32, 'a')}});
         require(rendered.find("content=\"" + std::string(32, 'a') + "\"") != std::string::npos, "built template accepts visit metadata");
-        require(rendered.find("visit-report.js") != std::string::npos, "standalone browser script included");
+        require(rendered.find("<script async src=\"/assets/visit-report.js\">") != std::string::npos,
+                "standalone browser script loads without waiting for page modules");
         auto legacy = inja::render(text, nlohmann::json::object());
         require(legacy.find("name=\"blog-visit\"") == std::string::npos, "legacy template context remains supported");
+        require(legacy.find("visit-report.js") == std::string::npos, "no script request without an issued visit");
     }
     config["mode"] = "enforce";
     config["observability"]["requestSampleRate"] = 0;
@@ -170,6 +173,7 @@ int main(int argc, char** argv) {
     std::atomic<std::int64_t> now = 100;
     {
         Blog::TrafficGuard guard(root.string(), [&] { return now.load(); });
+        now = 10000; // The original configuration has been active for much longer than its retirement window.
         auto token = page(guard);
         FHttpResponse response;
         guard.filter(request("/_traffic/proof", "203.0.113.2", token), response);
@@ -181,9 +185,9 @@ int main(int argc, char** argv) {
         guard.filter(request("/_traffic/proof", "203.0.113.1", token), response);
         require(response.getStatusCode() == StatusCode::_204, "retry idempotence");
         for (int i = 0; i < 30; ++i) page(guard);
-        now = 129;
+        now = 10029;
         require(!guard.filter(request("/api/archive"), response), "still loading");
-        now = 130;
+        now = 10030;
         guard.reload();
         const auto early = [&](const char* path) {
             const auto req = request(path);
@@ -197,7 +201,7 @@ int main(int argc, char** argv) {
         const auto oldStamp = std::filesystem::file_time_type::clock::now() - std::chrono::hours(1);
         std::filesystem::last_write_time(banFile, oldStamp);
         const auto stamp = std::filesystem::last_write_time(banFile);
-        now = 135;
+        now = 10035;
         guard.reload();
         require(std::filesystem::last_write_time(banFile) == stamp, "unchanged ban state does not rewrite file");
         require(guard.filter(request("/api/archive"), response) && response.getStatusCode() == StatusCode::_429, "API blocked");
@@ -206,13 +210,43 @@ int main(int argc, char** argv) {
         require(!guard.filter(request("/rss.xml"), response), "RSS exception");
         require(!guard.filter(request("/assets/main.js"), response), "static exception");
         require(guard.filter(request("/", "203.0.113.1", "", "X-Forwarded-For: 127.0.0.1\r\n"), response), "spoofed XFF rejected");
+        auto freshToken = page(guard, "/post/51", "203.0.113.2");
         config["mode"] = "observe"; save(); guard.reload();
         require(!guard.filter(request("/api/archive"), response), "observe releases blocking");
+        guard.filter(request("/_traffic/proof", "203.0.113.2", freshToken), response);
+        require(response.getStatusCode() == StatusCode::_204, "fresh proof survives retirement of an old config");
         { std::ofstream out(path); out << "{broken"; }
         guard.reload();
         require(!guard.filter(request("/api/archive"), response), "invalid reload retains observe");
         config["mode"] = "enforce"; save(); guard.reload();
         require(guard.filter(request("/api/archive"), response), "real ban survives config change");
+    }
+    config["clientIp"]["source"] = "forwarded";
+    config["clientIp"]["trustedProxyCidrs"] = {"192.0.2.0/24"};
+    config["articleViews"]["countOn"] = "confirmedReport";
+    save();
+    {
+        Blog::TrafficGuard guard(root.string(), [&] { return now.load(); });
+        FHttpResponse response;
+        for (const auto& headers : {std::string{}, std::string("X-Forwarded-For: invalid\r\n"),
+                std::string("X-Forwarded-For: 192.0.2.2\r\n"),
+                std::string("X-Forwarded-For: 203.0.113.2,\r\n"),
+                std::string("X-Forwarded-For: ") + std::string(2049, 'x') + "\r\n"}) {
+            auto req = request("/", "192.0.2.1", "", headers);
+            require(!guard.filter(req, response) && Blog::TrafficGuard::visitId(req).empty(), "unknown proxy client is untracked");
+            require(!guard.filterHeaders({req.getMethod(), req.getPath(), req.headers(), req.getAddrIn()}, response),
+                    "unknown proxy client bypasses early ban");
+        }
+        const std::string chain = "X-Forwarded-For: 203.0.113.1, 203.0.113.2, 192.0.2.2\r\n";
+        auto token = page(guard, "/", "192.0.2.1", chain);
+        guard.filter(request("/_traffic/proof", "192.0.2.1", token, chain), response);
+        require(response.getStatusCode() == StatusCode::_204 && !response.isDeferred(),
+                "valid proxy client and non-article confirmation stay in memory");
+        auto article = page(guard, "/post/51", "192.0.2.1", chain);
+        guard.filter(request("/_traffic/proof", "192.0.2.1", article, chain), response);
+        require(response.getStatusCode() == StatusCode::_503, "only articles require the database worker");
+        guard.filter(request("/_traffic/status", "127.0.0.1"), response);
+        require(nlohmann::json::parse(response.getBody()).at("unknownClientAddress") == 5, "proxy failures counted once");
     }
     {
         Blog::TrafficGuard restored(root.string(), [&] { return now.load(); });

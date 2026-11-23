@@ -8,6 +8,7 @@
 
 namespace Blog {
 	class ImageService;
+    class TrafficGuard;
     class ProfilerService;
 	namespace Script { class ScriptAdminService; class ArticleHookService; class AvatarCache; }
 	class Server {
@@ -22,6 +23,7 @@ namespace Blog {
 		std::atomic_bool shouldClose{false};
 		Fei::Http::FHttpServer* server;
 		std::unique_ptr<ImageService> images;
+        std::shared_ptr<TrafficGuard> trafficGuard;
         std::shared_ptr<ProfilerService> profiler;
 #ifdef FEILIB_ENABLE_SCRIPT
         void stopScriptServices();

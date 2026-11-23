@@ -1,4 +1,5 @@
 #include "TrafficGuard.h"
+#include "Async/FJobPool.h"
 #include "VisitPolicy.h"
 #include "DAO/DataBaseOperation.h"
 #include "FLogger.h"
@@ -15,6 +16,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -74,23 +76,19 @@ struct Cidr {
         mask = bits == 0 ? 0 : (0xffffffffU << (32 - bits));
         network = address(text.substr(0, slash)) & mask;
     }
-    bool contains(const std::string& ip) const { return (address(ip) & mask) == network; }
     bool contains(std::uint32_t ip) const { return (ip & mask) == network; }
 };
-bool matches(const std::vector<Cidr>& ranges, const std::string& ip) {
-    return std::any_of(ranges.begin(), ranges.end(), [&](const auto& range) { return range.contains(ip); });
-}
 bool matches(const std::vector<Cidr>& ranges, std::uint32_t ip) {
     return std::any_of(ranges.begin(), ranges.end(), [&](const auto& range) { return range.contains(ip); });
 }
-std::uint32_t socketKey(const FHttpRequestHeaders& request) {
+std::uint32_t socketKey(const auto& request) {
     const auto& a = request.getAddrIn().un.un_byte;
     return (std::uint32_t(a.a0) << 24) | (std::uint32_t(a.a1) << 16) |
            (std::uint32_t(a.a2) << 8) | std::uint32_t(a.a3);
 }
-std::string socketIp(const auto& request) {
-    const auto& a = request.getAddrIn().un.un_byte;
-    return std::to_string(a.a0) + "." + std::to_string(a.a1) + "." + std::to_string(a.a2) + "." + std::to_string(a.a3);
+std::string ipText(std::uint32_t ip) {
+    return std::to_string(ip >> 24) + "." + std::to_string((ip >> 16) & 255) + "." +
+           std::to_string((ip >> 8) & 255) + "." + std::to_string(ip & 255);
 }
 bool digits(const std::string& text) {
     return !text.empty() && std::all_of(text.begin(), text.end(), [](unsigned char c) { return c >= '0' && c <= '9'; });
@@ -145,6 +143,7 @@ struct Generation {
     std::string source = "socket", forwarded = "x-forwarded-for";
     std::string banFile;
     std::int64_t flush = 5, created = 0, lifetime = 0;
+    std::optional<std::int64_t> retiredUntil;
     double sample = 0.01;
     std::vector<Rule> rules;
 };
@@ -161,25 +160,31 @@ struct Visit {
 std::shared_ptr<Visit> visit(const FHttpRequest& request) {
     return std::static_pointer_cast<Visit>(request.applicationContext());
 }
-std::string clientIp(const Generation& config, const auto& request) {
-    auto peer = socketIp(request);
+std::optional<std::uint32_t> clientAddress(const Generation& config, const auto& request) {
+    auto peer = socketKey(request);
     if (config.source == "socket" || !matches(config.proxies, peer)) return peer;
+    std::string_view chain;
+    for (const auto& [name, value] : request.headers()) {
+        if (!std::equal(name.begin(), name.end(), config.forwarded.begin(), config.forwarded.end(),
+                        [](unsigned char a, char b) { return std::tolower(a) == b; })) continue;
+        if (!chain.empty() || value.empty() || value.size() > 2048) return std::nullopt;
+        chain = value;
+    }
+    if (chain.empty()) return std::nullopt;
     try {
-        std::vector<std::string> chain;
-        auto raw = header(request, config.forwarded);
-        if (raw.size() > 2048) return peer;
-        std::istringstream input(raw);
-        for (std::string item; std::getline(input, item, ',');) {
-            auto begin = item.find_first_not_of(" ");
-            auto end = item.find_last_not_of(" ");
-            if (begin == std::string::npos) return peer;
-            item = item.substr(begin, end - begin + 1);
-            address(item);
-            chain.push_back(item);
+        std::optional<std::uint32_t> client;
+        for (;;) {
+            const auto comma = chain.rfind(',');
+            const auto item = comma == chain.npos ? chain : chain.substr(comma + 1);
+            const auto begin = item.find_first_not_of(" \t");
+            const auto end = item.find_last_not_of(" \t");
+            if (begin == item.npos) return std::nullopt;
+            const auto ip = address(std::string(item.substr(begin, end - begin + 1)));
+            if (!client && !matches(config.proxies, ip)) client = ip;
+            if (comma == chain.npos) return client;
+            chain = chain.substr(0, comma);
         }
-        for (auto it = chain.rbegin(); it != chain.rend() && matches(config.proxies, peer); ++it) peer = *it;
-        return peer;
-    } catch (...) { diagnostic("Invalid forwarding chain"); return socketIp(request); }
+    } catch (const std::invalid_argument&) { return std::nullopt; }
 }
 FHttpResponse reject(std::int64_t seconds) {
     FHttpResponse response;
@@ -201,15 +206,18 @@ struct TrafficGuard::Impl {
     std::condition_variable wake;
     bool stopping = false;
     std::thread worker;
+    Fei::FEventLoop* databaseLoop;
+    std::unique_ptr<Fei::Async::JobPool> databaseJobs;
     std::filesystem::file_time_type modified{};
     std::string lastReloadError;
-    std::atomic_uint64_t sampled{0}, skipped{0}, confirmed{0}, rejected{0};
+    std::atomic_uint64_t sampled{0}, skipped{0}, confirmed{0}, rejected{0}, unknownClient{0};
     std::int64_t lastFlush = 0;
     std::string persistedPath;
     PersistentBans persistedBans;
     std::set<std::string> loggedBans;
-    Impl(std::string directory, std::function<std::int64_t()> time)
-        : root(std::move(directory)), clock(time ? std::move(time) : steadyNow) {
+    Impl(std::string directory, std::function<std::int64_t()> time, Fei::FEventLoop* loop)
+        : root(std::move(directory)), clock(time ? std::move(time) : steadyNow), databaseLoop(loop),
+          databaseJobs(loop ? std::make_unique<Fei::Async::JobPool>(Fei::Async::JobPoolOptions{1, 64}) : nullptr) {
         auto initial = std::make_shared<Snapshot>();
         initial->current = std::make_shared<Generation>();
         snapshot.store(initial);
@@ -282,7 +290,9 @@ struct TrafficGuard::Impl {
             options.maxPending = number(entry, "maxPendingPerIp", 64, 1, visits);
             options.retention = retention;
             rule.policy = std::make_shared<VisitPolicy>(options, budget);
-            config->lifetime = std::max(config->lifetime, options.ban + options.window + 120);
+            // A request already reserved when this generation retires may still activate.
+            config->lifetime = std::max(config->lifetime,
+                120 + options.grace + std::max({options.ban, options.window, options.retention}));
             config->rules.push_back(std::move(rule));
         }
         auto countOn = json.value("articleViews", Json::object()).value("countOn", "pageRequest");
@@ -305,17 +315,36 @@ struct TrafficGuard::Impl {
         std::lock_guard lock(reloadMutex);
         auto path = std::filesystem::path(root) / "config/traffic-guard.json";
         try {
-            auto stamp = std::filesystem::last_write_time(path);
-            if (stamp == modified) return;
-            modified = stamp;
+            std::error_code error;
+            const auto stamp = std::filesystem::last_write_time(path, error);
             auto previous = snapshot.load();
-            auto next = std::make_shared<Snapshot>();
-            for (auto generation : previous->generations)
-                if (clock() <= generation->created + generation->lifetime) next->generations.push_back(generation);
+            const auto now = clock();
+            const auto retired = [now](const auto& generation) {
+                return generation->retiredUntil && now >= *generation->retiredUntil;
+            };
+            const bool prune = std::any_of(previous->generations.begin(), previous->generations.end(), retired);
+            if (!prune && !error && stamp == modified) return;
+            auto next = std::make_shared<Snapshot>(*previous);
+            if (prune) {
+                std::erase_if(next->generations, retired);
+                snapshot.store(next);
+            }
+            if (error) throw std::filesystem::filesystem_error("Cannot find traffic configuration", path, error);
+            if (stamp == modified) return;
             auto json = readJson(path);
             if (next->generations.size() >= 8 && json.value("mode", "observe") != "off")
                 throw std::invalid_argument("Too many live configuration generations");
-            next->current = parse(json);
+            auto replacement = parse(json);
+            // The pruned snapshot may already be visible to requests.
+            if (prune) next = std::make_shared<Snapshot>(*next);
+            for (auto& generation : next->generations) {
+                if (generation != previous->current) continue;
+                auto retired = std::make_shared<Generation>(*generation);
+                retired->retiredUntil = now + retired->lifetime;
+                generation = std::move(retired);
+                break;
+            }
+            next->current = std::move(replacement);
             if (next->current->mode != "off") next->generations.push_back(next->current);
             snapshot.store(next);
             activeConfirmedViews = next->current->confirmedViews;
@@ -334,15 +363,19 @@ struct TrafficGuard::Impl {
             auto data = readJson(current->banFile);
             auto restored = std::make_shared<Generation>(*current);
             restored->mode = "enforce";
+            const auto now = clock();
+            restored->retiredUntil = now;
             for (auto& rule : restored->rules)
                 rule.policy = std::make_shared<VisitPolicy>(rule.policy->options(), budget);
             for (const auto& record : data) for (auto& rule : restored->rules)
                 if (record.at("rule") == rule.id) {
-                    auto ip = record.at("ip").get<std::string>(); address(ip);
-                    rule.policy->restoreBan(ip, std::min<std::int64_t>(604800, record.at("until").get<std::int64_t>() - wallNow()), clock());
+                    auto ip = ipText(address(record.at("ip").get<std::string>()));
+                    const auto remaining = std::min<std::int64_t>(604800, record.at("until").get<std::int64_t>() - wallNow());
+                    rule.policy->restoreBan(ip, remaining, now);
+                    restored->retiredUntil = std::max(*restored->retiredUntil, now + remaining);
                 }
             auto next = std::make_shared<Snapshot>(*snapshot.load());
-            next->generations.push_back(restored);
+            if (*restored->retiredUntil > now) next->generations.push_back(restored);
             snapshot.store(next);
         } catch (const std::exception& error) { diagnostic(std::string("Restore failed: ") + error.what()); }
     }
@@ -404,15 +437,19 @@ struct TrafficGuard::Impl {
         }
     }
 };
-TrafficGuard::TrafficGuard(std::string root, std::function<std::int64_t()> clock)
-    : impl_(std::make_unique<Impl>(std::move(root), std::move(clock))) {}
+TrafficGuard::TrafficGuard(std::string root, std::function<std::int64_t()> clock, Fei::FEventLoop* databaseLoop)
+    : impl_(std::make_unique<Impl>(std::move(root), std::move(clock), databaseLoop)) {}
 TrafficGuard::~TrafficGuard() = default;
 void TrafficGuard::reload() { impl_->reload(); impl_->maintain(); }
-void TrafficGuard::install(FHttpServer& server, const std::string& root) {
-    auto guard = std::make_shared<TrafficGuard>(root);
+std::shared_ptr<TrafficGuard> TrafficGuard::install(FHttpServer& server, const std::string& root) {
+    auto guard = std::make_shared<TrafficGuard>(root, nullptr, &server.jobLoop());
     server.setConnFilterCB([guard](const auto& request, auto& response) { return guard->filter(request, response); });
     server.setHeadersFilterCB([guard](const auto& request, auto& response) { return guard->filterHeaders(request, response); });
     server.setPreSendResponseCB([guard](const auto& request, auto& response) { guard->prepare(request, response); });
+    return guard;
+}
+void TrafficGuard::stopDatabase() {
+    if (impl_->databaseJobs) impl_->databaseJobs->shutdown();
 }
 std::string TrafficGuard::visitId(const FHttpRequest& request) {
     auto context = visit(request);
@@ -429,10 +466,10 @@ bool TrafficGuard::filterHeaders(const FHttpRequestHeaders& request, FHttpRespon
     const auto kind = pageKind(path);
     const int scope = !kind.empty() ? 0 : publicApi(request) ? 1 : -1;
     if (scope < 0) return false;
-    auto ip = config->source == "socket" ? socketKey(request) : address(clientIp(*config, request));
-    if (matches(config->allowed, ip)) return false;
+    const auto ip = clientAddress(*config, request);
+    if (!ip || matches(config->allowed, *ip)) return false;
     auto bans = impl_->earlyBans.load();
-    auto found = bans->find(ip);
+    auto found = bans->find(*ip);
     if (found == bans->end()) return false;
     auto remaining = found->second[scope] - impl_->clock();
     if (remaining <= 0) return false;
@@ -446,20 +483,20 @@ bool TrafficGuard::filter(const FHttpRequest& request, FHttpResponse& response) 
     if (request.getPath() == "/_traffic/status" || request.getPath() == "/_traffic/unban") {
         response = FHttpResponse{};
         response.addHeader("Cache-Control", "no-store").setContentType("application/json");
-        auto peer = socketIp(request);
-        if (!peer.starts_with("127.") || (config->source == "forwarded" && matches(config->proxies, peer))) {
+        auto peer = socketKey(request);
+        if ((peer >> 24) != 127 || (config->source == "forwarded" && matches(config->proxies, peer))) {
             response.setStatusCode(StatusCode::_403); return true;
         }
         if (request.getPath() == "/_traffic/status" && request.getMethod() == Method::GET) {
             response.setBody(Json({{"mode", config->mode}, {"trackedIps", impl_->budget->ips.load()},
                 {"pendingVisits", impl_->budget->visits.load()}, {"recentConfirmations", impl_->budget->recent.load()},
                 {"confirmed", impl_->confirmed.load()}, {"rejected", impl_->rejected.load()},
-                {"capacitySkipped", impl_->skipped.load()}}).dump());
+                {"capacitySkipped", impl_->skipped.load()}, {"unknownClientAddress", impl_->unknownClient.load()}}).dump());
         } else if (request.getPath() == "/_traffic/unban" && request.getMethod() == Method::POST &&
                    header(request, "x-blog-visit") == "1" && request.getRequestBody().size() <= 15) {
             auto source = std::string(request.getRequestBody());
             try {
-                address(source);
+                source = ipText(address(source));
                 std::lock_guard maintenanceLock(impl_->maintenanceMutex);
                 for (auto generation : snapshot->generations) for (auto& rule : generation->rules) rule.policy->unban(source);
                 impl_->earlyBans.store(std::make_shared<Impl::FastBans>());
@@ -487,24 +524,52 @@ bool TrafficGuard::filter(const FHttpRequest& request, FHttpResponse& response) 
             (!origin.empty() && origin != "https://" + host && origin != "http://" + host)) {
             response.setStatusCode(StatusCode::_403); return true;
         }
-        for (auto generation : snapshot->generations) {
-            auto ip = clientIp(*generation, request);
+        const auto currentIp = clientAddress(*config, request);
+        if (!currentIp) {
+            ++impl_->unknownClient;
+            response.setStatusCode(StatusCode::_403);
+            return true;
+        }
+        const std::string token(body);
+        for (const auto& generation : snapshot->generations) {
+            const auto client = generation == config ? currentIp : clientAddress(*generation, request);
+            if (!client) continue;
+            const auto ip = ipText(*client);
             for (auto& rule : generation->rules) {
-                auto result = rule.policy->confirm(ip, std::string(body), impl_->clock(), [&] {
-                    return !generation->confirmedViews || DatabaseOperation::instance()->confirmArticleVisit(std::string(body));
-                });
-                if (result == 1) { ++impl_->confirmed; response.setStatusCode(StatusCode::_204); return true; }
-                if (result < 0) { response.setStatusCode(StatusCode::_503); return true; }
+                const auto result = rule.policy->confirm(ip, token, impl_->clock());
+                if (!result) continue;
+                if (result->first) ++impl_->confirmed;
+                if (!result->articleId) response.setStatusCode(StatusCode::_204);
+                else if (!impl_->databaseJobs) response.setStatusCode(StatusCode::_503);
+                else response = FHttpResponse::defer(
+                    [this, policy = rule.policy, ip, token, id = *result->articleId](FHttpResponder reply) {
+                        // Once accepted, finish the idempotent count even if the client disconnects.
+                        impl_->databaseJobs->submit([token, id](auto) -> std::any {
+                            auto* database = DatabaseOperation::instance();
+                            database->usePrivateCacheForCurrentThread();
+                            return database->confirmArticleVisit(token, id);
+                        }, [policy, ip, token, reply](auto result) {
+                            const bool counted = result.ok() && std::any_cast<bool>(*result.value);
+                            if (counted) policy->markCounted(ip, token);
+                            FHttpResponse proof;
+                            proof.addHeader("Cache-Control", "no-store")
+                                .setStatusCode(counted ? StatusCode::_204 : StatusCode::_503);
+                            reply.complete(std::move(proof));
+                        }, impl_->databaseLoop);
+                    });
+                return true;
             }
         }
         response.setStatusCode(StatusCode::_403); return true;
     }
     if (config->mode == "off") return false;
-    auto ip = clientIp(*config, request);
-    if (matches(config->allowed, ip)) return false;
     auto kind = pageKind(request.getPath());
     auto scope = !kind.empty() ? "publicPages" : publicApi(request) ? "publicApi" : "";
     if (scope[0] == '\0') return false;
+    const auto client = clientAddress(*config, request);
+    if (!client) { ++impl_->unknownClient; return false; }
+    if (matches(config->allowed, *client)) return false;
+    const auto ip = ipText(*client);
     std::int64_t retry = 0;
     if (config->mode == "enforce") for (auto generation : snapshot->generations)
         if (generation->mode == "enforce") for (auto& rule : generation->rules)
@@ -531,22 +596,14 @@ void TrafficGuard::prepare(const FHttpRequest& request, FHttpResponse& response)
         response.getHeader("Content-Type", type);
         if (response.getStatusCode() == StatusCode::_200 && (type.empty() || type.starts_with("text/html")) &&
             response.getBody().find(context->token) != std::string::npos) {
-            if (context->confirmedViews && pageKind(request.getPath()) == "article") {
+            std::optional<std::uint64_t> articleId;
+            if (context->confirmedViews && request.getPath().starts_with("/post/")) {
                 std::uint64_t id = 0;
-                auto text = request.getPath().substr(6);
+                auto text = std::string_view(request.getPath()).substr(6);
                 auto parsed = std::from_chars(text.data(), text.data() + text.size(), id);
-                if (parsed.ec == std::errc{}) {
-                    try { DatabaseOperation::instance()->registerArticleVisit(context->token, id); }
-                    catch (const std::exception& error) {
-                        diagnostic(error.what());
-                        context->policy->cancel(context->ip, context->token);
-                        response = FHttpResponse{};
-                        response.setStatusCode(StatusCode::_503).setContentType("text/plain").setBody("Visit registration unavailable");
-                        return;
-                    }
-                }
+                if (parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size()) articleId = id;
             }
-            context->activated = context->policy->activate(context->ip, context->token, impl_->clock());
+            context->activated = context->policy->activate(context->ip, context->token, impl_->clock(), articleId);
             response.addHeader("Cache-Control", "private, no-store");
         } else context->policy->cancel(context->ip, context->token);
     }
@@ -555,7 +612,8 @@ void TrafficGuard::prepare(const FHttpRequest& request, FHttpResponse& response)
     if (config->sample > 0 && sequence % std::max<std::uint64_t>(1, static_cast<std::uint64_t>(1 / config->sample)) == 0) {
         auto path = request.getPath().substr(0, 4096);
         std::replace(path.begin(), path.end(), '\r', '?'); std::replace(path.begin(), path.end(), '\n', '?');
-        diagnostic("unix=" + std::to_string(wallNow()) + " ip=" + clientIp(*config, request) +
+        const auto client = clientAddress(*config, request);
+        diagnostic("unix=" + std::to_string(wallNow()) + " ip=" + (client ? ipText(*client) : "unknown") +
             " path=" + path + " status=" + statusCodeToStr2(response.getStatusCode()));
     }
 }

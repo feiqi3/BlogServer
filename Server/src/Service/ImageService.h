@@ -15,6 +15,7 @@ public:
     ImageService(const ImageService&) = delete;
     static ImageService* current() { return current_.load(std::memory_order_acquire); }
     void refreshDimensions(std::uint64_t photoId, std::string url);
+    void backfillDimensions();
     void shutdown();
 private:
     struct State;
