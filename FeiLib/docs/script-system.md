@@ -11,6 +11,7 @@ FeiLib. QuickJS and the runtime bridge are private; applications use
 int add(int a, int b) { return a + b; }
 
 Fei::FScriptOptions options;
+options.memoryLimitBytes = 16 * 1024 * 1024; // per script-version heap
 options.report = [](const Fei::FScriptExecution& event) { /* log status */ };
 auto& scripts = server.scriptEngine(options); // before run()
 FEI_SCRIPT_BIND(scripts, "add", add);
@@ -57,6 +58,8 @@ result and cancellation state. `call.http.get` and `call.after` belong to that
 invocation and are cancelled when it ends. Global `ctx.http` and `ctx.after`
 are version-scoped conveniences; use `call` for automatic invocation cleanup.
 Timers use callbacks: `await new Promise(resolve => call.after(100, resolve))`.
+HTTP GET supports binary bodies and bounded request options; see
+[Script HTTP](script-http.md) for `ArrayBuffer`, Range and response headers.
 
 Requests share the runtime of their script version on its owning loop; they do
 not create one VM per request. Normal invocation errors affect only that call.
@@ -104,6 +107,11 @@ the host supplies another immutable address policy. Redirects are not followed.
 
 Defaults include an 8 MiB JS heap per runtime, 100 ms execution slices, 64 KiB
 invocation JSON, 8192-byte URLs, and bounded request/timer/invocation counts.
+Set `options.memoryLimitBytes` before creating the engine to change the heap cap
+(1 MiB..1 GiB; invalid values throw). Every loaded or reloaded version receives
+this cap; invocations share their version's heap. Multiple scripts and draining
+versions have independent heaps. This limits QuickJS allocations, not total
+process memory, and does not change the separate HTTP or JSON budgets.
 Sources are bounded to 32 files, 128 KiB per file and 512 KiB total. These are
 resource controls, not an OS sandbox for hostile native code.
 

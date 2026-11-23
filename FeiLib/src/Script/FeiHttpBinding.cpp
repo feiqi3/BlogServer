@@ -11,6 +11,8 @@ using namespace std::chrono_literals;
 struct FeiHttpBinding::Pending {
     std::size_t id;
     std::uint64_t owner = 0;
+    bool binary = false;
+    std::size_t reserved = 0;
     JSValue resolve = JS_UNDEFINED;
     JSValue reject = JS_UNDEFINED;
     Fei::Async::OperationHandle handle;
@@ -211,11 +213,11 @@ void FeiHttpBinding::stopGracefully(std::function<void()> onClosed,bool cancelRe
     });
 }
 
-FeiHttpBinding::FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes)
-    : maxJsonBytes_(maxJsonBytes), client_(client), onError_(std::move(onError)) { checkLoop(); }
+FeiHttpBinding::FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes,std::size_t memoryLimitBytes)
+    : maxJsonBytes_(maxJsonBytes), client_(client), runtime_(memoryLimitBytes), onError_(std::move(onError)) { checkLoop(); }
 
-std::shared_ptr<FeiHttpBinding> FeiHttpBinding::createBare(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes) {
-    auto self = std::shared_ptr<FeiHttpBinding>(new FeiHttpBinding(client, std::move(onError),maxJsonBytes));
+std::shared_ptr<FeiHttpBinding> FeiHttpBinding::createBare(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes,std::size_t memoryLimitBytes) {
+    auto self = std::shared_ptr<FeiHttpBinding>(new FeiHttpBinding(client, std::move(onError),maxJsonBytes,memoryLimitBytes));
     auto* ctx = self->runtime_.context();
     JS_SetContextOpaque(ctx, self.get());
     JSValue global = JS_GetGlobalObject(ctx);
@@ -223,8 +225,8 @@ std::shared_ptr<FeiHttpBinding> FeiHttpBinding::createBare(Fei::Http::FHttpClien
     JS_FreeValue(ctx, global);
     return self;
 }
-std::shared_ptr<FeiHttpBinding> FeiHttpBinding::create(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes) {
-    auto self = createBare(client, std::move(onError),maxJsonBytes);
+std::shared_ptr<FeiHttpBinding> FeiHttpBinding::create(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes,std::size_t memoryLimitBytes) {
+    auto self = createBare(client, std::move(onError),maxJsonBytes,memoryLimitBytes);
     self->installHttp(); self->installTimers();
     return self;
 }
@@ -425,28 +427,54 @@ JSValue FeiHttpBinding::httpGetImpl(JSContext* ctx, int argc, JSValueConst* argv
         return JS_ThrowRangeError(ctx, "URL must be at most 8192 bytes and contain no NUL");
     }
     Fei::Http::ClientRequest request;
-    request.url = url;
+    try{request.url.assign(url,urlLength);}
+    catch(const std::bad_alloc&){JS_FreeCString(ctx,url);return JS_ThrowOutOfMemory(ctx);}
     JS_FreeCString(ctx, url);
     request.timeout = 5s;
     request.maxBodyBytes = 1024 * 1024;
-    auto pending = std::make_shared<Pending>();
+    bool binary=false;
+    try{
+        if(!httpOptions(ctx,argc>1?argv[1]:JS_UNDEFINED,request,binary))return JS_EXCEPTION;
+    }catch(const std::bad_alloc&){return JS_ThrowOutOfMemory(ctx);}
+    catch(...){return JS_ThrowInternalError(ctx,"Cannot configure HTTP request");}
+    constexpr std::size_t binaryBudget=8*1024*1024;
+    if(binary&&request.maxBodyBytes>binaryBudget-self->binaryReserved_)
+        return JS_ThrowRangeError(ctx,"Binary requests exceed the 8 MiB in-flight budget");
+    std::shared_ptr<Pending> pending;
+    try{pending=std::make_shared<Pending>();}
+    catch(const std::bad_alloc&){return JS_ThrowOutOfMemory(ctx);}
     pending->id = ++self->nextId_;
     pending->owner = owner;
+    pending->binary=binary;
     JSValue functions[2];
     JSValue promise = JS_NewPromiseCapability(ctx, functions);
     if (JS_IsException(promise)) return promise;
     pending->resolve = functions[0];
     pending->reject = functions[1];
-    self->pending_.emplace(pending->id, pending);
+    try{self->pending_.emplace(pending->id, pending);}
+    catch(const std::bad_alloc&){
+        JS_FreeValue(ctx,pending->resolve);JS_FreeValue(ctx,pending->reject);JS_FreeValue(ctx,promise);
+        return JS_ThrowOutOfMemory(ctx);
+    }
+    if(binary){pending->reserved=request.maxBodyBytes;self->binaryReserved_+=pending->reserved;}
     auto keep = self->shared_from_this();
-    pending->handle = self->client_.submit(std::move(request), [keep, pending](auto result) {
-        keep->complete(pending, std::move(result));
-    });
+    try{
+        pending->handle = self->client_.submit(std::move(request), [keep, pending](auto result) {
+            keep->complete(pending, std::move(result));
+        });
+    }catch(...){
+        self->binaryReserved_-=pending->reserved;self->pending_.erase(pending->id);
+        JS_FreeValue(ctx,pending->resolve);JS_FreeValue(ctx,pending->reject);JS_FreeValue(ctx,promise);
+        return JS_ThrowInternalError(ctx,"Cannot submit HTTP request");
+    }
     return promise;
 }
 void FeiHttpBinding::complete(std::shared_ptr<Pending> pending, Fei::Async::Result<Fei::Http::ClientResponse> result) {
     checkLoop();
     auto* ctx = runtime_.context();
+    // Release network admission before resolving: continuations can start a new
+    // bounded request immediately. ArrayBuffer storage has its own VM heap limit.
+    binaryReserved_-=pending->reserved;pending->reserved=0;
     if (closing_) {
         JS_FreeValue(ctx,pending->resolve);JS_FreeValue(ctx,pending->reject);pending_.erase(pending->id);
         notifyClosed();
@@ -462,22 +490,16 @@ void FeiHttpBinding::complete(std::shared_ptr<Pending> pending, Fei::Async::Resu
         }
         runtime_.resume(100ms, [&] {
             JSValue argument;
+            bool success=result.ok();
             if (result.ok()) {
-                argument = JS_NewObject(ctx);
-                if (JS_IsException(argument)) throw std::runtime_error("Response object allocation failed");
-                JSValue body = JS_NewStringLen(ctx, result.value->body.data(), result.value->body.size());
-                if (JS_IsException(body)) { JS_FreeValue(ctx, argument); throw std::runtime_error("Response exceeds script memory budget"); }
-                int statusResult = JS_SetPropertyStr(ctx, argument, "status", JS_NewInt32(ctx, result.value->status));
-                int bodyResult = JS_SetPropertyStr(ctx, argument, "body", body);
-                if (statusResult < 0 || bodyResult < 0) {
-                    JS_FreeValue(ctx, argument);
-                    throw std::runtime_error("Response exceeds script memory budget");
-                }
+                argument=httpResponse(ctx,*result.value,pending->binary);
             } else {
                 argument = JS_NewString(ctx, result.error.message.c_str());
             }
-            if (JS_IsException(argument)) throw std::runtime_error("Response allocation failed");
-            JSValue function = result.ok() ? pending->resolve : pending->reject;
+            // In particular, a retained body may exhaust this VM's heap. Reject
+            // this fetch with the actual JS exception instead of faulting others.
+            if(JS_IsException(argument)){argument=JS_GetException(ctx);success=false;}
+            JSValue function = success ? pending->resolve : pending->reject;
             JSValue ret = JS_Call(ctx, function, JS_UNDEFINED, 1, &argument);
             JS_FreeValue(ctx, argument);
             if (JS_IsException(ret)) {

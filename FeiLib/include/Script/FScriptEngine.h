@@ -39,6 +39,8 @@ struct FScriptOptions {
     std::size_t maxJsonBytes = 64 * 1024;
     bool profileInvocations = false;
     bool reportInvocations = false; // Optional string-based observer; profiling itself uses cached IDs.
+    // Per script-version QuickJS heap, shared by its invocations; 1 MiB..1 GiB.
+    std::size_t memoryLimitBytes = 8 * 1024 * 1024;
 };
 namespace ScriptDetail {
 template<class T> T argument(const ScriptValue& value) {

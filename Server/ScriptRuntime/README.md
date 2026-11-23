@@ -26,10 +26,21 @@ BlogServer can load a local script with scripting enabled:
 ```text
 ScriptFile: /absolute/path/links.mjs
 ScriptIntervalMs: 1200000
+ScriptMemoryLimitMiB: 16
 ```
 
 The configured script engine is owned and drained by `FHttpServer`. Existing
 blog and comment databases are not used for script version storage.
+
+`ScriptMemoryLimitMiB` defaults to `8` and accepts integers `1..1024`. Add it to
+the active environment in `Server/resources/config/server.cfg`, then restart.
+It caps each script version's QuickJS heap, including strings, objects and
+ArrayBuffers; concurrent requests share that heap. It applies to file scripts,
+admin uploads, rollback and hot-reload candidates. Invalid values disable script
+startup and log an error; native routes still start. Old and candidate versions
+have separate heaps during reload, so this is not a process-wide memory cap.
+Native HTTP buffers, JSON limits and the 8 MiB binary in-flight budget remain
+separate. The configured cap is an allocation limit, not preallocated memory.
 
 ## Admin upload
 
@@ -41,6 +52,7 @@ settings to the selected environment in `Server/resources/config/server.cfg`:
 ScriptAdminEnabled: true
 ScriptStoreDirectory: /absolute/path/script-versions
 ScriptIntervalMs: 1200000
+ScriptMemoryLimitMiB: 16
 ```
 
 Log in to the existing admin page, then open `/background/scripts`. Select

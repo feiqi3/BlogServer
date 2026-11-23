@@ -15,8 +15,13 @@ def exercise(url,seen,resources,tmp,profiling):
     source="""export async function onStart(){}
 export async function onTick(){}
 export async function onStop(){const c=await ctx.db.categories.get('1');if(c.id!=='1')throw Error('Stop model unavailable');await ctx.http.get('FIXTURE/stop-entered');await new Promise(r=>ctx.after(500,r));await ctx.http.get('FIXTURE/stop')}
+async function binaryProbe(call){
+ const r=await call.http.get('FIXTURE/binary',{responseType:'arrayBuffer',maxBytes:4});
+ const b=new Uint8Array(r.body);if(b.length!==4||b[0]!==0||b[1]!==128||b[2]!==255||b[3]!==65)throw Error('Binary HTTP bridge');
+}
 export const article={
  async OnSubmit(event,call){
+  await binaryProbe(call);
   const c=await call.db.categories.get('1');
   if(c.id!=='1'||!(await call.db.categories.list()).length)throw Error('Model category');
   if(event.operation==='create'&&event.postId!==null)throw Error('Create ID');
@@ -32,6 +37,7 @@ export const article={
   return {title:(title||'Filled')+'::Saved',profile:event.draft.profile||'Filled profile',content:event.draft.content||'Filled content',titlepic:'fixture.png'};
  },
  async OnRequest(event,call){
+  await binaryProbe(call);
   const p=await call.db.posts.get(event.postId);if(p.id!==event.postId)throw Error('Request identity');
   if(p.tags==='fallback')throw Error('Request rejected');
   if(p.tags==='invalid')return {id:'999'};

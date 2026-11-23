@@ -113,6 +113,12 @@ void Blog::Server::run()
             if (scriptInterval > std::chrono::hours(24) || (scriptInterval.count() > 0 && scriptInterval < std::chrono::milliseconds(10)))
                 throw std::runtime_error("ScriptIntervalMs must be 0 or 10..86400000");
             Fei::FScriptOptions options;
+            if(auto configured=scriptCfg->getCfg("ScriptMemoryLimitMiB")){
+                std::size_t memoryMiB=0;
+                if(!FCfgUtils::toNumber(*configured,memoryMiB)||memoryMiB<1||memoryMiB>1024)
+                    throw std::runtime_error("ScriptMemoryLimitMiB must be an integer in 1..1024");
+                options.memoryLimitBytes=memoryMiB*1024*1024;
+            }
             options.maxJsonBytes=256*1024;
             options.profileInvocations=static_cast<bool>(profiler);
             options.report = [](const Fei::FScriptExecution& result) {
@@ -123,8 +129,8 @@ void Blog::Server::run()
             articleHooks=Script::ArticleHookService::create(server->jobLoop(),engine);
             adminScripts = scriptCfg->getCfg("ScriptAdminEnabled").value_or("false") == "true";
             if (!adminScripts) engine.addScript("blog", scriptPath, scriptInterval);
-        } catch (const std::exception&) {
-            Fei::Logger::instance()->log(Fei::lvl::err, "[Scripts] Script service could not start");
+        } catch (const std::exception& error) {
+            Fei::Logger::instance()->log(Fei::lvl::err, "[Scripts] Script service could not start: {}",error.what());
         }
     }
 #endif

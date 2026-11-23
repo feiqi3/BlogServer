@@ -37,6 +37,8 @@ bool validName(const std::string& name) {
 struct FScriptEngine::State : std::enable_shared_from_this<State> {
     State(FEventLoop& owner,FScriptOptions input):loop(owner),options(std::move(input)){
         if(options.maxJsonBytes<1024||options.maxJsonBytes>1024*1024)throw std::invalid_argument("Invalid script JSON budget");
+        if(options.memoryLimitBytes<1024*1024||options.memoryLimitBytes>1024ULL*1024*1024)
+            throw std::invalid_argument("Script memoryLimitBytes must be 1048576..1073741824 (1..1024 MiB)");
     }
     FEventLoop& loop;
     FScriptOptions options;
@@ -142,7 +144,7 @@ struct FScriptEngine::State : std::enable_shared_from_this<State> {
         for(const char* hook:{"start","tick","stop","runtime"})load->profiles[hook]=profile(name,hook,load->generation);
         auto begin=std::chrono::steady_clock::now();
         try {
-            load->candidate=VM::create(*client,[self=shared_from_this(),name,generation=load->generation,id=load->profiles.at("runtime")](const std::string& error){self->report(name,"runtime",error,std::chrono::steady_clock::now(),generation,id);},options.maxJsonBytes);
+            load->candidate=VM::create(*client,[self=shared_from_this(),name,generation=load->generation,id=load->profiles.at("runtime")](const std::string& error){self->report(name,"runtime",error,std::chrono::steady_clock::now(),generation,id);},options.maxJsonBytes,options.memoryLimitBytes);
             for(const auto& [binding,function]:functions)load->candidate->bindFunction(binding,function);
             for(const auto& [binding,function]:asynchronous)load->candidate->bindAsyncFunction(binding,load->name,function);
             load->candidate->setValidating(true);

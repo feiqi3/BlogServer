@@ -19,6 +19,7 @@ admin = '--admin' in sys.argv
 articles = '--articles' in sys.argv
 profiling = '--profiling' in sys.argv
 native_only = '--native-only' in sys.argv
+memory_check = '--memory-limit-check' in sys.argv
 frontend = Path(sys.argv[sys.argv.index('--admin')+1]).resolve() if admin else None
 subprocess.run(['ip', 'link', 'set', 'lo', 'up'], check=True)
 subprocess.run(['ip', 'addr', 'add', '93.184.216.34/32', 'dev', 'lo'], check=True)
@@ -27,10 +28,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
     def do_GET(self):
         seen.append(self.path)
+        body=b'\x00\x80\xffA' if self.path=='/binary' else b'ok'
         self.send_response(200)
-        self.send_header('Content-Length', '2')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(b'ok')
+        try:self.wfile.write(body)
+        except (BrokenPipeError,ConnectionResetError):pass
 
 fixture = http.server.ThreadingHTTPServer(('0.0.0.0', 0), Handler)
 fixture.daemon_threads = True
@@ -55,7 +58,14 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
     url = f'http://93.184.216.34:{fixture.server_port}'
     (source.parent / 'request.js').write_text(f"export async function request(path){{return await ctx.http.get('{url}/'+path)}}")
     source.write_text("import {request} from './request.js';\n" + ''.join(f"export async function on{name}(){{await request('{route}')}}\n" for name, route in [('Start', 'start'), ('Tick', 'tick'), ('Stop', 'stop')]))
+    if memory_check:
+        # A retained 10 MiB buffer cannot load under the default 8 MiB cap.
+        with source.open('a') as script:
+            script.write("\nconst retained=new Uint8Array(10*1024*1024);retained[retained.length-1]=42;\n")
     (isolated / 'config/server.cfg').write_text(f'env:test\n[[test]]\nAdminUser: smoke\nAdminPassword: smoke-only\nLogShowLevel: info\nLogSaveLevel: off\nScriptFile: {source}\nScriptIntervalMs: 50\n'+('ScriptAdminEnabled: true\n' if admin else ''))
+    if memory_check:
+        with (isolated/'config/server.cfg').open('a') as configuration:
+            configuration.write('ScriptMemoryLimitMiB: 16\n')
     if articles:
         with (isolated/'config/server.cfg').open('a') as configuration:
             configuration.write(f'ALPNPreference: http2\nH2MaxStreamNum: 100\nH2EnablePush: 0\nProfilingEnabled: {str(profiling).lower()}\nProfilingDirectory: {tmp}/custom-profiles\n')
@@ -63,6 +73,32 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
     subprocess.run(['mount', '--bind', str(isolated), str(resources)], check=True)
     process = None
     try:
+        if memory_check:
+            configuration=isolated/'config/server.cfg'
+            valid_configuration=configuration.read_text()
+            try:
+                for invalid in ('0','-1','1.5','16MiB','1025','18446744073709551616',''):
+                    probe_configuration=valid_configuration.replace('ScriptMemoryLimitMiB: 16',f'ScriptMemoryLimitMiB: {invalid}')
+                    configuration.write_text(probe_configuration.replace(f'{tmp}/custom-profiles',f'{tmp}/invalid-memory-profiles'))
+                    with (tmp/'invalid-memory.log').open('w') as invalid_log:
+                        probe=subprocess.Popen([str(binary)],cwd=tmp,stdout=invalid_log,stderr=subprocess.STDOUT)
+                        try:
+                            for attempt in range(100):
+                                if probe.poll() is not None:raise RuntimeError('Invalid memory setting crashed native Server')
+                                try:
+                                    with urllib.request.urlopen('http://127.0.0.1/api/categories',timeout=1) as response:
+                                        if response.status==200:break
+                                except OSError:pass
+                                time.sleep(.05)
+                            else:raise RuntimeError('Invalid memory setting blocked native routes')
+                            if seen:raise RuntimeError('Invalid memory setting silently enabled scripts')
+                        finally:
+                            probe.terminate();probe.wait(timeout=10)
+                    if 'ScriptMemoryLimitMiB must be an integer in 1..1024' not in (tmp/'invalid-memory.log').read_text():
+                        raise RuntimeError('Invalid memory configuration was not reported')
+            finally:
+                configuration.write_text(valid_configuration)
+            print('PASS Server memory validation: invalid, fractional, empty and overflowing values disable scripts and preserve native routes')
         if '--startup-stress' in sys.argv:
             # Temporary fixtures only. Test process startup repeatedly; graceful
             # shutdown and final persistence are covered by the normal path.
@@ -121,6 +157,8 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
             if process.returncode or (not native_only and (seen[0] != '/start' or seen[-1] != '/stop')):
                 raise RuntimeError('Server lifecycle failed')
             print('PASS isolated Server: startup, blog API, graceful exit'+('' if native_only else ', recurring HTTP and stop hook'))
+            if memory_check:
+                print('PASS Server configuration: ScriptMemoryLimitMiB=16 permits a retained 10 MiB script buffer')
             if articles:
                 from article_checks import persisted
                 persisted(tmp,profiling,not native_only)

@@ -19,8 +19,8 @@ namespace Fei::Script {
 class FeiHttpBinding : public std::enable_shared_from_this<FeiHttpBinding> {
 public:
     using ErrorHandler = std::function<void(const std::string&)>;
-    static std::shared_ptr<FeiHttpBinding> create(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes=64*1024);
-    static std::shared_ptr<FeiHttpBinding> createBare(Fei::Http::FHttpClient&, ErrorHandler,std::size_t maxJsonBytes=64*1024);
+    static std::shared_ptr<FeiHttpBinding> create(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes=64*1024,std::size_t memoryLimitBytes=8*1024*1024);
+    static std::shared_ptr<FeiHttpBinding> createBare(Fei::Http::FHttpClient&, ErrorHandler,std::size_t maxJsonBytes=64*1024,std::size_t memoryLimitBytes=8*1024*1024);
     std::vector<std::string> functionNames();
     void installHttp();
     void installTimers();
@@ -39,7 +39,7 @@ public:
     void close(std::function<void()> onClosed);
     void setValidating(bool value) { checkLoop(); validating_ = value; }
 private:
-    explicit FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes);
+    explicit FeiHttpBinding(Fei::Http::FHttpClient& client, ErrorHandler onError,std::size_t maxJsonBytes,std::size_t memoryLimitBytes);
     std::size_t maxJsonBytes_;
     struct Pending;
     struct Timer;
@@ -53,6 +53,8 @@ private:
     static JSValue scopedHttpGet(JSContext*, JSValueConst, int, JSValueConst*, int, JSValue*);
     static JSValue scopedAfter(JSContext*, JSValueConst, int, JSValueConst*, int, JSValue*);
     static JSValue httpGetImpl(JSContext*, int, JSValueConst*, std::uint64_t);
+    static bool httpOptions(JSContext*,JSValueConst,Fei::Http::ClientRequest&,bool& binary);
+    static JSValue httpResponse(JSContext*,const Fei::Http::ClientResponse&,bool binary);
     static JSValue afterImpl(JSContext*, int, JSValueConst*, std::uint64_t);
     static JSValue httpGet(JSContext*, JSValueConst, int, JSValueConst*);
     static JSValue after(JSContext*, JSValueConst, int, JSValueConst*);
@@ -82,6 +84,7 @@ private:
     std::unordered_map<std::size_t, std::shared_ptr<Pending>> pending_;
     std::unordered_map<std::size_t, std::shared_ptr<Timer>> timers_;
     std::size_t nextId_ = 0;
+    std::size_t binaryReserved_ = 0;
     bool closing_ = false;
     bool validating_ = false;
     bool draining_ = false;
