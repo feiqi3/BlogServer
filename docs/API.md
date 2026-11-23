@@ -259,15 +259,15 @@ GET /background
 
 ```
 GET /background/articles
-GET /background/articles?id-begin={lastId}
+GET /background/articles?page={pageIdx}
 ```
 
 | 项目 | 说明 |
 |------|------|
 | 认证 | **必须**；未登录 → 302 到 `/background` |
-| 查询参数 | `id-begin` — 游标分页的起始 ID（数字，默认 0） |
+| 查询参数 | `page` — 页码，从 0 开始（数字，默认 0；超出范围自动截到最后一页） |
 | 响应 | HTML（`backyard-articles.html` 模板渲染） |
-| 模板变量 | `posts` 数组（每页 25 篇，按 ID 降序），每篇含 `id`, `title`, `created_at`, `updated_at` |
+| 模板变量 | `posts` 数组（每页 25 篇，按 ID 降序），每篇含 `id`, `title`, `created_at`, `updated_at`；翻页条：`pages`, `curPage`, `prevPage`, `nextPage`, `hasPrev`, `hasMore` |
 
 ---
 
