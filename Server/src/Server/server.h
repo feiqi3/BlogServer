@@ -7,6 +7,7 @@
 #include <memory>
 
 namespace Blog {
+	class ImageService;
     class ProfilerService;
 	namespace Script { class ScriptAdminService; class ArticleHookService; }
 	class Server {
@@ -20,6 +21,7 @@ namespace Blog {
 	private:
 		std::atomic_bool shouldClose{false};
 		Fei::Http::FHttpServer* server;
+		std::unique_ptr<ImageService> images;
         std::shared_ptr<ProfilerService> profiler;
 #ifdef FEILIB_ENABLE_SCRIPT
         void stopScriptServices();

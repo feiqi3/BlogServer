@@ -20,6 +20,7 @@ public:
   static std::optional<std::string> InsertPhoto(const Model::Photo& photo);
   static std::optional<std::string> UpdatePhoto(const Model::Photo& photo);
   static std::optional<std::string> UpdatePhotoDims(uint64_t id, int width, int height);
+  static std::optional<std::string> UpdatePhotoDimsIfUrlMatches(uint64_t id, const std::string& url, int width, int height);
   // returns {id, url} pairs for photos whose dimensions were never detected
   static std::vector<std::pair<uint64_t, std::string>> QueryPhotosMissingDims();
   static std::optional<std::string> DeletePhoto(uint64_t id);

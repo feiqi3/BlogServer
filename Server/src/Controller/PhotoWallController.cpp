@@ -8,8 +8,7 @@
 #include "Service/AdminLogin.h"
 #include "Service/QuickRedirect.h"
 #include "Utils/Digital.h"
-#include "Utils/ImageDimReader.h"
-#include "Utils/ThreadPool.h"
+#include "Service/ImageService.h"
 #include "Utils/TimeHelper.h"
 #include "Http/FReflect.h"
 #include <algorithm>
@@ -262,23 +261,15 @@ PhotoWallController::PostPhoto(const Fei::Http::FHttpRequest &req,
         refreshId = newPhoto->id;
     }
   } else {
-    auto existing = DAO::PhotoQuery::QueryPhotoById(id);
-    if (existing.has_value() && existing->url != photo.url)
-      refreshId = id; // url changed -> re-detect dimensions
+    refreshId = id; // The service rechecks the committed URL and missing dimensions.
     err = DAO::PhotoQuery::UpdatePhoto(photo);
   }
   if (err.has_value()) {
     res.setBody(JsonTool::ToString(getErrorJson(err.value())));
     return res;
   }
-  if (refreshId != 0 && !refreshUrl.empty()) {
-    Utils::imagePool().submit([refreshId, refreshUrl]() {
-      int w = 0, h = 0;
-      if (Utils::readImageDims(refreshUrl, w, h)) {
-        DAO::PhotoQuery::UpdatePhotoDims(refreshId, w, h);
-      }
-    });
-  }
+  if (auto* images = ImageService::current(); images && refreshId != 0 && !refreshUrl.empty())
+    images->refreshDimensions(refreshId, refreshUrl);
   res.setBody(JsonTool::ToString(getSucc()));
   return res;
 }

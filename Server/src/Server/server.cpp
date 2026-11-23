@@ -25,8 +25,7 @@
 #include "DAO/PhotoQuery.h"
 #include "Utils/Digital.h"
 #include "Utils/FileCache.h"
-#include "Utils/ImageDimReader.h"
-#include "Utils/ThreadPool.h"
+#include "Service/ImageService.h"
 #include "Service/ProfilerService.h"
 #ifdef FEILIB_ENABLE_SCRIPT
 #include "Script/FScriptEngine.h"
@@ -72,23 +71,7 @@ Blog::Server::Server()
 	server->loadPushPromiseList(PushPromiseCfgPath);
 	server->addListenPort(80);
 	server->addSSLPort(443);
-	server->jobLoop(); // Configure the application Loop before run().
-
-	// Backfill dimensions for photos created before width/height tracking.
-	auto missingDims = DAO::PhotoQuery::QueryPhotosMissingDims();
-	if (!missingDims.empty()) {
-		Fei::Logger::instance()->log(
-			Fei::lvl::info,
-			"[Server] Backfilling image dimensions for {} photos",
-			missingDims.size());
-		for (const auto& [id, url] : missingDims) {
-			Utils::imagePool().submit([id, url]() {
-				int w = 0, h = 0;
-				if (Utils::readImageDims(url, w, h))
-					DAO::PhotoQuery::UpdatePhotoDims(id, w, h);
-			});
-		}
-	}
+	server->jobLoop(); // Configure the shared application Loop before run().
 }
 
 void Blog::Server::run()
@@ -146,11 +129,26 @@ void Blog::Server::run()
         }
     }
 #endif
+	images = std::make_unique<ImageService>(server->jobLoop());
+
+
+	// Backfill dimensions for photos created before width/height tracking.
+	auto missingDims = DAO::PhotoQuery::QueryPhotosMissingDims();
+	if (!missingDims.empty()) {
+		Fei::Logger::instance()->log(
+			Fei::lvl::info,
+			"[Server] Backfilling image dimensions for {} photos",
+			missingDims.size());
+		for (const auto& [id, url] : missingDims) {
+			images->refreshDimensions(id, url);
+		}
+	}
 	while (!shouldClose) {
 		using namespace std::chrono_literals;
 		std::this_thread::sleep_for(20s);
 		server->tickAppEvents();
 	}
+	images->shutdown();
 #ifdef FEILIB_ENABLE_SCRIPT
     stopScriptServices();
 #endif
@@ -194,9 +192,11 @@ Blog::Server::~Server()
 #ifdef FEILIB_ENABLE_SCRIPT
     stopScriptServices();
 #endif
+	if (images) images->shutdown();
 	server->stop();
     if(profiler)profiler->shutdown();
     profiler.reset();
+	images.reset();
 	delete server;
 	delete TemplateRender::instance();
 	delete DatabaseOperation::instance();
