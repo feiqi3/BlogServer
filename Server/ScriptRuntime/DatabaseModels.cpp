@@ -38,6 +38,12 @@ Json execute(const std::string& operation,const Fei::FScriptNativeCall& call,Fei
     if(cancelled())throw std::runtime_error("Model operation cancelled");
     const auto& args=call.arguments;
     if(operation=="db.posts.get"){count(args,1);return post(modelId(args[0]));}
+    if(operation=="db.posts.findByTitle"){
+        count(args,1);auto title=args[0].get<std::string>();
+        if(title.empty()||title.size()>512)throw std::invalid_argument("Invalid article title");
+        Query<Model::Post> query;query.Select().Where(FIELD(Model::Post,title)==PARAM).limit(1).exec(title);
+        auto values=rows(query);return values.empty()?Json(nullptr):modelPost(values[0]);
+    }
     if(operation=="db.categories.get"){count(args,1);return category(modelId(args[0]));}
     if(operation=="db.posts.list"){
         auto [limit,offset]=paging(args);
@@ -64,7 +70,7 @@ Json execute(const std::string& operation,const Fei::FScriptNativeCall& call,Fei
 }
 void DatabaseModels::bind(Fei::FScriptEngine& engine){
     auto self=shared_from_this();
-    for(const auto* operation:{"db.posts.get","db.posts.list","db.posts.update","db.categories.get","db.categories.list"}){
+    for(const auto* operation:{"db.posts.get","db.posts.findByTitle","db.posts.list","db.posts.update","db.categories.get","db.categories.list"}){
         engine.bindAsyncFunction(operation,[self,operation](auto call,auto completion){return self->dispatch(operation,std::move(call),std::move(completion));});
     }
 }

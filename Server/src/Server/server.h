@@ -9,7 +9,7 @@
 namespace Blog {
 	class ImageService;
     class ProfilerService;
-	namespace Script { class ScriptAdminService; class ArticleHookService; }
+	namespace Script { class ScriptAdminService; class ArticleHookService; class AvatarCache; }
 	class Server {
 	public:
 		Server();
@@ -27,6 +27,7 @@ namespace Blog {
         void stopScriptServices();
 		std::shared_ptr<Script::ScriptAdminService> scripts;
         std::shared_ptr<Script::ArticleHookService> articleHooks;
+        std::shared_ptr<Script::AvatarCache> avatars;
 #endif
 	};
 }

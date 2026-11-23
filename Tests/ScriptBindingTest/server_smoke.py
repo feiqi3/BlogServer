@@ -12,6 +12,8 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
+import base64
 
 binary = Path(sys.argv[1]).resolve()
 resources = Path(sys.argv[2]).resolve()
@@ -20,16 +22,21 @@ articles = '--articles' in sys.argv
 profiling = '--profiling' in sys.argv
 native_only = '--native-only' in sys.argv
 memory_check = '--memory-limit-check' in sys.argv
+friend_avatars = '--friend-avatars' in sys.argv
 frontend = Path(sys.argv[sys.argv.index('--admin')+1]).resolve() if admin else None
 subprocess.run(['ip', 'link', 'set', 'lo', 'up'], check=True)
 subprocess.run(['ip', 'addr', 'add', '93.184.216.34/32', 'dev', 'lo'], check=True)
 seen = []
+avatar_state={'fail':False}
+avatar_png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII=')
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
     def do_GET(self):
         seen.append(self.path)
         body=b'\x00\x80\xffA' if self.path=='/binary' else b'ok'
-        self.send_response(200)
+        if self.path.startswith('/friend/'):
+            body=avatar_png
+        self.send_response(503 if avatar_state['fail'] and self.path.startswith('/friend/') else 200)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         try:self.wfile.write(body)
@@ -52,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
         schema = original.execute("select sql from sqlite_master where type='table' and sql is not null and name not like 'sqlite_%'").fetchall()
     with sqlite3.connect(isolated / 'database/blog.db') as database:
         for (statement,) in schema: database.execute(statement)
-        if articles: database.execute("INSERT INTO Categories(id,name,categorypic) VALUES(1,'Fixture','fixture.png')")
+        if articles or friend_avatars: database.execute("INSERT INTO Categories(id,name,categorypic) VALUES(1,'Fixture','fixture.png')")
     (tmp / 'scripts').mkdir()
     source = tmp / 'scripts/job.mjs'
     url = f'http://93.184.216.34:{fixture.server_port}'
@@ -66,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
     if memory_check:
         with (isolated/'config/server.cfg').open('a') as configuration:
             configuration.write('ScriptMemoryLimitMiB: 16\n')
-    if articles:
+    if articles or friend_avatars:
         with (isolated/'config/server.cfg').open('a') as configuration:
             configuration.write(f'ALPNPreference: http2\nH2MaxStreamNum: 100\nH2EnablePush: 0\nProfilingEnabled: {str(profiling).lower()}\nProfilingDirectory: {tmp}/custom-profiles\n')
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost', '-addext','subjectAltName=DNS:localhost','-keyout', str(isolated / 'SSL/private.pem'), '-out', str(isolated / 'SSL/cert.pem')], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -139,7 +146,10 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
                 from article_checks import native_exercise
                 native_exercise(isolated)
             elif admin:
-                if articles:
+                if friend_avatars:
+                    from avatar_cache_checks import exercise
+                    exercise(url,seen,isolated,avatar_state,avatar_png)
+                elif articles:
                     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'ArticleHookTest'))
                     from article_checks import exercise
                     exercise(url,seen,isolated,tmp,profiling)
@@ -162,7 +172,22 @@ with tempfile.TemporaryDirectory(prefix='script-server-') as directory:
             if articles:
                 from article_checks import persisted
                 persisted(tmp,profiling,not native_only)
-            if admin and not articles:
+            if friend_avatars:
+                # Restore the active package with the remote source unavailable.
+                avatar_state['fail']=True;source.unlink()
+                process=subprocess.Popen([str(binary)],cwd=tmp,stdout=log,stderr=subprocess.STDOUT)
+                cache_url='http://127.0.0.1/avatar-cache?source='+urllib.parse.quote(url+'/friend/avatar.png?a=1&b=two%20words',safe='')
+                for attempt in range(100):
+                    if process.poll() is not None:raise RuntimeError('Cache restore Server exited')
+                    try:
+                        with urllib.request.urlopen(cache_url,timeout=1) as response:
+                            assert response.read()==avatar_png;break
+                    except OSError:time.sleep(.05)
+                else:raise RuntimeError('Persisted avatar was unavailable after restart')
+                urllib.request.urlopen('http://127.0.0.1/shutdown',timeout=5).close();process.wait(timeout=60)
+                if process.returncode:raise RuntimeError('Restored cache Server failed shutdown')
+                print('PASS friend avatar restart: cached bytes survive without bootstrap script or working avatar origin')
+            if admin and not articles and not friend_avatars:
                 # Start the same executable/store again, after removing the bootstrap file.
                 source.unlink()
                 process = subprocess.Popen([str(binary)], cwd=tmp, stdout=log, stderr=subprocess.STDOUT)

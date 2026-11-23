@@ -51,6 +51,7 @@ Server/resources/database/*.bak.*
 # Runtime script uploads and activation records
 Server/resources/scripts/versions/
 Server/resources/profiling/
+Server/resources/cache/
 # GoatCounter credentials (plaintext secrets)
 Server/Tools/GoatCounter/gc_credentials.cfg
 Server/Tools/GoatCounter/gc_credentials.*.cfg

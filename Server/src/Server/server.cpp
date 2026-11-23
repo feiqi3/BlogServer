@@ -31,6 +31,7 @@
 #include "Script/FScriptEngine.h"
 #include "Service/ScriptAdminService.h"
 #include "Service/ArticleHookService.h"
+#include "ScriptRuntime/AvatarCache.h"
 #include <future>
 #endif
 
@@ -84,6 +85,8 @@ void Blog::Server::run()
 #ifdef FEILIB_ENABLE_SCRIPT
     bool adminScripts = false;
     auto scriptCfg = Fei::FConfigReader::instance();
+    try{avatars=Script::AvatarCache::create(server->jobLoop(),scriptCfg->getCfg("AvatarCacheDirectory").value_or(ResourceDir+"cache/avatars"));}
+    catch(const std::exception& error){Fei::Logger::instance()->log(Fei::lvl::err,"[AvatarCache] Could not start: {}",error.what());}
     auto scriptPath = scriptCfg->getCfg("ScriptFile").value_or("");
     auto scriptInterval = std::chrono::milliseconds(1200000);
     if (!scriptPath.empty() || scriptCfg->getCfg("ScriptAdminEnabled").value_or("false") == "true") {
@@ -109,6 +112,7 @@ void Blog::Server::run()
                 if (auto admin = Script::ScriptAdminService::current()) admin->record(result);
             };
             auto& engine = server->scriptEngine(options);
+            if(avatars)avatars->bind(engine);
             articleHooks=Script::ArticleHookService::create(server->jobLoop(),engine);
             adminScripts = scriptCfg->getCfg("ScriptAdminEnabled").value_or("false") == "true";
             if (!adminScripts) engine.addScript("blog", scriptPath, scriptInterval);
@@ -151,6 +155,7 @@ void Blog::Server::run()
 	images->shutdown();
 #ifdef FEILIB_ENABLE_SCRIPT
     stopScriptServices();
+    if(avatars)avatars->shutdown();
 #endif
 	server->stop();
     if(profiler)profiler->shutdown();
@@ -191,6 +196,7 @@ Blog::Server::~Server()
 {
 #ifdef FEILIB_ENABLE_SCRIPT
     stopScriptServices();
+    if(avatars)avatars->shutdown();
 #endif
 	if (images) images->shutdown();
 	server->stop();

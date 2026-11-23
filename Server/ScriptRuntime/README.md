@@ -146,6 +146,9 @@ The Server bounds invocation input/output JSON at 256 KiB.
 During shutdown, pending article calls are cancelled and new submissions receive
 HTTP 503. `onStop` may still perform model reads before workers and loops close.
 
+[Friend avatar example](../../docs/friend-avatars.md) combines binary HTTP,
+`friends.OnSubmit` and periodic refresh with a persistent local fallback cache.
+
 ## Profiling
 
 ```text
